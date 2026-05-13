@@ -5,12 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Page</title>
   <style>
+    :root {
+      --left-width: 33.333%;
+    }
     body {
       margin: 0;
       background: #ffffff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+    }
+    .left {
+      width: var(--left-width);
+      height: 100%;
+    }
+    .right {
+      flex: 1;
+      height: 100%;
+    }
+    .divider {
+      width: 2px;
+      height: 50vh;
+      background: #d3d3d3;
+      border-radius: 2px;
+      flex-shrink: 0;
     }
   </style>
 </head>
 <body>
+  <div class="left"></div>
+  <div class="divider"></div>
+  <div class="right"></div>
 </body>
 </html>
