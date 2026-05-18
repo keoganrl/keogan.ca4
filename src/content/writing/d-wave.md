@@ -1,13 +1,15 @@
 ---
 title: "D-Wave"
-year: 2025
-date: 2025-04-12
+year: 2026
+date: 2026-01-01
 tags: [work, quantum]
-summary: "Notes on quantum annealing and my time at D-Wave."
+summary: "Eight months on the IC design team for the world's first commercial quantum annealer, in Vancouver."
 ---
 
-D-Wave builds quantum annealers — a type of quantum computer optimized for solving combinatorial optimization problems. Unlike gate-based quantum computers (IBM, Google), annealers don't run arbitrary quantum circuits. Instead, they find low-energy states of a physical system that correspond to solutions of a given problem.
+At a previous co-op at the Institute for Quantum Computing, I worked under Dr. Bradley Hauer. His wife, Allison MacDonald, was the Director of Science at D-Wave. An unbelievably lucky connection, and a seriously impressive couple. Their kid is going to be terrifying.
 
-The hardware is a superconducting chip kept at ~15 millikelvin, colder than outer space. Qubits are flux qubits — tiny loops of superconducting wire where current flows clockwise or counterclockwise (or both, in superposition).
+Allison graciously helped get momentum going for the quantum club I had co-founded by giving a couple of talks on the science at D-Wave. At some point I mentioned that I was looking for a co-op, and if she heard about an opening, I would love to be considered.
 
-What I found most interesting was the hybrid solver workflow: for problems too large to fit on the QPU directly, you decompose the problem, send subproblems to the quantum hardware, and stitch results back together classically. The QPU is used as a subroutine, not a standalone solver.
+So here I am, out in Vancouver, working for the world's 2nd largest quantum computing company. Within a week of starting, D-Wave acquired Quantum Circuits Inc., expanding their specialty to versatile gate-model quantum computing in addition to the optimization-focused quantum annealing they have held a monopoly over for a decade and a half.
+
+I was hired onto the IC design team, a small group responsible for designing the quantum annealing processor. I'm not yet sure what I can and can't disclose about my work, but I'll update this with project details once my co-op wraps up.
