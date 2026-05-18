@@ -21,3 +21,5 @@ Most superconducting resonators are in the 4–8 GHz range, so our research on h
 The resonators I designed were LC-circuits, with an inductor component and a capacitor component. The inductor stored energy in a magnetic field; the capacitor stored energy in an electric field. Resonance occurred as energy oscillated between them.
 
 I worked with two resonator designs. The first is a lumped element design, with a meandering inductor at the top and an interdigitated capacitor at the bottom. The second is a spiral resonator, which blends both elements together into a more compact shape. My simulations helped predict resonant frequencies and coupling rates — helpful for an accurate measurement of the quality factor.
+
+![COMSOL simulation output showing resonator designs on sapphire wafer](/images/IQCResonators.png)

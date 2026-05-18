@@ -217,6 +217,7 @@ body {
 }
 
 .article-body p { margin: 0 0 1.25rem; }
+.article-body img { width: 100%; height: auto; display: block; border-radius: 4px; margin: 1.5rem 0; }
 .article-body h2 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; margin: 2rem 0 0.75rem; }
 .article-body h3 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; margin: 1.5rem 0 0.5rem; }
 .article-body a { color: inherit; text-decoration: underline; text-decoration-color: #ccc; }

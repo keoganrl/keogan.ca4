@@ -30,9 +30,13 @@ You may notice that the particle I said to be the smallest in the universe, the 
 
 So now knowing what the largest and smallest items are, how do humans stack up? Where have we been placed in the universe, on the scale of length? On a logarithmic scale from 10<sup>-16</sup> to 10<sup>26</sup> meters, we're about 38% of the way across. I'm not sure why this information is so satisfying, but it's cool to know where we sit.
 
+![Logarithmic scale of length, from upsilon meson to the observable universe](/images/Meter.png)
+
 ## Mass
 
 The mass of the universe has been calculated to be approximately 10<sup>53</sup> kg. The smallest mass that we know of is the electron neutrino, which you can find in the Standard Model. It has a mass of 10<sup>-37</sup> kg. Similarly to our conversation about the smallest measurable thing in the universe by length, there are particles which have zero mass, like the photon, but for the same reasons we didn't use photons or electrons (zero-length particles) as our length limit, we won't use photons or other bosons (zero-mass particles) as our mass limit. Between the mass of electron neutrinos and the universe, we're slightly closer to the neutrinos, at 43% of the way across.
+
+![Logarithmic scale of mass, from electron neutrino to the universe](/images/Kilogram.png)
 
 ## Time
 
@@ -41,6 +45,8 @@ The universe has been around for 13.8 billion years, which is 4 × 10<sup>17</su
 The human value for time is more difficult than for length or mass. It's not as clear what value should be used. Here are three options:
 
 The first is one second, which corresponds to one human heartbeat. That's 58% of the way across. Next is one day (86,400 seconds), since we structure our lives around daily cycles. That's 70%. The final one is the average human lifespan of 73 years, which is 81% of the way across. If I got to choose one of these units to experience the largest amount of, I would pick time. I think it's beautiful that we're so far across this scale.
+
+![Logarithmic scale of time, from zeptoseconds to the age of the universe](/images/Time.png)
 
 ## Electric Current
 
@@ -58,11 +64,15 @@ This is still not the lowest bound. Humans have accomplished something truly rem
 
 For this discussion, we'll use the naturally occurring 1 K of the Boomerang Nebula as our lower value, since the man-made record is constantly being broken and is less meaningful in the context of the universe. The highest temperature the universe has ever experienced was shortly after its inception, at 10<sup>32</sup> K — so high that our laws of physics break down for anything hotter. At 310 K, humans are only 8% of the way across this scale.
 
+![Logarithmic scale of temperature, from Boomerang Nebula to the Big Bang](/images/Kelvin.png)
+
 ## Amount of Substance
 
 This scale is pretty similar to the one for mass. Amount of substance is measured in moles, defined as 6.022 × 10<sup>23</sup> items. The logical lower bound is 1 atom, which is 1 divided by Avogadro's constant — about 1.7 × 10<sup>-24</sup> moles. A typical human has around 11,600 moles of atoms, and the universe is estimated to have roughly 10<sup>56</sup> moles. Humans are 35% of the way across this scale.
 
 The reason this scale doesn't align perfectly with the mass scale is that the average atomic mass of atoms in a human body is much higher than the average in the universe. Most of the universe is hydrogen (~92% of all atoms, atomic mass 1 u) and helium (most of the rest, at 4 u). The human body, mostly oxygen (16 u), carbon (12 u), and other heavier elements, has an average atomic mass closer to 12 u per atom.
+
+![Logarithmic scale of amount of substance, from single atoms to the universe](/images/Moles.png)
 
 ## Luminous Intensity
 
