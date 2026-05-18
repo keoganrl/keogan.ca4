@@ -237,3 +237,19 @@ body {
   color: #2a2a2a;
   border-bottom-color: #ccc;
 }
+
+.project-link {
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.project-link a {
+  color: #3a3a3a;
+  text-decoration: none;
+  border-bottom: 1px solid #ccc;
+  transition: border-color 0.15s;
+}
+
+.project-link a:hover {
+  border-bottom-color: #888;
+}

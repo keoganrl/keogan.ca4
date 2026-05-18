@@ -10,6 +10,7 @@ const allTags = [...new Set(articles.flatMap(a => a.data.tags))].sort();
 ---
 
 <BaseLayout title="Writing — Keogan Larade">
+  <p class="back"><a href="/">← back</a></p>
   <h1 class="name">Writing</h1>
 
   <nav class="tags">
@@ -29,9 +30,12 @@ const allTags = [...new Set(articles.flatMap(a => a.data.tags))].sort();
       </li>
     ))}
   </ul>
-
-  <p class="back"><a href="/">← back</a></p>
 </BaseLayout>
+
+<style>
+  .back { margin-bottom: 0.6rem; }
+  .name { margin-bottom: 1.25rem; }
+</style>
 
 <script>
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tag');
