@@ -21,10 +21,26 @@ const { Content } = await render(article);
   <div class="article-body">
     <Content />
   </div>
+  <p class="back back-bottom" hidden><a href="/writing">← writing</a></p>
 </BaseLayout>
 
 <style>
-  .back { position: absolute; top: 5rem; left: 1.75rem; margin: 0; }
+  .back { position: absolute; top: 4rem; left: 1.75rem; margin: 0; }
+  .back-bottom { position: static; margin-top: 4rem; }
   .name { margin-bottom: 1.25rem; }
   .article-meta { margin-bottom: 4rem; }
 </style>
+
+<script>
+  function checkBottomBack() {
+    const el = document.querySelector('.back-bottom');
+    if (!el) return;
+    if (document.documentElement.scrollHeight > window.innerHeight) {
+      el.removeAttribute('hidden');
+    } else {
+      el.setAttribute('hidden', '');
+    }
+  }
+  checkBottomBack();
+  document.addEventListener('astro:page-load', checkBottomBack);
+</script>
