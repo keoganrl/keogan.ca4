@@ -12,13 +12,19 @@ const { Content } = await render(article);
 ---
 
 <BaseLayout title={`${article.data.title} — Keogan Larade`}>
+  <p class="back"><a href="/writing">← writing</a></p>
+  <h1 class="name">{article.data.title}</h1>
   <p class="article-meta">
     <span class="article-year">{article.data.year}</span>
     {article.data.tags.map(tag => <span class="article-tag">{tag}</span>)}
   </p>
-  <h1 class="name">{article.data.title}</h1>
   <div class="article-body">
     <Content />
   </div>
-  <p class="back"><a href="/writing">← writing</a></p>
 </BaseLayout>
+
+<style>
+  .back { position: absolute; top: 5rem; left: 1.75rem; margin: 0; }
+  .name { margin-bottom: 1.25rem; }
+  .article-meta { margin-bottom: 4rem; }
+</style>

@@ -12,16 +12,22 @@ const { Content } = await render(project);
 ---
 
 <BaseLayout title={`${project.data.title} — Keogan Larade`}>
+  <p class="back"><a href="/projects">← projects</a></p>
+  <h1 class="name">{project.data.title}</h1>
   <p class="article-meta">
     <span class="article-year">{project.data.year}</span>
     {project.data.tags.map(tag => <span class="article-tag">{tag}</span>)}
   </p>
-  <h1 class="name">{project.data.title}</h1>
   <div class="article-body">
     <Content />
   </div>
   {project.data.link && (
     <p class="project-link"><a href={project.data.link} target="_blank" rel="noopener">View project →</a></p>
   )}
-  <p class="back"><a href="/projects">← projects</a></p>
 </BaseLayout>
+
+<style>
+  .back { position: absolute; top: 5rem; left: 1.75rem; margin: 0; }
+  .name { margin-bottom: 1.25rem; }
+  .article-meta { margin-bottom: 4rem; }
+</style>
