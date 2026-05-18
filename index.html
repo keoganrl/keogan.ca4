@@ -64,9 +64,9 @@
       padding: 0;
       margin: 0;
       display: flex;
-      flex-direction: column;
+      gap: 2rem;
+      justify-content: space-around;
       align-items: center;
-      gap: 1.5rem;
     }
     .directory li {
       margin: 0;
@@ -74,12 +74,10 @@
       line-height: 1.6;
     }
     .directory li:first-child {
-      align-self: flex-start;
-      padding-left: 0;
+      transform: translateY(-1.5rem);
     }
     .directory li:last-child {
-      align-self: flex-end;
-      padding-right: 0;
+      transform: translateY(1.5rem);
     }
     .directory a {
       color: #3a3a3a;
