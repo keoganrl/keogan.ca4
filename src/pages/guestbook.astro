@@ -1,0 +1,104 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Guestbook — Keogan Larade">
+  <p class="back"><a href="/">← back</a></p>
+  <h1 class="name">Guestbook</h1>
+
+  <form class="guestbook-form" id="guestbook-form">
+    <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+    <div class="guestbook-field">
+      <label for="gb-name">Name</label>
+      <input id="gb-name" name="name" type="text" maxlength="100" required autocomplete="name" />
+    </div>
+    <div class="guestbook-field">
+      <label for="gb-message">Message</label>
+      <textarea id="gb-message" name="message" maxlength="500" required rows="4"></textarea>
+    </div>
+    <button type="submit" class="guestbook-submit">Leave a message</button>
+    <p class="guestbook-status" id="guestbook-status" hidden></p>
+  </form>
+
+  <ul class="guestbook-entries" id="guestbook-entries"></ul>
+</BaseLayout>
+
+<style>
+  .back { position: absolute; top: 3rem; left: 1.75rem; margin: 0; }
+  .name { margin-bottom: 2.5rem; }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  function formatDate(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  function renderEntry(entry: { name: string; message: string; created_at: string }): string {
+    const name = entry.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const message = entry.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `
+      <li class="guestbook-entry">
+        <div class="guestbook-entry-header">
+          <span class="guestbook-entry-name">${name}</span>
+          <span class="guestbook-entry-date">· ${formatDate(entry.created_at)}</span>
+        </div>
+        <p class="guestbook-entry-message">${message}</p>
+      </li>`;
+  }
+
+  async function loadEntries() {
+    const list = document.getElementById('guestbook-entries');
+    if (!list) return;
+    const { data } = await supabase
+      .from('guestbook_entries')
+      .select('name, message, created_at')
+      .order('created_at', { ascending: false });
+    if (data) list.innerHTML = data.map(renderEntry).join('');
+  }
+
+  async function initGuestbook() {
+    await loadEntries();
+
+    const form = document.getElementById('guestbook-form') as HTMLFormElement | null;
+    const status = document.getElementById('guestbook-status') as HTMLParagraphElement | null;
+    if (!form || !status) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+
+      // honeypot check
+      if (data.get('website')) return;
+
+      const name = (data.get('name') as string).trim();
+      const message = (data.get('message') as string).trim();
+      if (!name || !message) return;
+
+      const submitBtn = form.querySelector<HTMLButtonElement>('.guestbook-submit')!;
+      submitBtn.disabled = true;
+
+      const { error } = await supabase
+        .from('guestbook_entries')
+        .insert({ name, message });
+
+      if (error) {
+        status.textContent = 'Something went wrong. Please try again.';
+        status.removeAttribute('hidden');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      form.reset();
+      status.textContent = 'Message left!';
+      status.removeAttribute('hidden');
+      submitBtn.disabled = false;
+      setTimeout(() => status.setAttribute('hidden', ''), 3000);
+      await loadEntries();
+    });
+  }
+
+  document.addEventListener('astro:page-load', initGuestbook);
+</script>
