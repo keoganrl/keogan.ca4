@@ -1,9 +1,52 @@
 ---
+import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const articles = (await getCollection('writing')).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+
+const allTags = [...new Set(articles.flatMap(a => a.data.tags))].sort();
 ---
 
 <BaseLayout title="Writing — Keogan Larade">
   <h1 class="name">Writing</h1>
-  <p class="blurb">Coming soon.</p>
-  <p><a href="/">← back</a></p>
+
+  <nav class="tags">
+    <button class="tag active" data-filter="all">all</button>
+    {allTags.map(tag => (
+      <button class="tag" data-filter={tag}>{tag}</button>
+    ))}
+  </nav>
+
+  <ul class="article-list">
+    {articles.map(a => (
+      <li class="article-item" data-tags={a.data.tags.join(',')}>
+        <a href={`/writing/${a.id}`}>
+          <span class="article-year">{a.data.year}</span>
+          <span class="article-title">{a.data.title}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+  <p class="back"><a href="/">← back</a></p>
 </BaseLayout>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.tag');
+  const items = document.querySelectorAll<HTMLLIElement>('.article-item');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filter = btn.dataset.filter!;
+      items.forEach(item => {
+        const tags = item.dataset.tags!.split(',');
+        item.style.display = (filter === 'all' || tags.includes(filter)) ? '' : 'none';
+      });
+    });
+  });
+</script>
