@@ -9,6 +9,7 @@ body {
   max-width: 480px;
   margin-inline: auto;
   font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif;
+  position: relative;
 }
 
 .name {
