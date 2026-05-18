@@ -41,7 +41,6 @@
       margin: 5rem 0;
     }
     .images > div {
-      background: #f0f0f0;
       border-radius: 4px;
       overflow: hidden;
       min-height: 0;
@@ -77,36 +76,17 @@
     }
     .directory li {
       margin: 0;
-      font-size: 1.0rem;
+      font-size: 1.1rem;
       line-height: 1.6;
     }
-    .directory a {
-      color: #3a3a3a;
-      text-decoration: none;
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.2s ease;
-    }
-    .directory a:hover {
-      border-bottom-color: #b8b8b8;
-    }
     .link-logo {
-      width: 1.4em;
-      height: 1.4em;
-      margin-right: 0.5rem;
+      width: 1.1em;
+      height: 1.1em;
       vertical-align: middle;
       display: inline-block;
       object-fit: contain;
       border-radius: 4px;
       opacity: 0.75;
-      transform: translateY(-0.1rem);
-    }
-    .internal {
-      font-size: 1.1em;
-    }
-    .internal .link-logo {
-      width: 1.1em;
-      height: 1.1em;
-      margin-right: 0;
       transform: translateY(-0.1rem);
     }
     .footer {
@@ -125,12 +105,14 @@
       opacity: 0.75;
       display: block;
     }
+    .directory a,
     .footer a {
       color: #3a3a3a;
       text-decoration: none;
       border-bottom: 1px solid transparent;
       transition: border-color 0.2s ease;
     }
+    .directory a:hover,
     .footer a:hover {
       border-bottom-color: #b8b8b8;
     }
@@ -146,9 +128,9 @@
   <section class="directory">
     <h2>Directory</h2>
     <ul>
-      <li><a href="#" class="internal"><img class="link-logo" src="images/slash.png" alt="">writing</a></li>
-      <li><a href="#" class="internal"><img class="link-logo" src="images/slash.png" alt="">projects</a></li>
-      <li><a href="#" class="internal"><img class="link-logo" src="images/slash.png" alt="">guestbook</a></li>
+      <li><a href="#"><img class="link-logo" src="images/slash.png" alt="">writing</a></li>
+      <li><a href="#"><img class="link-logo" src="images/slash.png" alt="">projects</a></li>
+      <li><a href="#"><img class="link-logo" src="images/slash.png" alt="">guestbook</a></li>
     </ul>
   </section>
   <footer class="footer">
