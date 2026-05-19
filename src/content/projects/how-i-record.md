@@ -1,5 +1,5 @@
 ---
-title: "Music"
+title: "How I Record"
 year: 2022
 date: 2022-01-01
 tags: [music]

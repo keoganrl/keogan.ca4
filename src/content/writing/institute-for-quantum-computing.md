@@ -10,9 +10,9 @@ At IQC, I used COMSOL Multiphysics software to simulate and design millimetre-wa
 
 The quality factor tells us two main things about the resonator:
 
-A) How long it will resonate for (how much of its energy is lost as it resonates). Imagine a bell which rings out for a very long time when struck, vs one which goes "clunk" and dies off quickly. The long-ringing (high quality) bell has a high Q-factor, while the cheap clunky bell has a low Q-factor.
+**A)** How long it will resonate for (how much of its energy is lost as it resonates). Imagine a bell which rings out for a very long time when struck, vs one which goes "clunk" and dies off quickly. The long-ringing (high quality) bell has a high Q-factor, while the cheap clunky bell has a low Q-factor.
 
-B) The second thing the Q-factor tells us is how narrow the frequency band is that it resonates at. A bell with a high Q-factor will ring with a very specific frequency, whereas a cheap bell with a low Q-factor will emit a wide range of frequencies ("clunk"). A crystal wine glass vibrates and eventually shatters when enough resonant energy builds up — a sign of a very high Q.
+**B)** The second thing the Q-factor tells us is how narrow the frequency band is that it resonates at. A bell with a high Q-factor will ring with a very specific frequency, whereas a cheap bell with a low Q-factor will emit a wide range of frequencies ("clunk"). A crystal wine glass vibrates and eventually shatters when enough resonant energy builds up — a sign of a very high Q.
 
 High frequency selectivity (i.e. high Q-factor) is essential for quantum circuits. If resonators overlap in frequency, they interfere with each other, introducing noise and corrupting the tiny signals we're trying to measure. Resonators with high Q-factor can also store information and remain "coherent" for longer periods of time (think: bell ringing for a long time).
 
