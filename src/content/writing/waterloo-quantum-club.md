@@ -2,7 +2,7 @@
 title: "Waterloo Quantum Club"
 year: 2025
 date: 2025-05-01
-tags: [work, quantum]
+tags: [work, quantum, waterloo]
 summary: "Co-founding UW's first quantum computing club after attending Quantum Days 2025."
 ---
 

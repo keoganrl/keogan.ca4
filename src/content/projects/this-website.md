@@ -2,7 +2,7 @@
 title: "This Website"
 year: 2024
 date: 2024-09-01
-tags: [side-project]
+tags: [software]
 summary: "A two-week resume booster that became a four-month passion project."
 ---
 
