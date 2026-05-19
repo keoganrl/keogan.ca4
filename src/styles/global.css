@@ -352,12 +352,16 @@ body {
   .back { top: 3.25rem; left: 2.5rem; }
 }
 
-/* Desktop — back link floats into the left margin and sticks on scroll */
+/* Desktop — wider column, back link in fixed left margin aligned with page title */
 @media (min-width: 1100px) {
+  body { max-width: 800px; }
+
   .back:not(.back-bottom) {
     position: fixed;
-    top: 3.25rem;
-    left: calc(50% - 360px - 3rem);
+    top: 6rem;
+    left: calc(50% - 400px - 3rem);
     transform: translateX(-100%);
   }
+
+  .back-bottom { display: none; }
 }
