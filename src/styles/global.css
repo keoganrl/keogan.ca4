@@ -358,7 +358,7 @@ body {
 
   .back:not(.back-bottom) {
     position: fixed;
-    top: 6rem;
+    top: 7rem;
     left: calc(50% - 400px - 3rem);
     transform: translateX(-100%);
   }
