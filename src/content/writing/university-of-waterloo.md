@@ -2,7 +2,7 @@
 title: "University of Waterloo"
 year: 2023
 date: 2023-09-01
-tags: [education]
+tags: [waterloo]
 summary: "My general thoughts on UW as a Nanotechnology Engineering student."
 ---
 

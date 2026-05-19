@@ -1,7 +1,7 @@
 ---
 title: "How I Draw"
-year: 2021
-date: 2021-06-01
+year: 2024
+date: 2024-06-01
 tags: [art]
 summary: "Origin story and process behind the hyperrealistic car drawings."
 ---

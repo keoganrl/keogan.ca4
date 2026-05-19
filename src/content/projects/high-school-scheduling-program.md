@@ -1,7 +1,7 @@
 ---
 title: "High School Scheduling Program"
-year: 2022
-date: 2022-09-01
+year: 2020
+date: 2020-09-01
 tags: [side-project]
 summary: "An iPhone Shortcuts app for 2-day rotating schedules, built for 20 Ottawa high schools."
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Piano Covers"
-year: 2022
-date: 2022-06-01
+year: 2023
+date: 2023-06-01
 tags: [music]
 summary: "Piano covers on YouTube, Spotify, and Apple Music."
 ---

@@ -1,7 +1,7 @@
 ---
 title: "How I Record"
-year: 2022
-date: 2022-01-01
+year: 2024
+date: 2024-01-01
 tags: [music]
 summary: "Piano covers recorded in Logic Pro X, built on 10 years of classical training."
 ---
