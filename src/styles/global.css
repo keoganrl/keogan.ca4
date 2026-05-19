@@ -224,6 +224,9 @@ body {
 .article-body a:hover { text-decoration-color: #888; }
 
 .back {
+  position: absolute;
+  top: 4rem;
+  left: 1.75rem;
   font-size: 0.9rem;
   margin: 0;
 }
@@ -330,3 +333,31 @@ body {
 .guestbook-entry-name { font-size: 0.95rem; color: #2a2a2a; }
 .guestbook-entry-date { font-size: 0.8rem; color: #aaa; }
 .guestbook-entry-message { font-size: 1rem; line-height: 1.6; color: #3a3a3a; margin: 0; }
+
+/* Tablet & up — widen the reading column */
+@media (min-width: 768px) {
+  body {
+    max-width: 720px;
+    padding: 6rem 2.5rem 1rem;
+  }
+
+  .name { font-size: 2rem; }
+  .blurb { font-size: 1.15rem; }
+
+  .directory ul {
+    justify-content: flex-start;
+    gap: 3rem;
+  }
+
+  .back { top: 3.25rem; left: 2.5rem; }
+}
+
+/* Desktop — back link floats into the left margin and sticks on scroll */
+@media (min-width: 1100px) {
+  .back:not(.back-bottom) {
+    position: fixed;
+    top: 3.25rem;
+    left: calc(50% - 360px - 3rem);
+    transform: translateX(-100%);
+  }
+}
