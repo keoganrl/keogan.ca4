@@ -12,4 +12,4 @@ Somehow, despite being home to IQC, Waterloo didn't have a quantum computing clu
 
 It didn't take long to meet Chaitanya Sharma, Prachee Nanda, Iman Umair-Qaiser, and Lavanya Yadav, four computer engineering students at Waterloo who were on the same mission as me. We joined forces, and by the start of the summer term we had weekly meetings planned with lectures and events lined up.
 
-The summer term went well, with 10 to 15 people showing up each week. In the fall, all four co-founders left for co-op, leaving me to lead the club. Juman Amro led the club's marketing, which boosted regular attendance and recruited most of the executives who ended up taking the club off my hands — come the next winter term, when I was off on co-op at D-Wave.
+The summer term went well, with 10 to 15 people showing up each week. In the fall, all four co-founders left for co-op, leaving me to lead the club. Juman Amro led the club's marketing, which boosted regular attendance, and recruited most of the executives who ended up taking the club off my hands come the next winter term, when I was off on co-op at D-Wave.

@@ -12,7 +12,7 @@ I'm a Nanotechnology Engineering student at the University of Waterloo. I really
 - Fantastic engineering education
 - Co-op provides great experience
 - Lots of opportunities to be the dumbest person in the room (surrounding yourself with high-achievers motivates you to become one)
-- Campus enclosed in a ring road — feels like a little town of just students, great for the first-year on-campus-living vibes
+- Campus enclosed in a ring road (feels like a little town of just students, great for the first year on-campus-living vibes)
 - Attractive location (nature and green space around)
 - Great public transit
 
