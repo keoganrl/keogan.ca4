@@ -15,8 +15,6 @@ const monthView = document.getElementById("monthView");
 const photosEl = document.getElementById("photos");
 const monthLabelEl = document.getElementById("monthLabel");
 const monthCountEl = document.getElementById("monthCount");
-const backBtn = document.getElementById("backBtn");
-const homeBtn = document.getElementById("homeBtn");
 const topTitle = document.getElementById("topTitle");
 
 const lightbox = document.getElementById("lightbox");
@@ -28,19 +26,9 @@ const lbNext = document.getElementById("lbNext");
 let currentMonth = null;
 let lbIndex = 0;
 
-homeBtn.addEventListener("click", () => {
-  sessionStorage.removeItem(SESSION_KEY);
-  goHome();
-});
-
-backBtn.addEventListener("click", () => {
-  showMonths();
-});
-
 function showMonths() {
   monthView.hidden = true;
   monthsView.hidden = false;
-  backBtn.hidden = true;
   topTitle.textContent = "Months";
   photosEl.innerHTML = "";
   currentMonth = null;
@@ -49,7 +37,6 @@ function showMonths() {
 function showMonth(monthObj) {
   monthsView.hidden = true;
   monthView.hidden = false;
-  backBtn.hidden = false;
   topTitle.textContent = monthObj.label;
 
   monthLabelEl.textContent = monthObj.label;
