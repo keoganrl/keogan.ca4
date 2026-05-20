@@ -9,4 +9,7 @@ export default defineConfig({
     },
   }),
   site: 'https://keogan.ca',
+  build: {
+    inlineStylesheets: 'always',
+  },
 });
