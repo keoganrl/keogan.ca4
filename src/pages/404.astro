@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Not found — Keogan Larade">
+  <h1 class="name">404</h1>
+  <p class="blurb" id="msg">You found the void. Congrats.</p>
+  <p class="back back-bottom"><a href="/">← home</a></p>
+</BaseLayout>
+
+<style>
+  .back-bottom { position: static; margin-top: 2rem; }
+</style>
+
+<script>
+  const messages = [
+    'You found the void. Congrats.',
+    'This URL is doing its own thing. Respect.',
+  ];
+  function setMessage() {
+    const el = document.getElementById('msg');
+    if (!el) return;
+    el.textContent = messages[Math.floor(Math.random() * messages.length)];
+  }
+  setMessage();
+  document.addEventListener('astro:page-load', setMessage);
+</script>
