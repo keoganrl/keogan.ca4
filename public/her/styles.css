@@ -265,6 +265,8 @@ body.gate {
 
 /* ---------- Lightbox ---------- */
 
+.lightbox[hidden] { display: none; }
+
 .lightbox {
   position: fixed;
   inset: 0;
