@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="gallery">
+  <header class="topbar">
+    <button id="backBtn" class="topbar-btn" type="button" hidden>Back</button>
+    <div class="topbar-title" id="topTitle">Months</div>
+    <button id="homeBtn" class="topbar-btn" type="button" title="Exit">Exit</button>
+  </header>
+
+  <main class="wrap">
+    <section id="monthsView" class="months"></section>
+
+    <section id="monthView" class="month" hidden>
+      <div class="month-head">
+        <h2 id="monthLabel" class="month-title"></h2>
+        <div class="month-sub" id="monthCount"></div>
+      </div>
+      <div id="photos" class="photos" aria-label="Photos"></div>
+    </section>
+  </main>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <button id="lbClose" class="lb-close" type="button" aria-label="Close">×</button>
+    <button id="lbPrev" class="lb-nav lb-prev" type="button" aria-label="Previous">‹</button>
+    <button id="lbNext" class="lb-nav lb-next" type="button" aria-label="Next">›</button>
+    <img id="lbImg" class="lb-img" alt="" />
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

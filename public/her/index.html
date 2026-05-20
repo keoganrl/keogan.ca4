@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <base href="/her/">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>keogan.ca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="gate">
+  <main class="gate-card" aria-label="Enter">
+    <h1 class="gate-title">Enter</h1>
+    <form id="gateForm" autocomplete="off">
+      <label class="gate-label" for="pw">Password</label>
+      <input id="pw" class="gate-input" type="password" inputmode="text" autofocus />
+      <button class="gate-btn" type="submit">Continue</button>
+    </form>
+  </main>
+
+  <script>
+    // Light obfuscation: compare SHA-256 hashes so "olive" is not in plaintext.
+    // Still not real security. It just stops casual snooping.
+
+    const HOME = "/";
+    const GALLERY = "/her/gallery.html";
+    const SESSION_KEY = "her_authed_v1";
+
+    // SHA-256("olive") in hex:
+    const OLIVE_HASH = "fa6598317163f260c9f3bb0959f80974868eb5ff3f6bf80a092f54e042071aa2";
+
+    async function sha256Hex(str) {
+      const enc = new TextEncoder().encode(str);
+      const buf = await crypto.subtle.digest("SHA-256", enc);
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    document.getElementById("gateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const raw = (document.getElementById("pw").value || "").trim().toLowerCase();
+      const h = await sha256Hex(raw);
+
+      if (h === OLIVE_HASH) {
+        sessionStorage.setItem(SESSION_KEY, String(Date.now()));
+        location.replace(GALLERY);
+      } else {
+        // Silent fail: dump them back to the normal site.
+        location.replace(HOME);
+      }
+    });
+  </script>
+</body>
+</html>
