@@ -44,6 +44,7 @@ function showMonth(monthObj) {
 
   currentMonth = monthObj;
   renderPhotos(monthObj);
+  monthView.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function loadMonths() {
