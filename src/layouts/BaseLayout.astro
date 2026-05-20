@@ -1,6 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import Analytics from '@vercel/analytics/astro';
+import SpeedInsights from '@vercel/speed-insights/astro';
 import '../styles/global.css';
 
 interface Props {
@@ -27,6 +28,7 @@ const { title = 'Keogan Larade' } = Astro.props;
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
     <link rel="manifest" href="/images/site.webmanifest">
     <Analytics />
+    <SpeedInsights />
     <ClientRouter />
   </head>
   <body>
