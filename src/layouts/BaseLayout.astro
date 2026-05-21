@@ -13,7 +13,7 @@ interface Props {
 const {
   title = 'Keogan Larade',
   description = "Keogan Larade — writing, projects, and notes on quantum computing, music, and art.",
-  ogImage,
+  ogImage = '/images/canoe.jpg',
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
