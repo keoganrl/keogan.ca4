@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /her/
+
+Sitemap: https://keogan.ca/sitemap-index.xml

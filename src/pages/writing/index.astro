@@ -9,7 +9,7 @@ const articles = (await getCollection('writing')).sort(
 const allTags = [...new Set(articles.flatMap(a => a.data.tags))].sort();
 ---
 
-<BaseLayout title="Writing — Keogan Larade">
+<BaseLayout title="Writing — Keogan Larade" description="Essays and notes by Keogan Larade.">
   <p class="back"><a href="/">← back</a></p>
   <h1 class="name">Writing</h1>
 
