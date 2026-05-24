@@ -1,5 +1,5 @@
 ---
-title: "D-Wave"
+title: "Co-op: D-Wave"
 year: 2026
 date: 2026-01-01
 tags: [work, quantum]
