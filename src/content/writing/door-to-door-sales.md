@@ -1,5 +1,5 @@
 ---
-title: "Door to Door Sales"
+title: "Co-opish: Door to Door Sales"
 year: 2023
 date: 2023-08-01
 tags: [work]
