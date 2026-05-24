@@ -1,5 +1,5 @@
 ---
-title: "Institute for Quantum Computing"
+title: "Co-op: Institute for Quantum Computing"
 year: 2025
 date: 2025-08-01
 tags: [work, quantum]
