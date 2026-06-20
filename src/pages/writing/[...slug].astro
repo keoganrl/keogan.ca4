@@ -15,8 +15,8 @@ const { Content } = await render(article);
   title={`${article.data.title} — Keogan Larade`}
   description={article.data.summary ?? `${article.data.title} — writing by Keogan Larade.`}
 >
-  <p class="back"><a href="/writing">← writing</a></p>
-  <h1 class="name">{article.data.title}</h1>
+  <p class="back" transition:name="back-link"><a href="/writing">← writing</a></p>
+  <h1 class="name" transition:name="page-heading">{article.data.title}</h1>
   <p class="article-meta">
     <span class="article-year">{article.data.year}</span>
     {article.data.tags.map(tag => <span class="article-tag">{tag}</span>)}

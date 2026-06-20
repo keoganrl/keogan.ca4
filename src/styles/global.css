@@ -148,10 +148,8 @@ body {
   transition: border-color 0.2s ease;
 }
 
-.directory a:hover,
-.footer a:hover {
-  border-bottom-color: #b8b8b8;
-}
+/* Hover affordances for .directory a / .footer a live in the
+   @media (hover: hover) block at the foot of this file. */
 
 /* Writing / Projects listing */
 
@@ -203,10 +201,6 @@ body {
   color: #2a2a2a;
   text-decoration: none;
   transition: border-color 0.15s;
-}
-
-.article-item a:hover {
-  border-bottom-color: #ccc;
 }
 
 .article-year {
@@ -267,11 +261,6 @@ body {
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color 0.15s, color 0.15s;
-}
-
-.back a:hover {
-  color: #2a2a2a;
-  border-bottom-color: #ccc;
 }
 
 .project-link {
@@ -395,4 +384,53 @@ body {
   }
 
   .back-bottom { display: none; }
+}
+
+/* Hover motion — asymmetric: quick lift in (0.27s), slow settle out (1s).
+   Gated to fine pointers so touch devices never get sticky-hover shifts. */
+@media (hover: hover) and (pointer: fine) {
+
+  /* 1 · Directory slash links — scale + darken, no underline */
+  .directory a {
+    display: inline-flex;
+    align-items: center;
+    transition: transform 1s ease, color 0.15s ease;
+  }
+  .directory a:hover {
+    transform: scale(1.07);
+    color: #2a2a2a;
+    border-bottom-color: transparent;
+    transition: transform 0.27s ease, color 0.15s ease;
+  }
+
+  /* 2 · Footer social icons — scale 1.2 */
+  .footer a {
+    transition: transform 1s ease;
+  }
+  .footer a:hover {
+    transform: scale(1.2);
+    border-bottom-color: transparent;
+    transition: transform 0.27s ease;
+  }
+
+  /* 3 · List rows — only the TITLE slides; year stays put */
+  .article-title {
+    transition: transform 1s ease;
+  }
+  .article-item a:hover .article-title {
+    transform: translateX(5px);
+    transition: transform 0.27s ease;
+  }
+
+  /* 4 · Back link — slide left + darken, no underline */
+  .back a {
+    display: inline-block;
+    transition: transform 1s ease, color 0.15s ease;
+  }
+  .back a:hover {
+    transform: translateX(-3px);
+    color: #2a2a2a;
+    transition: transform 0.27s ease, color 0.15s ease;
+  }
+
 }

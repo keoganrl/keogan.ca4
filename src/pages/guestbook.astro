@@ -3,8 +3,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
 <BaseLayout title="Guestbook — Keogan Larade" description="Leave a note. Read what others have written.">
-  <p class="back"><a href="/">← back</a></p>
-  <h1 class="name">Guestbook</h1>
+  <p class="back" transition:name="back-link"><a href="/">← back</a></p>
+  <h1 class="name" transition:name="page-heading">Guestbook</h1>
 
   <form class="guestbook-form" id="guestbook-form">
     <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />

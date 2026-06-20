@@ -10,8 +10,8 @@ const allTags = [...new Set(articles.flatMap(a => a.data.tags))].sort();
 ---
 
 <BaseLayout title="Writing — Keogan Larade" description="Essays and notes by Keogan Larade.">
-  <p class="back"><a href="/">← back</a></p>
-  <h1 class="name">Writing</h1>
+  <p class="back" transition:name="back-link"><a href="/">← back</a></p>
+  <h1 class="name" transition:name="page-heading">Writing</h1>
 
   <nav class="tags">
     <button class="tag active" data-filter="all">all</button>
