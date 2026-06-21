@@ -172,11 +172,6 @@ body {
   transition: border-color 0.15s, color 0.15s;
 }
 
-.tag:hover {
-  border-color: #888;
-  color: #2a2a2a;
-}
-
 .tag.active {
   border-color: #2a2a2a;
   color: #2a2a2a;
@@ -246,7 +241,6 @@ body {
 .article-body h2 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; font-size: 1.17em; margin: 2rem 0 0.75rem; }
 .article-body h3 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; margin: 1.5rem 0 0.5rem; }
 .article-body a { color: inherit; text-decoration: underline; text-decoration-color: #ccc; }
-.article-body a:hover { text-decoration-color: #888; }
 
 .back {
   position: absolute;
@@ -273,10 +267,6 @@ body {
   text-decoration: none;
   border-bottom: 1px solid #ccc;
   transition: border-color 0.15s;
-}
-
-.project-link a:hover {
-  border-bottom-color: #888;
 }
 
 /* Guestbook */
@@ -331,7 +321,6 @@ body {
   margin-top: 0.5rem;
 }
 
-.guestbook-submit:hover { border-color: #888; color: #2a2a2a; }
 .guestbook-submit:disabled { opacity: 0.5; cursor: default; }
 
 .guestbook-status { font-size: 0.85rem; color: #888; margin: 0.75rem 0 0; }
@@ -431,6 +420,42 @@ body {
     transform: translateX(-3px);
     color: #2a2a2a;
     transition: transform 0.27s ease, color 0.15s ease;
+  }
+
+  /* 5 · Colour-only hovers — quick-in (0.1s), slow settle out (1s) */
+
+  .tag {
+    transition: border-color 1s ease, color 1s ease;
+  }
+  .tag:hover {
+    border-color: #888;
+    color: #2a2a2a;
+    transition: border-color 0.1s ease, color 0.1s ease;
+  }
+
+  .article-body a {
+    transition: text-decoration-color 1s ease;
+  }
+  .article-body a:hover {
+    text-decoration-color: #888;
+    transition: text-decoration-color 0.1s ease;
+  }
+
+  .project-link a {
+    transition: border-color 1s ease;
+  }
+  .project-link a:hover {
+    border-bottom-color: #888;
+    transition: border-color 0.1s ease;
+  }
+
+  .guestbook-submit {
+    transition: border-color 1s ease, color 1s ease;
+  }
+  .guestbook-submit:hover {
+    border-color: #888;
+    color: #2a2a2a;
+    transition: border-color 0.1s ease, color 0.1s ease;
   }
 
 }

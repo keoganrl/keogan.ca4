@@ -92,11 +92,7 @@ body.gate {
   font-size: 1rem;
   font-family: var(--body);
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-.gate-btn:hover {
-  background: var(--accent);
-  color: var(--bg);
+  transition: background 1s ease, color 1s ease;
 }
 
 /* ---------- Topbar ---------- */
@@ -152,12 +148,7 @@ body.gate {
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   user-select: none;
-  transition: background 0.25s, border-color 0.25s, transform 0.25s;
-}
-.month-tile:hover {
-  background: linear-gradient(180deg, var(--bg-card-2), rgba(255, 240, 235, 0.04));
-  border-color: rgba(243, 232, 228, 0.18);
-  transform: translateY(-1px);
+  transition: background 1s ease, border-color 1s ease, transform 1s ease;
 }
 .month-tile:focus-visible {
   outline: 2px solid var(--accent);
@@ -226,10 +217,7 @@ body.gate {
   height: auto;
   border-radius: 4px;
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
-  transition: transform 0.4s ease;
-}
-.photo-card:hover .photo {
-  transform: translateY(-2px);
+  transition: transform 1s ease;
 }
 
 .skeleton {
@@ -291,11 +279,9 @@ body.gate {
   color: var(--muted);
   cursor: pointer;
   font-family: var(--body);
-  transition: color 0.2s, transform 0.2s;
+  transition: color 1s ease, transform 1s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.lb-close:hover,
-.lb-nav:hover { color: var(--accent); }
 
 .lb-close {
   top: 0.75rem;
@@ -312,7 +298,6 @@ body.gate {
   line-height: 1;
   padding: 0.5rem 0.85rem;
 }
-.lb-nav:hover { transform: translateY(-50%) scale(1.1); }
 .lb-prev { left: 0.5rem; }
 .lb-next { right: 0.5rem; }
 
@@ -332,4 +317,41 @@ body.gate {
   .lb-nav { font-size: 3rem; }
   .lb-prev { left: 1.25rem; }
   .lb-next { right: 1.25rem; }
+}
+
+/* ---------- Hover motion ---------- */
+/* Asymmetric: quick in (motion 0.27s / colour 0.1s), slow settle out (1s).
+   Gated to fine pointers so touch devices never get sticky-hover shifts. */
+@media (hover: hover) and (pointer: fine) {
+
+  /* Colour — quick-in 0.1s */
+  .gate-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+    transition: background 0.1s ease, color 0.1s ease;
+  }
+
+  .lb-close:hover,
+  .lb-nav:hover {
+    color: var(--accent);
+    transition: color 0.1s ease, transform 0.27s ease;
+  }
+
+  /* Motion — quick-in 0.27s */
+  .photo-card:hover .photo {
+    transform: translateY(-2px);
+    transition: transform 0.27s ease;
+  }
+
+  .lb-nav:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  /* Both — colour 0.1s, motion 0.27s */
+  .month-tile:hover {
+    background: linear-gradient(180deg, var(--bg-card-2), rgba(255, 240, 235, 0.04));
+    border-color: rgba(243, 232, 228, 0.18);
+    transform: translateY(-1px);
+    transition: background 0.1s ease, border-color 0.1s ease, transform 0.27s ease;
+  }
 }
