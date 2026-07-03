@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
 import sitemap from '@astrojs/sitemap';
+import svelte from '@astrojs/svelte';
 
 export default defineConfig({
   output: 'static',
@@ -11,8 +12,11 @@ export default defineConfig({
   }),
   site: 'https://keogan.ca',
   integrations: [
+    svelte(),
     sitemap({
-      filter: (page) => !page.startsWith('https://keogan.ca/her'),
+      filter: (page) =>
+        !page.startsWith('https://keogan.ca/her') &&
+        !page.startsWith('https://keogan.ca/chips'),
     }),
   ],
   build: {

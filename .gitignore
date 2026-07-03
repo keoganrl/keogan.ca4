@@ -23,5 +23,8 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
+# claude code local state (worktrees, launch config, local settings)
+.claude/
+
 # astro
 .astro/

@@ -1,0 +1,8 @@
+---
+import ChipsLayout from '../../layouts/ChipsLayout.astro';
+import Home from '../../chips/components/Home.svelte';
+---
+
+<ChipsLayout>
+  <Home client:only="svelte" />
+</ChipsLayout>

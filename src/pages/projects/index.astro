@@ -21,19 +21,94 @@ const allTags = [...new Set(projects.flatMap(p => p.data.tags))].sort();
   </nav>
 
   <ul class="article-list">
-    {projects.map(p => (
-      <li class="article-item" data-tags={p.data.tags.join(',')}>
-        <a href={`/projects/${p.id}`}>
-          <span class="article-year">{p.data.year}</span>
-          <span class="article-title">{p.data.title}</span>
-        </a>
-      </li>
-    ))}
+    {projects.map(p => {
+      const target = p.data.href ?? `/projects/${p.id}`;
+      const external = /^https?:\/\//.test(target);
+      return (
+        <li class="article-item" data-tags={p.data.tags.join(',')}>
+          {p.data.collaborator ? (
+            <div class="article-row">
+              <span class="article-year">{p.data.year}</span>
+              <span class="article-titles">
+                <a class="article-title-link" href={target} {...(external ? { target: '_blank', rel: 'noopener' } : {})}>
+                  <span class="article-title">{p.data.title}</span>
+                </a><span class="article-collab"> – with <a href={p.data.collaborator.url} target="_blank" rel="noopener">{p.data.collaborator.name}</a></span>
+              </span>
+            </div>
+          ) : (
+            <a href={target} {...(external ? { target: '_blank', rel: 'noopener' } : {})}>
+              <span class="article-year">{p.data.year}</span>
+              <span class="article-title">{p.data.title}</span>
+            </a>
+          )}
+        </li>
+      );
+    })}
   </ul>
 </BaseLayout>
 
 <style>
   .name { margin-bottom: 1.25rem; }
+
+  /* Collaborator row — mirrors .article-item a's layout (see global.css) but
+     holds two independent links, so it can't be a single anchor. */
+  .article-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.55rem 0;
+  }
+
+  /* global.css forces every .article-item a to display:flex with its own
+     padding/border — reset the inner links so title + credit read inline. */
+  .article-row a {
+    display: inline;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  /* Title + credit slide together as one unit. global.css only slides
+     .article-title, which would shift the title into the credit — so slide
+     the whole container and cancel the per-title transform. */
+  .article-titles {
+    transition: transform 1s ease;
+  }
+  .article-row .article-title {
+    transform: none;
+  }
+
+  /* One uniform ink colour; the credit's link keeps its underline. */
+  .article-title-link,
+  .article-collab,
+  .article-collab a {
+    color: #2a2a2a;
+  }
+
+  .article-title-link {
+    text-decoration: none;
+  }
+
+  .article-collab {
+    font-size: 1.05rem;
+    line-height: 1.5;
+  }
+
+  .article-collab a {
+    text-decoration: underline;
+    text-decoration-color: #ccc;
+    transition: text-decoration-color 1s ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .article-titles:hover {
+      transform: translateX(5px);
+      transition: transform 0.27s ease;
+    }
+    .article-collab a:hover {
+      text-decoration-color: #888;
+      transition: text-decoration-color 0.1s ease;
+    }
+  }
 </style>
 
 <script>

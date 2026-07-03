@@ -1,0 +1,97 @@
+import type { BlindLevel } from '$lib/types';
+
+export type Pace = 'turbo' | 'normal' | 'deep';
+export type CashSessionLength = 60 | 120 | 180 | 240;
+
+const NICE_BLINDS: [number, number][] = [
+	[1, 2],
+	[2, 4],
+	[2, 5],
+	[3, 6],
+	[5, 10],
+	[10, 20],
+	[15, 30],
+	[25, 50],
+	[50, 100],
+	[75, 150],
+	[100, 200],
+	[200, 400],
+	[300, 600],
+	[500, 1000]
+];
+
+// Shorter sessions get shallower effective stacks (bigger blinds) so games actually
+// resolve in the time available: a 1-hour session starts everyone at ~20 big blinds.
+const CASH_SESSION_TARGET_BB: Record<CashSessionLength, number> = {
+	60: 20,
+	120: 50,
+	180: 75,
+	240: 100
+};
+
+function suggestStartingIndex(buyIn: number, targetBBMultiplier = 75): number {
+	const targetBB = buyIn / targetBBMultiplier;
+	let best = 0;
+	for (let i = 0; i < NICE_BLINDS.length; i++) {
+		if (NICE_BLINDS[i][1] <= targetBB) best = i;
+	}
+	return best;
+}
+
+export function suggestCashBlinds(
+	buyIn: number,
+	sessionMinutes: CashSessionLength = 120
+): [number, number] {
+	const idx = suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes]);
+	return NICE_BLINDS[idx];
+}
+
+function blindsAtIndex(idx: number): [number, number] {
+	if (idx < NICE_BLINDS.length) return NICE_BLINDS[idx];
+	const overshoot = idx - NICE_BLINDS.length + 1;
+	const [lastSb, lastBb] = NICE_BLINDS[NICE_BLINDS.length - 1];
+	return [lastSb * Math.pow(2, overshoot), lastBb * Math.pow(2, overshoot)];
+}
+
+const PACE_MINUTES: Record<Pace, number> = {
+	turbo: 10,
+	normal: 20,
+	deep: 30
+};
+
+export function generateTournamentSchedule(
+	buyIn: number,
+	numPlayers: number,
+	sessionMinutes: number,
+	pace: Pace
+): BlindLevel[] {
+	const startIdx = suggestStartingIndex(buyIn);
+	const levelMinutes = PACE_MINUTES[pace];
+	const totalLevels = Math.max(3, Math.round(sessionMinutes / levelMinutes));
+
+	return Array.from({ length: totalLevels }, (_, i) => {
+		const [sb, bb] = blindsAtIndex(startIdx + i);
+		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: levelMinutes };
+	});
+}
+
+// The ladder starts at the same blinds the session length suggests, then escalates.
+export function generateCashEscalationSchedule(
+	buyIn: number,
+	numPlayers: number,
+	sessionMinutes: CashSessionLength = 120
+): BlindLevel[] {
+	const startIdx = suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes]);
+	const count = Math.max(3, Math.min(numPlayers - 1, 8));
+
+	return Array.from({ length: count }, (_, i) => {
+		const [sb, bb] = blindsAtIndex(startIdx + i);
+		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: 0 };
+	});
+}
+
+export function formatBlindTime(seconds: number): string {
+	const m = Math.floor(seconds / 60);
+	const s = seconds % 60;
+	return `${m}:${String(s).padStart(2, '0')}`;
+}

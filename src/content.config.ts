@@ -21,6 +21,11 @@ const projects = defineCollection({
     tags: z.array(z.string()),
     summary: z.string().optional(),
     link: z.string().url().optional(),
+    // When set, the projects-list row links straight here instead of to the
+    // generated /projects/<slug> detail page (may be an on-site path like /chips).
+    href: z.string().optional(),
+    // A collaborator credited beside the title, as a separate link.
+    collaborator: z.object({ name: z.string(), url: z.string().url() }).optional(),
   }),
 });
 

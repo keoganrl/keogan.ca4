@@ -1,0 +1,18 @@
+---
+import ChipsLayout from '../../layouts/ChipsLayout.astro';
+import Invite from '../../chips/components/Invite.svelte';
+import { WORDS } from '../../chips/lib/utils/joinCode';
+
+// Join codes come from a fixed 15-word pool, so every shareable invite URL
+// (keogan.ca/chips/WOLF) can be prerendered. The component resolves the code
+// against live sessions at visit time.
+export function getStaticPaths() {
+  return WORDS.map((word) => ({ params: { code: word } }));
+}
+
+const { code } = Astro.params;
+---
+
+<ChipsLayout title={`Join ${code} — Chips`}>
+  <Invite code={code} client:only="svelte" />
+</ChipsLayout>
