@@ -76,15 +76,16 @@ export function generateTournamentSchedule(
 }
 
 // The ladder starts at the same blinds the session length suggests, then escalates.
+// A fixed nine-step ladder covers any table size (3 to 9 players): blinds only ever
+// climb as seats empty, so extra rungs simply go unused at a small table.
 export function generateCashEscalationSchedule(
 	buyIn: number,
-	numPlayers: number,
-	sessionMinutes: CashSessionLength = 120
+	sessionMinutes: CashSessionLength = 120,
+	steps = 9
 ): BlindLevel[] {
 	const startIdx = suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes]);
-	const count = Math.max(3, Math.min(numPlayers - 1, 8));
 
-	return Array.from({ length: count }, (_, i) => {
+	return Array.from({ length: steps }, (_, i) => {
 		const [sb, bb] = blindsAtIndex(startIdx + i);
 		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: 0 };
 	});

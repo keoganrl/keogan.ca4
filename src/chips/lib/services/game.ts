@@ -125,7 +125,7 @@ export async function joinSession(
 	]);
 
 	const nextSeat = currentPlayers?.length ? currentPlayers[0].seat_order + 1 : 1;
-	const buyIn = sessionRow?.starting_stack ?? 200;
+	const buyIn = sessionRow?.starting_stack ?? 1000;
 
 	const { data: inserted, error } = await supabase
 		.from('players')

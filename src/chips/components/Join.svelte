@@ -2,12 +2,11 @@
   import { onMount } from 'svelte';
   import { go } from '../lib/nav';
   import { initIdentity, displayName, identityId, saveIdentity } from '../lib/stores/identity';
-  import { joinSession, getSession } from '../lib/services/game';
+  import { joinSession } from '../lib/services/game';
 
   let sessionId = $state('');
   let joinCode = $state('');
   let name = $state('');
-  let startingStack = $state<number | null>(null);
   let errorMsg = $state('');
   let loading = $state(false);
 
@@ -17,10 +16,6 @@
     sessionId = params.get('session') ?? '';
     joinCode = params.get('code') ?? '';
     name = $displayName;
-    if (sessionId) {
-      const session = await getSession(sessionId);
-      startingStack = session?.starting_stack ?? null;
-    }
   });
 
   async function handleJoinGame() {
@@ -51,16 +46,15 @@
   <p class="chips-sub"><span class="chips-code">{joinCode}</span></p>
 
   <div class="cfield">
-    <label for="join-name">Your name</label>
-    <input id="join-name" bind:value={name} maxlength="40" autocomplete="name" />
+    <input
+      id="join-name"
+      bind:value={name}
+      placeholder="Your name"
+      maxlength="40"
+      autocomplete="name"
+      aria-label="Your name"
+    />
   </div>
-
-  <!-- Buy-in is fixed by the host at game setup -->
-  {#if startingStack !== null}
-    <p class="stack-note">
-      You'll sit down with <strong>{startingStack} chips</strong> — the host set the buy-in.
-    </p>
-  {/if}
 
   {#if errorMsg}
     <p class="cerror">{errorMsg}</p>
@@ -72,13 +66,6 @@
 </div>
 
 <style>
-  .stack-note {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: var(--ink-soft);
-    margin: 0 0 2rem;
-  }
-
   .sit {
     font-size: 1.05rem;
     padding: 0.8rem 1.2rem;

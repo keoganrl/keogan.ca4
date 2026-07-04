@@ -65,8 +65,10 @@ body.chips button { touch-action: manipulation; }
 .chips-page {
   max-width: 480px;
   margin-inline: auto;
-  padding: 5.5rem 1.75rem 2.5rem;
-  padding-top: max(5.5rem, calc(env(safe-area-inset-top) + 3rem));
+  padding: 7rem 1.75rem 2.5rem;
+  /* Title lands at 7rem like every other page, so the gap below the back link
+     (pinned at top: 4rem) matches the rest of the site. */
+  padding-top: max(7rem, calc(env(safe-area-inset-top) + 4.5rem));
   padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
   position: relative;
 }
@@ -83,9 +85,14 @@ body.chips button { touch-action: manipulation; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Match the site-wide back link (global.css .back): pinned high on the page
+   rather than sitting in the flow, so it lines up with every other page. */
 .chips-back {
+  position: absolute;
+  top: 4rem;
+  left: 1.75rem;
   font-size: 0.9rem;
-  margin: 0 0 2.5rem;
+  margin: 0;
 }
 .chips-back a {
   color: var(--faint);

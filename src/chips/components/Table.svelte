@@ -786,7 +786,7 @@
       >
         <p class="head-code">
           <span class="chips-code">{s.session?.join_code}</span>
-          <span class="pill">qr</span>
+          <span class="pill">QR</span>
         </p>
         {#if s.hasBlindSchedule}
           <button
@@ -901,8 +901,8 @@
                 >{:else if isBusted}<span class="pill">busted</span
                 >{:else if player.folded}<span class="pill">folded</span>{/if}
               {#if isButton && !player.folded}<span class="pill pill-dark">dealer</span>{/if}
-              {#if isSB && !player.folded}<span class="pill">sb</span>{/if}
-              {#if isBB && !player.folded}<span class="pill">bb</span>{/if}
+              {#if isSB && !player.folded}<span class="pill">SB</span>{/if}
+              {#if isBB && !player.folded}<span class="pill">BB</span>{/if}
               {#if player.is_host}<span class="pill-plain pill">host</span>{/if}
               {#if player.identity_id === $identityId}<span class="pill-plain pill">you</span>{/if}
             </div>
@@ -962,20 +962,21 @@
         <!-- Primary actions: Fold / Check+Call / Raise -->
         {#if !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
           <div class="btn-row">
-            <button class="cbtn cbtn-danger" onclick={handleFold} disabled={s.actionPending}>
+            <button class="act act-fold" onclick={handleFold} disabled={s.actionPending}>
               Fold
             </button>
             {#if callAmount > 0}
-              <button class="cbtn" onclick={handleCall} disabled={s.actionPending}>
+              <button class="act act-check" onclick={handleCall} disabled={s.actionPending}>
                 Call {callAmount}
               </button>
             {:else}
-              <button class="cbtn" onclick={handleCheck} disabled={s.actionPending}>Check</button>
+              <button class="act act-check" onclick={handleCheck} disabled={s.actionPending}
+                >Check</button
+              >
             {/if}
             {#if s.canRaise}
               <button
-                class="cbtn"
-                class:cbtn-primary={!showBetting}
+                class="act act-raise"
                 onclick={() => {
                   showBetting = !showBetting;
                 }}
@@ -1146,7 +1147,7 @@
                 aria-label="Toggle blind unit"
               >
                 {blindsCount % 1 === 0 ? blindsCount : blindsCount.toFixed(1)}
-                {blindUnit.toLowerCase()}
+                {blindUnit}
               </button>
             </div>
 
@@ -1410,6 +1411,25 @@
   }
   .btn-row > :global(.cbtn) { flex: 1; }
   .btn-row.wrap { flex-wrap: wrap; }
+
+  /* Primary in-hand actions — solid, muted fills, no borders, so the table
+     reads like a game rather than a page. Colour carries the meaning:
+     fold in the ledger red, check/call in neutral grey, raise in the green. */
+  .act {
+    flex: 1;
+    font-family: inherit;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 2rem;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    color: var(--paper);
+    transition: opacity 0.15s ease;
+  }
+  .act:disabled { opacity: 0.45; cursor: default; }
+  .act-fold { background: var(--down); }
+  .act-check { background: var(--muted); }
+  .act-raise { background: var(--up); }
   .grow { flex: 1; }
   .center { text-align: center; }
 
@@ -1733,5 +1753,6 @@
       color: var(--ink);
       transition: color 0.1s ease;
     }
+    .act:hover:not(:disabled) { opacity: 0.85; }
   }
 </style>

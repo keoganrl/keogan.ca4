@@ -55,11 +55,7 @@
 
 <div class="chips-page">
   <p class="chips-back"><a href="/">← back</a></p>
-  <h1 class="chips-title">Chips</h1>
-  <p class="chips-blurb">
-    Poker night without the chips. One phone per player — blinds, bets, and pots keep themselves.
-    The cards stay real.
-  </p>
+  <h1 class="chips-title home-title">Poker Chips</h1>
 
   <button class="cbtn cbtn-primary cbtn-block start" onclick={handleCreateGame} disabled={loading}>
     Start a game
@@ -72,7 +68,7 @@
       class="cinput code-input"
       bind:value={joinCode}
       onkeydown={(e) => e.key === 'Enter' && handleJoinGame()}
-      placeholder="WOLF"
+      placeholder="CODE"
       maxlength={8}
       aria-label="Join code"
       autocapitalize="characters"
@@ -93,6 +89,14 @@
 </div>
 
 <style>
+  /* Home is the marquee: drop the title to the vertical middle so it sits
+     just above "Start a game", the one action you came here for. */
+  .home-title {
+    text-align: center;
+    margin-top: 28vh;
+    margin-bottom: 2.5rem;
+  }
+
   .start {
     font-size: 1.05rem;
     padding: 0.8rem 1.2rem;
@@ -117,8 +121,9 @@
   /* Secondary destination — set apart from the create/join flow, kept quiet
      so "Start a game" stays the one primary action on the page. */
   .leaderboard-link {
-    display: inline-block;
-    margin-top: 3.5rem;
+    display: block;
+    width: fit-content;
+    margin: 3.5rem auto 0;
     text-decoration: none;
   }
 
