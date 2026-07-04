@@ -38,6 +38,21 @@
     showQrCode && store?.session?.join_code ? inviteUrl(store.session.join_code) : null
   );
   const qrSvg = $derived(joinUrl ? renderSVG(joinUrl) : null);
+
+  // Tapping the invite URL copies it — quicker than reading out a QR to someone
+  // sitting next to you. Reverts the "copied" note after a beat.
+  let inviteCopied = $state(false);
+  async function copyInvite() {
+    if (!joinUrl) return;
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      inviteCopied = true;
+      setTimeout(() => (inviteCopied = false), 1500);
+    } catch {
+      // Clipboard blocked (insecure context / permissions) — leave the URL visible to copy by hand.
+    }
+  }
+
   let focusedPlayerId = $state<string | null>(null);
 
   // Seat reorder drag state
@@ -468,7 +483,9 @@
           </div>
         {/if}
         {#if joinUrl}
-          <p class="qr-url">{joinUrl}</p>
+          <button class="qr-url" onclick={copyInvite} aria-label="Copy invite link">
+            {inviteCopied ? 'Copied to clipboard' : joinUrl}
+          </button>
         {/if}
         <button class="cbtn cbtn-block" onclick={() => (showQrCode = false)}>Close</button>
       </div>
@@ -989,6 +1006,25 @@
 
         <!-- Betting round done: host or dealer confirms once the cards are dealt IRL -->
         {#if s.streetComplete}
+          <!-- Board preview: card slots for the street about to come. The flop
+               deals three fresh cards; the turn and river add one, so only the
+               new (rightmost) slot is highlighted then. -->
+          {@const street = s.session?.street}
+          {@const board =
+            street === 'preflop'
+              ? { count: 3, newFrom: 0 }
+              : street === 'flop'
+                ? { count: 4, newFrom: 3 }
+                : street === 'turn'
+                  ? { count: 5, newFrom: 4 }
+                  : null}
+          {#if board}
+            <div class="board-preview" aria-hidden="true">
+              {#each Array.from({ length: board.count }) as _, i (i)}
+                <span class="card-slot" class:dealt={i >= board.newFrom}></span>
+              {/each}
+            </div>
+          {/if}
           {#if s.canConfirmNextStreet}
             <button
               class="cbtn cbtn-primary cbtn-block"
@@ -1405,6 +1441,24 @@
     background: var(--paper);
   }
 
+  /* Board preview — card-shaped slots shown above the "deal" action. Grey fill
+     marks the card(s) about to hit the felt; outlines are cards already out. */
+  .board-preview {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-bottom: 0.15rem;
+  }
+  .card-slot {
+    width: 1.6rem;
+    height: 2.2rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+  }
+  .card-slot.dealt {
+    background: var(--rule);
+  }
+
   .btn-row {
     display: flex;
     gap: 0.5rem;
@@ -1518,9 +1572,19 @@
     display: block;
   }
   .qr-url {
+    font-family: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
     font-size: 0.75rem;
     color: var(--faint);
     word-break: break-all;
+    text-align: center;
+    transition: color 1s ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .qr-url:hover { color: var(--ink); transition: color 0.1s ease; }
   }
 
   .rankings {

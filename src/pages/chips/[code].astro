@@ -5,9 +5,21 @@ import { WORDS } from '../../chips/lib/utils/joinCode';
 
 // Join codes come from a fixed 15-word pool, so every shareable invite URL
 // (keogan.ca/chips/WOLF) can be prerendered. The component resolves the code
-// against live sessions at visit time.
+// against live sessions at visit time. Static routes are case-sensitive, so we
+// prerender each word cased three ways — WOLF, wolf, Wolf — and let visitors
+// reach a game whether they type or share the code in any of them.
 export function getStaticPaths() {
-  return WORDS.map((word) => ({ params: { code: word } }));
+  const seen = new Set<string>();
+  const paths: { params: { code: string } }[] = [];
+  for (const word of WORDS) {
+    const variants = [word, word.toLowerCase(), word[0] + word.slice(1).toLowerCase()];
+    for (const code of variants) {
+      if (seen.has(code)) continue;
+      seen.add(code);
+      paths.push({ params: { code } });
+    }
+  }
+  return paths;
 }
 
 const { code } = Astro.params;

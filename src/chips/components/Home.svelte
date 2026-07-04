@@ -127,8 +127,14 @@
     text-decoration: none;
   }
 
+  /* Anchored to the foot of the screen, centred — a quiet sign-off. */
   .welcome {
-    margin-top: 2rem;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem));
+    margin: 0;
+    text-align: center;
     font-size: 0.85rem;
     color: var(--whisper);
     font-style: italic;

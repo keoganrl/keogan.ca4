@@ -90,7 +90,7 @@
     <div class="subgroup">
       <span class="clabel">Session length</span>
       <div class="choices">
-        {#each [[60, '1h'] as const, [120, '2h'] as const, [180, '3+h'] as const] as [mins, label] (mins)}
+        {#each [[60, '1h'] as const, [120, '2h'] as const, [180, '3h+'] as const] as [mins, label] (mins)}
           <button
             class="cchoice grow"
             class:active={sessionMinutes === mins}
@@ -100,7 +100,7 @@
       </div>
     </div>
 
-    <label class="cswitch">
+    <label class="cswitch escalation-toggle">
       <input type="checkbox" bind:checked={enableEscalation} />
       <span class="track" aria-hidden="true"></span>
       Raise blinds as players leave
@@ -136,6 +136,9 @@
     gap: 0.5rem;
   }
   .grow { flex: 1; }
+
+  /* A touch more air between the session-length row and the toggle. */
+  .escalation-toggle { margin-top: 1rem; }
 
   .start {
     font-size: 1.05rem;
