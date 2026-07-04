@@ -93,7 +93,7 @@
      just above "Start a game", the one action you came here for. */
   .home-title {
     text-align: center;
-    margin-top: 28vh;
+    margin-top: 14vh;
     margin-bottom: 2.5rem;
   }
 
