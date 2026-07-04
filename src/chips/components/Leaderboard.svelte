@@ -7,12 +7,26 @@
 
   let stats = $state<LifetimeStat[]>([]);
   let loading = $state(true);
+  let errorMsg = $state('');
   let sortBy = $state<SortKey>('total_net');
 
   onMount(async () => {
-    const { data } = await supabase.from('lifetime_stats').select('*');
-    if (data) stats = data as LifetimeStat[];
-    loading = false;
+    // Surface failures instead of silently rendering an empty board — a missing
+    // view or a permissions error looks identical to "no games yet" otherwise.
+    try {
+      const { data, error } = await supabase.from('lifetime_stats').select('*');
+      if (error) throw error;
+      stats = (data ?? []) as LifetimeStat[];
+    } catch (e) {
+      console.error('Leaderboard failed to load:', e);
+      // Supabase returns a plain PostgrestError object (not an Error), so read
+      // its message directly — that's where "relation … does not exist" etc. live.
+      const msg =
+        e instanceof Error ? e.message : (e as { message?: string } | null)?.message;
+      errorMsg = msg || 'Could not load the leaderboard.';
+    } finally {
+      loading = false;
+    }
   });
 
   let sorted = $derived.by(() => {
@@ -53,6 +67,8 @@
 
   {#if loading}
     <p class="cnote">Loading…</p>
+  {:else if errorMsg}
+    <p class="cerror">Couldn’t load the leaderboard — {errorMsg}</p>
   {:else if stats.length === 0}
     <p class="cnote">No completed sessions yet.</p>
   {:else}

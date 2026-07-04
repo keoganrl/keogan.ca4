@@ -53,6 +53,32 @@
     }
   }
 
+  // Copy on a press-and-hold too, not just a tap. Guard the trailing click so a
+  // long press doesn't copy twice.
+  let inviteHoldTimer: ReturnType<typeof setTimeout> | null = null;
+  let inviteHeld = false;
+  function startInviteHold() {
+    cancelInviteHold();
+    inviteHeld = false;
+    inviteHoldTimer = setTimeout(() => {
+      inviteHeld = true;
+      void copyInvite();
+    }, 450);
+  }
+  function cancelInviteHold() {
+    if (inviteHoldTimer) {
+      clearTimeout(inviteHoldTimer);
+      inviteHoldTimer = null;
+    }
+  }
+  function onInviteClick() {
+    if (inviteHeld) {
+      inviteHeld = false;
+      return;
+    }
+    void copyInvite();
+  }
+
   let focusedPlayerId = $state<string | null>(null);
 
   // Seat reorder drag state
@@ -385,8 +411,25 @@
   <div class="chips-app">
     <!-- Street announcement popup -->
     {#if streetAnnouncement}
+      {@const annBoard =
+        streetAnnouncement === 'Flop'
+          ? { count: 3, newFrom: 0 }
+          : streetAnnouncement === 'Turn'
+            ? { count: 4, newFrom: 3 }
+            : streetAnnouncement === 'River'
+              ? { count: 5, newFrom: 4 }
+              : null}
       <div transition:fade={{ duration: 300 }} class="street-pop" aria-live="polite">
-        <div class="street-pop-card">{streetAnnouncement}</div>
+        <div class="street-pop-card">
+          {#if annBoard}
+            <div class="board-preview" aria-hidden="true">
+              {#each Array.from({ length: annBoard.count }) as _, i (i)}
+                <span class="card-slot" class:dealt={i >= annBoard.newFrom}></span>
+              {/each}
+            </div>
+          {/if}
+          <span class="street-pop-text">{streetAnnouncement}</span>
+        </div>
       </div>
     {/if}
 
@@ -483,7 +526,15 @@
           </div>
         {/if}
         {#if joinUrl}
-          <button class="qr-url" onclick={copyInvite} aria-label="Copy invite link">
+          <button
+            class="qr-url"
+            onclick={onInviteClick}
+            onpointerdown={startInviteHold}
+            onpointerup={cancelInviteHold}
+            onpointerleave={cancelInviteHold}
+            oncontextmenu={(e) => e.preventDefault()}
+            aria-label="Copy invite link"
+          >
             {inviteCopied ? 'Copied to clipboard' : joinUrl}
           </button>
         {/if}
@@ -1224,15 +1275,21 @@
     z-index: 60;
   }
   .street-pop-card {
-    font-family: var(--serif-display);
-    font-style: italic;
-    font-size: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
     color: var(--ink);
     background: var(--paper);
     border: 1px solid var(--rule);
     border-radius: 4px;
     box-shadow: 0 12px 40px rgba(42, 42, 42, 0.18);
     padding: 1.5rem 2.75rem;
+  }
+  .street-pop-text {
+    font-family: var(--serif-display);
+    font-style: italic;
+    font-size: 2rem;
   }
 
   /* --- Header --- */
@@ -1582,6 +1639,11 @@
     word-break: break-all;
     text-align: center;
     transition: color 1s ease;
+    /* Tap or press-and-hold copies; suppress the text-selection callout so a
+       hold reads as a deliberate copy, not a drag-select. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
   @media (hover: hover) and (pointer: fine) {
     .qr-url:hover { color: var(--ink); transition: color 0.1s ease; }
