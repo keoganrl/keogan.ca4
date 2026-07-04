@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Guestbook <onboarding@resend.dev>',
+      from: 'Guestbook <guestbook@keogan.ca>',
       to: 'keog@nlara.de',
       subject: `New guestbook entry from ${name}`,
       text: `${name} wrote:\n\n${message}`,
