@@ -49,10 +49,11 @@ export function streetLabel(street: string | null): string {
 }
 
 /**
- * Human-readable line for a single event, given the actor's display name. Returns ''
- * for events that aren't rendered as lines (`deal`, and `street` which is a divider).
+ * Human-readable line for a single event, given the actor's display name (and the
+ * recipient's, for 'give' events). Returns '' for events that aren't rendered as
+ * lines (`deal`, and `street` which is a divider).
  */
-export function describeEvent(event: GameEvent, name: string): string {
+export function describeEvent(event: GameEvent, name: string, targetName?: string): string {
 	const amt = event.amount ?? 0;
 	switch (event.type) {
 		case 'post_sb':
@@ -73,6 +74,8 @@ export function describeEvent(event: GameEvent, name: string): string {
 			return `${name} wins ${amt}`;
 		case 'rebuy':
 			return `${name} rebuys ${amt}`;
+		case 'give':
+			return `${name} gives ${amt} to ${targetName ?? 'someone'}`;
 		case 'join':
 			return `${name} joined`;
 		case 'leave':

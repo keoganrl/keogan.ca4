@@ -62,6 +62,7 @@ export type GameEventType =
 	| 'street'
 	| 'win'
 	| 'rebuy'
+	| 'give' // player-to-player chip transfer; player_id gives, target_player_id receives
 	| 'join'
 	| 'leave'
 	| 'kick';
@@ -74,6 +75,8 @@ export interface GameEvent {
 	type: GameEventType;
 	amount: number | null;
 	street: string | null;
+	// recipient for 'give' events; null elsewhere
+	target_player_id: string | null;
 	created_at: string;
 }
 

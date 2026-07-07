@@ -1,4 +1,4 @@
-import type { Player } from '$lib/types';
+import type { Player } from '../types';
 
 export type Pot = { amount: number; eligibleIds: string[] };
 
@@ -62,4 +62,60 @@ export function computePots(players: Player[]): Pot[] {
 		}
 	}
 	return merged;
+}
+
+export type AwardResolution = {
+	// chips each winner takes this round (sums exactly to the consumed pots)
+	payouts: Record<string, number>;
+	// pots none of the confirmed winners were eligible for — resolved in a later round
+	remainingPots: Pot[];
+};
+
+/**
+ * Resolves one "who had the best hand?" answer against the outstanding pots.
+ *
+ * The confirmed winner(s) take every remaining pot they're eligible for; ties split
+ * each pot equally among the tied winners eligible for it. Integer shares only — odd
+ * chips go one each to the tied winners in seat order starting left of the button
+ * (the standard odd-chip rule, and deterministic).
+ *
+ * Pots the winners can't reach (deeper side pots when the best hand was all-in for
+ * less) are returned in remainingPots for the host's next question. Because
+ * computePots orders pots main → side with nested eligibility, `remainingPots[0]`
+ * always holds the widest candidate set for that next question.
+ */
+export function resolveAward(
+	remainingPots: Pot[],
+	winnerIds: string[],
+	players: Player[],
+	buttonPlayerId: string | null
+): AwardResolution {
+	const payouts: Record<string, number> = {};
+	const leftover: Pot[] = [];
+
+	// Rank players by seat, starting one left of the button, for odd-chip order.
+	const bySeat = [...players].sort((a, b) => a.seat_order - b.seat_order);
+	const btnIdx = bySeat.findIndex((p) => p.id === buttonPlayerId);
+	const oddChipRank = new Map<string, number>(
+		bySeat.map((_, i) => [bySeat[(btnIdx + 1 + i) % bySeat.length].id, i])
+	);
+
+	for (const pot of remainingPots) {
+		const winners = winnerIds.filter((id) => pot.eligibleIds.includes(id));
+		if (!winners.length) {
+			leftover.push(pot);
+			continue;
+		}
+		const ordered = [...winners].sort(
+			(a, b) => (oddChipRank.get(a) ?? Infinity) - (oddChipRank.get(b) ?? Infinity)
+		);
+		const share = Math.floor(pot.amount / ordered.length);
+		let remainder = pot.amount - share * ordered.length;
+		for (const id of ordered) {
+			payouts[id] = (payouts[id] ?? 0) + share + (remainder > 0 ? 1 : 0);
+			if (remainder > 0) remainder--;
+		}
+	}
+
+	return { payouts, remainingPots: leftover };
 }

@@ -5,9 +5,11 @@ import {
 	resetHand as resetHandService,
 	setDealer as setDealerService,
 	awardPot as awardPotService,
+	awardPayouts as awardPayoutsService,
 	claimHost as claimHostService,
 	endSession as endSessionService,
 	doRebuy as doRebuyService,
+	giveChips as giveChipsService,
 	kickPlayer as kickPlayerService,
 	leaveTable as leaveTableService,
 	advanceTurn as advanceTurnService,
@@ -19,14 +21,16 @@ import {
 	advanceStreet as advanceStreetService,
 	startGame as startGameService,
 	advanceBlindLevel as advanceBlindLevelService,
+	advanceBlindLevels as advanceBlindLevelsService,
+	cashEscalationActive,
 	reorderSeats as reorderSeatsService,
 	playersBeforeTarget,
 	interveningResolutions,
 	logEvent
 } from '../services/table';
-import type { Session, Player, BlindLevel, GameEvent } from '../types';
+import type { Session, Player, GameEvent } from '../types';
 import { formatBlindTime } from '../utils/blindSchedule';
-import { computePots } from '../utils/pots';
+import { computePots, resolveAward } from '../utils/pots';
 
 export function createTableStore(sessionId: string, identityId: string) {
 	let session = $state<Session | null>(null);
@@ -34,7 +38,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 	let events = $state<GameEvent[]>([]);
 	let loading = $state(true);
 	let now = $state(Date.now());
-	let escalationSuggestion = $state<BlindLevel | null>(null);
 
 	// Winner of the main pot (first award) and original pot total, for hand record.
 	let firstPotWinnerId: string | null = null;
@@ -148,27 +151,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 						players = [...players, inserted];
 					} else if (payload.eventType === 'UPDATE') {
 						const updated = payload.new as Player;
-						// payload.old only carries the primary key (tables don't use REPLICA IDENTITY
-						// FULL), so diff against our local copy of the row instead.
-						const prev = players.find((p) => p.id === updated.id);
 						players = players.map((p) => (p.id === updated.id ? updated : p));
-
-						// Suggest blind escalation to host when a player leaves (cash mode with schedule)
-						if (
-							prev?.is_active &&
-							!updated.is_active &&
-							session?.game_mode === 'cash' &&
-							(session.blind_schedule?.length ?? 0) > 0
-						) {
-							const isHost = players.find((p) => p.identity_id === identityId)?.is_host;
-							if (isHost) {
-								const nextIdx = (session.blind_level ?? 0) + 1;
-								if (nextIdx < session.blind_schedule.length) {
-									escalationSuggestion = session.blind_schedule[nextIdx];
-								}
-							}
-						}
-
 						void maybeSkipMyTurn();
 					} else if (payload.eventType === 'DELETE') {
 						players = players.filter((p) => p.id !== payload.old.id);
@@ -252,12 +235,68 @@ export function createTableStore(sessionId: string, identityId: string) {
 	}
 
 	// Computed once the street is showdown. computePots only reads hand_total_bet,
-	// folded, and is_active — none of which change during awardPot — so this stays
-	// stable throughout the award flow.
+	// folded, and is_active — none of which change while pots are awarded — so this
+	// stays stable throughout the award flow.
 	const pots = $derived.by(() => {
 		if (session?.street !== 'showdown') return [];
 		return computePots(players);
 	});
+
+	// Winner sets the host has confirmed this showdown, in order ("who had the best
+	// hand?" rounds). remainingPots is derived by replaying them over the stable pot
+	// structure, so it survives re-renders; only this client (the host) mutates it.
+	let awardRounds = $state<string[][]>([]);
+
+	const remainingPots = $derived.by(() => {
+		let rem = pots;
+		for (const round of awardRounds) {
+			rem = resolveAward(rem, round, players, session?.button_player_id ?? null).remainingPots;
+		}
+		return rem;
+	});
+
+	function resetAwards() {
+		awardRounds = [];
+	}
+
+	// Awards one confirmed best-hand answer: the winner(s) take every remaining pot
+	// they're eligible for (ties split — see resolveAward). Deeper side pots that
+	// none of them could reach stay in remainingPots for the next question.
+	async function awardBestHand(winnerIds: string[]) {
+		if (!session || session.street !== 'showdown' || !winnerIds.length) return;
+		const { payouts } = resolveAward(
+			remainingPots,
+			winnerIds,
+			players,
+			session.button_player_id ?? null
+		);
+		const entries = Object.entries(payouts);
+		const total = entries.reduce((sum, [, amt]) => sum + amt, 0);
+		if (total <= 0) return;
+
+		if (!firstPotWinnerId) {
+			firstPotWinnerId = winnerIds[0];
+			handPotTotal = session.pot;
+		}
+
+		const newPot = session.pot - total;
+		players = players.map((p) =>
+			payouts[p.id] ? { ...p, stack: p.stack + payouts[p.id] } : p
+		);
+		session = { ...session, pot: newPot };
+		awardRounds = [...awardRounds, winnerIds];
+
+		await awardPayoutsService(
+			sessionId,
+			entries.map(([playerId, amount]) => ({
+				playerId,
+				amount,
+				// players was just updated optimistically, so this stack already includes the payout
+				newStack: players.find((p) => p.id === playerId)!.stack
+			})),
+			newPot
+		);
+	}
 
 	// A client acting on a stale snapshot can advanceTurn onto a player who has already
 	// folded (or is all-in and can't act). The mis-targeted player's own client is the one
@@ -544,13 +583,39 @@ export function createTableStore(sessionId: string, identityId: string) {
 		const potTotal = handPotTotal;
 		firstPotWinnerId = null;
 		handPotTotal = 0;
-		await endHandService(session, players, winner, potTotal);
+		resetAwards();
+
+		// Cash escalation: every seat emptied this hand climbs the blinds one rung.
+		// Newly busted = dealt in (hand_total_bet > 0) but out of chips after awards;
+		// players dealt out earlier have hand_total_bet 0 so they never recount. Runs
+		// before the deal so postBlinds posts the new blinds for the very next hand.
+		let dealSession = session;
+		if (cashEscalationActive(session)) {
+			const busted = players.filter(
+				(p) => p.is_active && p.stack === 0 && p.hand_total_bet > 0
+			).length;
+			if (busted > 0) {
+				await advanceBlindLevelsService(session, busted);
+				const schedule = session.blind_schedule;
+				const target = Math.min((session.blind_level ?? 0) + busted, schedule.length - 1);
+				const level = schedule[target];
+				dealSession = {
+					...session,
+					blind_level: target,
+					small_blind: level.small_blind,
+					big_blind: level.big_blind
+				};
+			}
+		}
+
+		await endHandService(dealSession, players, winner, potTotal);
 	}
 
 	async function performVoidHand() {
 		if (!session) return;
 		firstPotWinnerId = null;
 		handPotTotal = 0;
+		resetAwards();
 		await voidHandService(session, players);
 	}
 
@@ -558,6 +623,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (!session) return;
 		firstPotWinnerId = null;
 		handPotTotal = 0;
+		resetAwards();
 		await resetHandService(session, players);
 	}
 
@@ -596,20 +662,24 @@ export function createTableStore(sessionId: string, identityId: string) {
 		);
 	}
 
-	async function performAdvanceBlindLevel() {
-		if (!session) return;
-		await advanceBlindLevelService(session);
-		escalationSuggestion = null;
-	}
-
 	async function performReorderSeats(newOrder: Player[]) {
 		if (!session) return;
 		const activePlayers = players.filter((p) => p.is_active);
 		await reorderSeatsService(session, activePlayers, newOrder);
 	}
 
-	function dismissEscalation() {
-		escalationSuggestion = null;
+	async function performGiveChips(recipientId: string, amount: number) {
+		if (!me) return;
+		const recipient = players.find((p) => p.id === recipientId);
+		if (!recipient || !recipient.is_active || recipient.id === me.id) return;
+		if (!Number.isInteger(amount) || amount <= 0 || amount > me.stack) return;
+		const giver = me;
+		players = players.map((p) => {
+			if (p.id === giver.id) return { ...p, stack: p.stack - amount };
+			if (p.id === recipient.id) return { ...p, stack: p.stack + amount };
+			return p;
+		});
+		await giveChipsService(giver, recipient, amount);
 	}
 
 	return {
@@ -652,11 +722,12 @@ export function createTableStore(sessionId: string, identityId: string) {
 		get blindTimeDisplay() {
 			return blindTimeDisplay;
 		},
-		get escalationSuggestion() {
-			return escalationSuggestion;
+		get remainingPots() {
+			return remainingPots;
 		},
-		get pots() {
-			return pots;
+		// 0 on the first "who had the best hand?" question, 1+ for leftover side pots
+		get awardRound() {
+			return awardRounds.length;
 		},
 		get streetComplete() {
 			return streetComplete;
@@ -680,6 +751,11 @@ export function createTableStore(sessionId: string, identityId: string) {
 			runExclusive(() => placeBet(amount, outOfTurn), ''),
 		awardPot: (winnerId: string, amount: number) =>
 			runExclusive(() => awardPot(winnerId, amount), undefined),
+		awardBestHand: (winnerIds: string[]) =>
+			runExclusive(() => awardBestHand(winnerIds), undefined),
+		giveChips: (recipientId: string, amount: number) =>
+			runExclusive(() => performGiveChips(recipientId, amount), undefined),
+		resetAwards,
 		confirmNextStreet: () => runExclusive(confirmNextStreet, undefined),
 		passTurn: (outOfTurn = false) => runExclusive(() => passTurn(outOfTurn), undefined),
 		fold: () => runExclusive(fold, undefined),
@@ -693,8 +769,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 		endSession: performEndSession,
 		leaveTable: performLeaveTable,
 		startGame: performStartGame,
-		advanceBlindLevel: performAdvanceBlindLevel,
-		dismissEscalation,
 		kickPlayer: performKickPlayer,
 		reorderSeats: performReorderSeats
 	};

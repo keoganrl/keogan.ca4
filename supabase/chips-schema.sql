@@ -114,6 +114,11 @@ create table events (
   type text not null,
   amount int,
   street text,
+  -- recipient for 'give' (player-to-player chip transfer) events; null elsewhere.
+  -- Added 2026-07: existing databases need
+  --   alter table events add column target_player_id uuid
+  --     references players(id) on delete set null;
+  target_player_id uuid references players(id) on delete set null,
   created_at timestamptz not null default now()
 );
 

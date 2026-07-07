@@ -8,14 +8,20 @@ import type { Session, Player, BlindLevel, GameEventType } from '../types';
 export async function logEvent(
 	sessionId: string,
 	type: GameEventType,
-	opts: { playerId?: string | null; amount?: number | null; street?: string | null } = {}
+	opts: {
+		playerId?: string | null;
+		amount?: number | null;
+		street?: string | null;
+		targetPlayerId?: string | null;
+	} = {}
 ): Promise<void> {
 	await supabase.from('events').insert({
 		session_id: sessionId,
 		type,
 		player_id: opts.playerId ?? null,
 		amount: opts.amount ?? null,
-		street: opts.street ?? null
+		street: opts.street ?? null,
+		target_player_id: opts.targetPlayerId ?? null
 	});
 }
 
@@ -540,6 +546,26 @@ export async function awardPot(
 	await logEvent(sessionId, 'win', { playerId: winnerId, amount });
 }
 
+// Awards one showdown round's payouts (see resolveAward): each winner's stack is set to
+// its post-award value and session.pot drops by the round total. One 'win' ledger line
+// per winner. newStack values must already include the payout — the caller computed them
+// from its optimistic state.
+export async function awardPayouts(
+	sessionId: string,
+	payouts: { playerId: string; newStack: number; amount: number }[],
+	newPot: number
+): Promise<void> {
+	await Promise.all([
+		...payouts.map((w) =>
+			supabase.from('players').update({ stack: w.newStack }).eq('id', w.playerId)
+		),
+		supabase.from('sessions').update({ pot: newPot }).eq('id', sessionId)
+	]);
+	for (const w of payouts) {
+		await logEvent(sessionId, 'win', { playerId: w.playerId, amount: w.amount });
+	}
+}
+
 export async function claimHost(myPlayer: Player, currentHost: Player | undefined): Promise<void> {
 	if (currentHost) {
 		// Compare-and-swap on the stale host. When several players see the host drop out and claim
@@ -569,6 +595,12 @@ export async function leaveTable(
 ): Promise<void> {
 	await supabase.from('players').update({ is_active: false }).eq('id', player.id);
 	await logEvent(session.id, 'leave', { playerId: player.id });
+
+	// A seat with chips has emptied — climb the escalation ladder one rung. Busted
+	// players (no chips in play) already advanced the blinds when they busted.
+	if (cashEscalationActive(session) && player.stack + player.hand_total_bet > 0) {
+		await advanceBlindLevels(session, 1);
+	}
 
 	// If the leaving player holds the button, rotate it to the next active player.
 	if (session.button_player_id === player.id) {
@@ -651,6 +683,34 @@ export async function startGame(session: Session, activePlayers: Player[]): Prom
 	await postBlinds(session, activePlayers);
 }
 
+// Cash games with an escalation schedule climb the blinds automatically as seats
+// empty (busts and departures). Tournament levels advance on the timer instead.
+export function cashEscalationActive(session: Session): boolean {
+	return (
+		session.status === 'active' &&
+		session.game_mode === 'cash' &&
+		(session.blind_schedule?.length ?? 0) > 0
+	);
+}
+
+// Advances `count` levels (one per emptied seat). Each step is CAS-guarded on
+// blind_level by advanceBlindLevel, so a double-fire can't skip ahead.
+export async function advanceBlindLevels(session: Session, count: number): Promise<void> {
+	let current = session;
+	for (let i = 0; i < count; i++) {
+		const nextIdx = (current.blind_level ?? 0) + 1;
+		if (nextIdx >= (current.blind_schedule?.length ?? 0)) return;
+		await advanceBlindLevel(current);
+		const next = current.blind_schedule[nextIdx];
+		current = {
+			...current,
+			blind_level: nextIdx,
+			small_blind: next.small_blind,
+			big_blind: next.big_blind
+		};
+	}
+}
+
 export async function advanceBlindLevel(session: Session): Promise<void> {
 	const schedule = session.blind_schedule;
 	if (!schedule?.length) return;
@@ -689,6 +749,11 @@ export async function kickPlayer(
 
 	await supabase.from('players').update({ is_active: false }).eq('id', targetPlayer.id);
 	await logEvent(session.id, 'kick', { playerId: targetPlayer.id });
+
+	// Same seat-emptied escalation as leaveTable (folding above doesn't touch the stack).
+	if (cashEscalationActive(session) && targetPlayer.stack + targetPlayer.hand_total_bet > 0) {
+		await advanceBlindLevels(session, 1);
+	}
 
 	if (session.button_player_id === targetPlayer.id) {
 		const remaining = allPlayers.filter((p) => p.is_active && p.id !== targetPlayer.id);
@@ -745,6 +810,30 @@ export async function reorderSeats(
 		folded: bustedAfterRefund(p)
 	}));
 	await postBlinds({ ...session, pot: 0, current_bet: 0 }, freshPlayers, false);
+}
+
+// Transfers chips from one player's stack to another's — the app equivalent of handing
+// chips across the table. Only behind-the-line stacks move; bets already in the pot
+// (current_round_bet / hand_total_bet) are untouched, so pot math is unaffected. Nets
+// shift accordingly (net = stack − buy-in): the giver goes down, the receiver up.
+export async function giveChips(giver: Player, recipient: Player, amount: number): Promise<void> {
+	if (!Number.isInteger(amount) || amount <= 0 || amount > giver.stack) return;
+	if (!recipient.is_active || recipient.id === giver.id) return;
+	await Promise.all([
+		supabase
+			.from('players')
+			.update({ stack: giver.stack - amount })
+			.eq('id', giver.id),
+		supabase
+			.from('players')
+			.update({ stack: recipient.stack + amount })
+			.eq('id', recipient.id)
+	]);
+	await logEvent(giver.session_id, 'give', {
+		playerId: giver.id,
+		amount,
+		targetPlayerId: recipient.id
+	});
 }
 
 export async function doRebuy(player: Player, amount: number): Promise<void> {

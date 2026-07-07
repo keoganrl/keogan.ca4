@@ -8,6 +8,7 @@
   import { snapToStep } from '../lib/utils/bet';
   import { renderSVG } from 'uqr';
   import { groupEventsByHand, describeEvent, streetLabel } from '../lib/utils/ledger';
+  import { resolveAward } from '../lib/utils/pots';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -18,6 +19,9 @@
   let betError = $state('');
   let showMenu = $state(false);
   let showRebuy = $state(false);
+  let showGive = $state(false);
+  let giveTargetId = $state<string | null>(null);
+  let giveAmount = $state(0);
   let showLedger = $state(false);
   let ledgerScrollEl = $state<HTMLDivElement | null>(null);
   let rebuyAmount = $state(200);
@@ -145,11 +149,26 @@
   const seatsInHand = $derived(activeBySeat.filter((p) => p.stack > 0 || p.hand_total_bet > 0));
 
   // SB/BB badge holders, computed once per state change instead of per player row.
+  // Heads-up the button IS the small blind (and acts first preflop) — without the
+  // special case the +2 offset wraps back onto the button and the badges swap.
+  // Button missing from seatsInHand falls back to seat 0, matching the engine's
+  // effectiveBtnIdx convention in getActionOrder/postBlinds.
   const badgeButtonIdx = $derived(
-    seatsInHand.findIndex((p) => p.id === store?.session?.button_player_id)
+    Math.max(
+      seatsInHand.findIndex((p) => p.id === store?.session?.button_player_id),
+      0
+    )
   );
-  const sbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 1) % seatsInHand.length]?.id);
-  const bbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 2) % seatsInHand.length]?.id);
+  const sbBadgeId = $derived(
+    seatsInHand.length === 2
+      ? seatsInHand[badgeButtonIdx]?.id
+      : seatsInHand[(badgeButtonIdx + 1) % seatsInHand.length]?.id
+  );
+  const bbBadgeId = $derived(
+    seatsInHand.length === 2
+      ? seatsInHand[(badgeButtonIdx + 1) % 2]?.id
+      : seatsInHand[(badgeButtonIdx + 2) % seatsInHand.length]?.id
+  );
 
   function cancelLongPress() {
     if (longPressTimer) clearTimeout(longPressTimer);
@@ -242,7 +261,57 @@
   let prevStreet = $state<string | null>(null);
   let streetTimer: ReturnType<typeof setTimeout> | null = null;
   let showdownReady = $state(false);
-  let potAwardIndex = $state(0);
+
+  // Winners the host has tapped for the current "who had the best hand?" question.
+  // More than one selection = a tie; an explicit confirm button does the award.
+  let selectedWinners = $state<string[]>([]);
+
+  function toggleWinner(playerId: string) {
+    selectedWinners = selectedWinners.includes(playerId)
+      ? selectedWinners.filter((id) => id !== playerId)
+      : [...selectedWinners, playerId];
+  }
+
+  // Preview of what confirming the current selection would pay out, so the confirm
+  // button can say exactly what will happen ("Award 450 to Alice" / split details).
+  const awardPreview = $derived.by(() => {
+    if (!store?.session || !selectedWinners.length) return null;
+    const { payouts } = resolveAward(
+      store.remainingPots,
+      selectedWinners,
+      store.players,
+      store.session.button_player_id ?? null
+    );
+    const entries = Object.entries(payouts);
+    if (!entries.length) return null;
+    const total = entries.reduce((sum, [, amt]) => sum + amt, 0);
+    const names = entries.map(
+      ([id]) => store!.players.find((p) => p.id === id)?.display_name ?? '?'
+    );
+    return { total, names };
+  });
+
+  async function confirmAward() {
+    const winners = selectedWinners;
+    selectedWinners = [];
+    await store?.awardBestHand(winners);
+  }
+
+  // Blinds changed mid-session (cash escalation after a bust or departure) — tell
+  // everyone at the table, whichever client triggered it.
+  let blindsToast = $state<string | null>(null);
+  let blindsToastTimer: ReturnType<typeof setTimeout> | null = null;
+  let prevBigBlind = $state<number | null>(null);
+  $effect(() => {
+    const sb = store?.session?.small_blind ?? null;
+    const bb = store?.session?.big_blind ?? null;
+    if (bb !== null && prevBigBlind !== null && bb !== prevBigBlind) {
+      blindsToast = `blinds up — now ${sb}/${bb}`;
+      if (blindsToastTimer) clearTimeout(blindsToastTimer);
+      blindsToastTimer = setTimeout(() => (blindsToast = null), 3500);
+    }
+    prevBigBlind = bb;
+  });
 
   const STREET_LABELS: Record<string, string> = {
     flop: 'Flop',
@@ -256,7 +325,8 @@
     if (current !== null) {
       if (prevStreet !== null && current !== prevStreet) {
         showdownReady = false;
-        potAwardIndex = 0;
+        selectedWinners = [];
+        store?.resetAwards();
         if (STREET_LABELS[current]) {
           streetAnnouncement = STREET_LABELS[current];
           if (streetTimer) clearTimeout(streetTimer);
@@ -374,6 +444,18 @@
     showMenu = false;
   }
 
+  // Everyone I could give chips to (any other active player — not host-gated).
+  const giveTargets = $derived(
+    (store?.players ?? []).filter((p) => p.is_active && p.id !== store?.me?.id)
+  );
+
+  async function handleGiveChips() {
+    if (!giveTargetId) return;
+    await store?.giveChips(giveTargetId, giveAmount);
+    showGive = false;
+    showMenu = false;
+  }
+
   function openMenu() {
     showBetting = false;
     showMenu = true;
@@ -395,6 +477,7 @@
   function closeMenu() {
     showMenu = false;
     showRebuy = false;
+    showGive = false;
     showLeaveConfirm = false;
     showVoidConfirm = false;
     showResetConfirm = false;
@@ -597,6 +680,7 @@
               class="cbtn cbtn-block"
               onclick={() => {
                 showLeaveConfirm = false;
+                showGive = false;
                 showRebuy = true;
               }}
             >
@@ -625,12 +709,91 @@
             </div>
           {/if}
 
+          <!-- Give chips (anyone can hand part of their stack to another player) -->
+          {#if !showGive}
+            <button
+              class="cbtn cbtn-block"
+              onclick={() => {
+                showRebuy = false;
+                showLeaveConfirm = false;
+                giveTargetId = null;
+                giveAmount = Math.min(s.session?.big_blind ?? 1, s.me?.stack ?? 0);
+                showGive = true;
+              }}
+              disabled={(s.me?.stack ?? 0) <= 0 || giveTargets.length === 0}
+            >
+              Give chips
+            </button>
+          {:else}
+            <div class="menu-sub">
+              <p class="clabel">Give to</p>
+              <div class="choices">
+                {#each giveTargets as p (p.id)}
+                  <button
+                    class="cchoice"
+                    class:active={giveTargetId === p.id}
+                    onclick={() => (giveTargetId = p.id)}
+                  >
+                    {p.display_name}
+                  </button>
+                {/each}
+              </div>
+              <p class="clabel">Amount — your stack is {s.me?.stack ?? 0}</p>
+              <div class="choices">
+                {#each [25, 50, 100, 250] as amount (amount)}
+                  <button
+                    class="cchoice"
+                    class:active={giveAmount === amount}
+                    onclick={() => (giveAmount = amount)}
+                    disabled={amount > (s.me?.stack ?? 0)}
+                  >
+                    {amount}
+                  </button>
+                {/each}
+              </div>
+              <div class="bet-slider">
+                <button
+                  class="cstep"
+                  onclick={() =>
+                    (giveAmount = Math.max(1, giveAmount - (s.session?.small_blind ?? 1)))}
+                  aria-label="Decrease amount"
+                >
+                  −
+                </button>
+                <input type="range" min="1" max={s.me?.stack ?? 1} step="1" bind:value={giveAmount} />
+                <button
+                  class="cstep"
+                  onclick={() =>
+                    (giveAmount = Math.min(
+                      s.me?.stack ?? 0,
+                      giveAmount + (s.session?.small_blind ?? 1)
+                    ))}
+                  aria-label="Increase amount"
+                >
+                  +
+                </button>
+              </div>
+              <button
+                class="cbtn cbtn-primary cbtn-block"
+                onclick={handleGiveChips}
+                disabled={!giveTargetId || giveAmount <= 0 || giveAmount > (s.me?.stack ?? 0)}
+              >
+                Give {giveAmount} to {giveTargets.find((p) => p.id === giveTargetId)
+                  ?.display_name ?? '…'}
+              </button>
+              <button class="cbtn cbtn-small cbtn-block" onclick={() => (showGive = false)}
+                >Cancel</button
+              >
+            </div>
+          {/if}
+
           <!-- Leave -->
           {#if !showLeaveConfirm}
             <button
               class="cbtn cbtn-block"
               onclick={() => {
                 showRebuy = false;
+                showGive = false;
                 showLeaveConfirm = true;
               }}
             >
@@ -663,6 +826,7 @@
                     class="cbtn cbtn-block"
                     onclick={() => {
                       showRebuy = false;
+                      showGive = false;
                       showLeaveConfirm = false;
                       showVoidConfirm = true;
                     }}
@@ -679,7 +843,6 @@
                       class="cbtn cbtn-primary cbtn-block"
                       onclick={async () => {
                         await s.voidHand();
-                        potAwardIndex = 0;
                         closeMenu();
                       }}
                     >
@@ -696,7 +859,6 @@
                   class="cbtn cbtn-block"
                   onclick={() => {
                     s.endHand();
-                    potAwardIndex = 0;
                     closeMenu();
                   }}
                 >
@@ -709,6 +871,7 @@
                     class="cbtn cbtn-block"
                     onclick={() => {
                       showRebuy = false;
+                      showGive = false;
                       showLeaveConfirm = false;
                       showVoidConfirm = false;
                       showResetConfirm = true;
@@ -726,7 +889,6 @@
                       class="cbtn cbtn-primary cbtn-block"
                       onclick={async () => {
                         await s.resetHand();
-                        potAwardIndex = 0;
                         closeMenu();
                       }}
                     >
@@ -781,7 +943,10 @@
                   {:else}
                     {@const name =
                       s.players.find((p) => p.id === event.player_id)?.display_name ?? 'Someone'}
-                    <p class="ledger-line">{describeEvent(event, name)}</p>
+                    {@const targetName = event.target_player_id
+                      ? s.players.find((p) => p.id === event.target_player_id)?.display_name
+                      : undefined}
+                    <p class="ledger-line">{describeEvent(event, name, targetName)}</p>
                   {/if}
                 {/each}
               </div>
@@ -818,24 +983,6 @@
               {/if}
             </div>
           {/each}
-        </div>
-      </div>
-    {/if}
-
-    <!-- Cash escalation prompt (host only) -->
-    {#if s.escalationSuggestion && s.me?.is_host}
-      <div class="escalation">
-        <div class="escalation-text">
-          <p class="escalation-title">Player left</p>
-          <p class="clabel">
-            Raise blinds to {s.escalationSuggestion.small_blind}/{s.escalationSuggestion.big_blind}?
-          </p>
-        </div>
-        <div class="escalation-btns">
-          <button class="cbtn cbtn-small cbtn-primary" onclick={() => s.advanceBlindLevel()}
-            >Apply</button
-          >
-          <button class="cbtn cbtn-small" onclick={() => s.dismissEscalation()}>Dismiss</button>
         </div>
       </div>
     {/if}
@@ -916,6 +1063,13 @@
     {#if reorderToast}
       <div transition:fade={{ duration: 300 }} class="banner banner-wait">
         <p>Seats rearranged — hand reset to blinds</p>
+      </div>
+    {/if}
+
+    <!-- Blinds-up toast (cash escalation after a bust or departure) -->
+    {#if blindsToast}
+      <div transition:fade={{ duration: 300 }} class="banner banner-wait">
+        <p>{blindsToast}</p>
       </div>
     {/if}
 
@@ -1101,7 +1255,6 @@
                   const winnerId = foldWin.id;
                   await s.awardPot(winnerId, s.session?.pot ?? 0);
                   await s.endHand();
-                  potAwardIndex = 0;
                 }}
                 disabled={s.actionPending}
               >
@@ -1113,40 +1266,47 @@
           {/if}
         {/if}
 
-        <!-- Showdown: winner selection -->
+        <!-- Showdown: the host answers "who had the best hand?" and the app works out
+             who gets what. A short-stack winner can't reach the deeper side money, so
+             the question repeats for the remaining players until every pot is gone. -->
         {#if s.session?.street === 'showdown' && showdownReady}
           {#if s.me?.is_host}
-            {@const currentPot = s.pots[potAwardIndex]}
-            {#if currentPot}
+            {@const nextPot = s.remainingPots[0]}
+            {#if nextPot}
+              {@const unawarded = s.remainingPots.reduce((sum, p) => sum + p.amount, 0)}
               <div class="award">
                 <div class="award-head">
                   <p class="award-label">
-                    {s.pots.length > 1
-                      ? potAwardIndex === 0
-                        ? 'main pot'
-                        : `side pot ${potAwardIndex}`
-                      : 'pot'}
+                    {s.awardRound === 0
+                      ? 'who had the best hand?'
+                      : 'best hand of the remaining players?'}
                   </p>
-                  {#if s.pots.length > 1}
-                    <p class="clabel">{potAwardIndex + 1} of {s.pots.length}</p>
-                  {/if}
                 </div>
-                <p class="award-amount">{currentPot.amount} chips</p>
-                <p class="clabel">tap the winner to award</p>
+                <p class="award-amount">{unawarded} chips</p>
+                <p class="clabel">tap the winner — or several for a tie</p>
                 <div class="btn-row wrap">
-                  {#each s.players.filter((p) => currentPot.eligibleIds.includes(p.id)) as player (player.id)}
+                  {#each s.players.filter((p) => nextPot.eligibleIds.includes(p.id)) as player (player.id)}
                     <button
                       class="cbtn winner-btn"
-                      onclick={() => {
-                        s.awardPot(player.id, currentPot.amount);
-                        potAwardIndex++;
-                      }}
+                      class:selected={selectedWinners.includes(player.id)}
+                      onclick={() => toggleWinner(player.id)}
                       disabled={s.actionPending}
                     >
                       {player.display_name}
                     </button>
                   {/each}
                 </div>
+                {#if awardPreview}
+                  <button
+                    class="cbtn cbtn-primary cbtn-block"
+                    onclick={confirmAward}
+                    disabled={s.actionPending}
+                  >
+                    {awardPreview.names.length === 1
+                      ? `Award ${awardPreview.total} to ${awardPreview.names[0]}`
+                      : `Split ${awardPreview.total} — ${awardPreview.names.join(' & ')}`}
+                  </button>
+                {/if}
               </div>
             {:else}
               <!-- All pots awarded — host starts next hand -->
@@ -1154,7 +1314,6 @@
                 class="cbtn cbtn-primary cbtn-block"
                 onclick={() => {
                   s.endHand();
-                  potAwardIndex = 0;
                   closeMenu();
                 }}
                 disabled={s.actionPending}
@@ -1571,6 +1730,11 @@
     flex: 1;
     min-width: 6rem;
   }
+  .winner-btn.selected {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
 
   .bet-panel {
     border-top: 1px solid var(--hairline);
@@ -1842,36 +2006,6 @@
     color: var(--faint);
     width: 2.5rem;
     text-align: right;
-  }
-
-  /* --- Escalation prompt --- */
-  .escalation {
-    position: fixed;
-    bottom: calc(6.5rem + env(safe-area-inset-bottom));
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(calc(480px - 2.5rem), calc(100vw - 2.5rem));
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    border-radius: 4px;
-    box-shadow: 0 8px 30px rgba(42, 42, 42, 0.15);
-    padding: 0.85rem 1rem;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-  .escalation-text { min-width: 0; }
-  .escalation-text p { margin: 0; }
-  .escalation-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-  }
-  .escalation-btns {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
   }
 
   @media (hover: hover) and (pointer: fine) {

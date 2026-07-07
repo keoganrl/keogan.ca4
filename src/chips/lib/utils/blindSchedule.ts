@@ -1,4 +1,4 @@
-import type { BlindLevel } from '$lib/types';
+import type { BlindLevel } from '../types';
 
 export type Pace = 'turbo' | 'normal' | 'deep';
 export type CashSessionLength = 60 | 120 | 180 | 240;
@@ -46,11 +46,11 @@ export function suggestCashBlinds(
 	return NICE_BLINDS[idx];
 }
 
-function blindsAtIndex(idx: number): [number, number] {
-	if (idx < NICE_BLINDS.length) return NICE_BLINDS[idx];
-	const overshoot = idx - NICE_BLINDS.length + 1;
-	const [lastSb, lastBb] = NICE_BLINDS[NICE_BLINDS.length - 1];
-	return [lastSb * Math.pow(2, overshoot), lastBb * Math.pow(2, overshoot)];
+// Levels strictly double from the starting blinds. NICE_BLINDS only picks the
+// start; stepping through it gave sub-2× jumps (25/50 → 50/100 → 75/150) that
+// played as barely-rising blinds over a whole session.
+function doubledBlinds(start: [number, number], level: number): [number, number] {
+	return [start[0] * 2 ** level, start[1] * 2 ** level];
 }
 
 const PACE_MINUTES: Record<Pace, number> = {
@@ -65,12 +65,12 @@ export function generateTournamentSchedule(
 	sessionMinutes: number,
 	pace: Pace
 ): BlindLevel[] {
-	const startIdx = suggestStartingIndex(buyIn);
+	const start = NICE_BLINDS[suggestStartingIndex(buyIn)];
 	const levelMinutes = PACE_MINUTES[pace];
 	const totalLevels = Math.max(3, Math.round(sessionMinutes / levelMinutes));
 
 	return Array.from({ length: totalLevels }, (_, i) => {
-		const [sb, bb] = blindsAtIndex(startIdx + i);
+		const [sb, bb] = doubledBlinds(start, i);
 		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: levelMinutes };
 	});
 }
@@ -83,10 +83,10 @@ export function generateCashEscalationSchedule(
 	sessionMinutes: CashSessionLength = 120,
 	steps = 9
 ): BlindLevel[] {
-	const startIdx = suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes]);
+	const start = NICE_BLINDS[suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes])];
 
 	return Array.from({ length: steps }, (_, i) => {
-		const [sb, bb] = blindsAtIndex(startIdx + i);
+		const [sb, bb] = doubledBlinds(start, i);
 		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: 0 };
 	});
 }
