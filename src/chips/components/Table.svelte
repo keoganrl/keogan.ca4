@@ -1226,13 +1226,15 @@
         {#if s.streetComplete}
           <!-- Board preview: card slots for the street about to come. The flop
                deals three fresh cards; the turn and river add one, so only the
-               new (rightmost) slot is highlighted then. -->
+               new (rightmost) slot is highlighted then. An all-in run-out deals
+               the entire remaining board off one tap, so all five slots show
+               with everything still to come highlighted. -->
           {@const street = s.session?.street}
           {@const board =
             street === 'preflop'
-              ? { count: 3, newFrom: 0 }
+              ? { count: s.runOut ? 5 : 3, newFrom: 0 }
               : street === 'flop'
-                ? { count: 4, newFrom: 3 }
+                ? { count: s.runOut ? 5 : 4, newFrom: 3 }
                 : street === 'turn'
                   ? { count: 5, newFrom: 4 }
                   : null}

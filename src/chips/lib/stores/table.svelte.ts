@@ -18,6 +18,7 @@ import {
 	callBet as callBetService,
 	streetReadyToAdvance,
 	nextStreetLabel,
+	isRunOut,
 	advanceStreet as advanceStreetService,
 	startGame as startGameService,
 	advanceBlindLevel as advanceBlindLevelService,
@@ -349,8 +350,16 @@ export function createTableStore(sessionId: string, identityId: string) {
 		streetComplete && !!me && !!session && (me.is_host || me.id === session.button_player_id)
 	);
 
+	// All-in run-out: no betting left on any street, so the one confirm jumps straight
+	// to showdown (advanceStreet applies the same check server-side).
+	const runOut = $derived(isRunOut(players.filter((p) => p.is_active)));
+
 	const nextStreetAction = $derived(
-		streetComplete && session ? nextStreetLabel(session.street) : null
+		streetComplete && session
+			? runOut
+				? 'Go to Showdown'
+				: nextStreetLabel(session.street)
+			: null
 	);
 
 	// Raising is pointless when every other player still in the hand is already all-in:
@@ -769,6 +778,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 		},
 		get nextStreetAction() {
 			return nextStreetAction;
+		},
+		get runOut() {
+			return runOut;
 		},
 		get canRaise() {
 			return canRaise;

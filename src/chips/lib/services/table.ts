@@ -323,6 +323,16 @@ export function nextStreetLabel(street: string): string {
 	}
 }
 
+// True when no further betting is possible this hand: at most one non-folded player
+// still has chips (everyone else is all-in), so the remaining streets are a pure
+// run-out. The hand jumps straight to showdown — the board gets dealt in real life
+// either way, and per-street confirm taps are just noise.
+export function isRunOut(activePlayers: Player[]): boolean {
+	const nonFolded = activePlayers.filter((p) => !p.folded);
+	if (nonFolded.length < 2) return false;
+	return nonFolded.filter((p) => p.stack > 0).length <= 1;
+}
+
 const STREETS = ['preflop', 'flop', 'turn', 'river'] as const;
 
 // Advances to the next street, resets bets, and sets the first postflop actor.
@@ -342,8 +352,9 @@ export async function advanceStreet(
 		.eq('session_id', session.id)
 		.eq('is_active', true);
 
-	if (currentIdx < 0 || currentIdx >= STREETS.length - 1) {
-		// River completed — showdown. Only advance if still on the expected street.
+	if (currentIdx < 0 || currentIdx >= STREETS.length - 1 || isRunOut(activePlayers)) {
+		// River completed — or an all-in run-out with nothing left to bet on any
+		// street — showdown. Only advance if still on the expected street.
 		const { data } = await supabase
 			.from('sessions')
 			.update({ street: 'showdown', current_bet: 0 })
