@@ -46,11 +46,11 @@ export function suggestCashBlinds(
 	return NICE_BLINDS[idx];
 }
 
-// Levels strictly double from the starting blinds. NICE_BLINDS only picks the
-// start; stepping through it gave sub-2× jumps (25/50 → 50/100 → 75/150) that
-// played as barely-rising blinds over a whole session.
-function doubledBlinds(start: [number, number], level: number): [number, number] {
-	return [start[0] * 2 ** level, start[1] * 2 ** level];
+// Levels are arithmetic multiples of the starting blinds (25/50 → 50/100 →
+// 75/150 → 100/200): every rung stays a clean multiple of the initial stakes.
+// NICE_BLINDS only picks the start. (Doubling was tried and rose too fast.)
+function blindsAtLevel(start: [number, number], level: number): [number, number] {
+	return [start[0] * (level + 1), start[1] * (level + 1)];
 }
 
 const PACE_MINUTES: Record<Pace, number> = {
@@ -70,7 +70,7 @@ export function generateTournamentSchedule(
 	const totalLevels = Math.max(3, Math.round(sessionMinutes / levelMinutes));
 
 	return Array.from({ length: totalLevels }, (_, i) => {
-		const [sb, bb] = doubledBlinds(start, i);
+		const [sb, bb] = blindsAtLevel(start, i);
 		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: levelMinutes };
 	});
 }
@@ -86,7 +86,7 @@ export function generateCashEscalationSchedule(
 	const start = NICE_BLINDS[suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes])];
 
 	return Array.from({ length: steps }, (_, i) => {
-		const [sb, bb] = doubledBlinds(start, i);
+		const [sb, bb] = blindsAtLevel(start, i);
 		return { level: i + 1, small_blind: sb, big_blind: bb, duration_minutes: 0 };
 	});
 }

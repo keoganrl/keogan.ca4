@@ -149,26 +149,16 @@
   const seatsInHand = $derived(activeBySeat.filter((p) => p.stack > 0 || p.hand_total_bet > 0));
 
   // SB/BB badge holders, computed once per state change instead of per player row.
-  // Heads-up the button IS the small blind (and acts first preflop) — without the
-  // special case the +2 offset wraps back onto the button and the badges swap.
-  // Button missing from seatsInHand falls back to seat 0, matching the engine's
-  // effectiveBtnIdx convention in getActionOrder/postBlinds.
+  // Matches postBlinds: SB is left of the button at any table size, and heads-up the
+  // +2 offset wraps back onto the dealer, who posts the BB (house rule).
   const badgeButtonIdx = $derived(
     Math.max(
       seatsInHand.findIndex((p) => p.id === store?.session?.button_player_id),
       0
     )
   );
-  const sbBadgeId = $derived(
-    seatsInHand.length === 2
-      ? seatsInHand[badgeButtonIdx]?.id
-      : seatsInHand[(badgeButtonIdx + 1) % seatsInHand.length]?.id
-  );
-  const bbBadgeId = $derived(
-    seatsInHand.length === 2
-      ? seatsInHand[(badgeButtonIdx + 1) % 2]?.id
-      : seatsInHand[(badgeButtonIdx + 2) % seatsInHand.length]?.id
-  );
+  const sbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 1) % seatsInHand.length]?.id);
+  const bbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 2) % seatsInHand.length]?.id);
 
   function cancelLongPress() {
     if (longPressTimer) clearTimeout(longPressTimer);
@@ -297,8 +287,8 @@
     await store?.awardBestHand(winners);
   }
 
-  // Blinds changed mid-session (cash escalation after a bust or departure) — tell
-  // everyone at the table, whichever client triggered it.
+  // Blinds changed mid-session (escalation after a bust/departure, or the host picking
+  // a level from the schedule sheet) — tell everyone, whichever client triggered it.
   let blindsToast = $state<string | null>(null);
   let blindsToastTimer: ReturnType<typeof setTimeout> | null = null;
   let prevBigBlind = $state<number | null>(null);
@@ -306,7 +296,7 @@
     const sb = store?.session?.small_blind ?? null;
     const bb = store?.session?.big_blind ?? null;
     if (bb !== null && prevBigBlind !== null && bb !== prevBigBlind) {
-      blindsToast = `blinds up — now ${sb}/${bb}`;
+      blindsToast = `blinds ${bb > prevBigBlind ? 'up' : 'down'} — now ${sb}/${bb}`;
       if (blindsToastTimer) clearTimeout(blindsToastTimer);
       blindsToastTimer = setTimeout(() => (blindsToast = null), 3500);
     }
@@ -973,17 +963,40 @@
         <div class="sched-list">
           {#each s.session?.blind_schedule ?? [] as level, i (level.level)}
             {@const isCurrent = i === (s.session?.blind_level ?? 0)}
-            <div class="sched-row" class:current={isCurrent}>
-              <span class="sched-level">level {level.level}</span>
-              <span class="sched-blinds">{level.small_blind}/{level.big_blind}</span>
-              {#if level.duration_minutes > 0}
-                <span class="sched-mins">{level.duration_minutes}m</span>
-              {:else}
-                <span class="sched-mins"></span>
-              {/if}
-            </div>
+            {#if s.me?.is_host}
+              <!-- Host can jump the schedule either way; applies from the next deal
+                   (or this hand, via Reset hand — see the hint below). -->
+              <button
+                class="sched-row sched-row-btn"
+                class:current={isCurrent}
+                onclick={() => {
+                  s.setBlindLevel(i);
+                  showSchedulePanel = false;
+                }}
+              >
+                <span class="sched-level">level {level.level}</span>
+                <span class="sched-blinds">{level.small_blind}/{level.big_blind}</span>
+                <span class="sched-mins"
+                  >{level.duration_minutes > 0 ? `${level.duration_minutes}m` : ''}</span
+                >
+              </button>
+            {:else}
+              <div class="sched-row" class:current={isCurrent}>
+                <span class="sched-level">level {level.level}</span>
+                <span class="sched-blinds">{level.small_blind}/{level.big_blind}</span>
+                <span class="sched-mins"
+                  >{level.duration_minutes > 0 ? `${level.duration_minutes}m` : ''}</span
+                >
+              </div>
+            {/if}
           {/each}
         </div>
+        {#if s.me?.is_host}
+          <p class="cnote sched-hint">
+            Tap a level to set the blinds for the next hand. Reset hand applies them to the
+            current one.
+          </p>
+        {/if}
       </div>
     {/if}
 
@@ -1994,6 +2007,20 @@
     font-size: 0.95rem;
   }
   .sched-row.current { font-weight: 700; }
+  .sched-row-btn {
+    font-family: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--hairline);
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+  }
+  .sched-hint {
+    margin: 0.85rem 0 0;
+    font-size: 0.8rem;
+  }
   .sched-level {
     font-size: 0.8rem;
     color: var(--faint);

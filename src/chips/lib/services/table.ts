@@ -54,8 +54,8 @@ export function nextButtonPlayerId(
  * Postflop: action starts left of the button (SB).
  *   seat order: [BTN, SB, BB, UTG, ...] → action order: [SB, BB, UTG, ..., BTN]
  *
- * With fewer than 3 players the standard heads-up convention applies:
- *   BTN posts SB and acts first preflop; BB acts first postflop.
+ * Heads-up follows the house rule (not the tournament convention): the dealer
+ * posts the BB, the other player posts the SB and speaks first on every street.
  */
 export function getActionOrder(
 	session: Session,
@@ -72,8 +72,8 @@ export function getActionOrder(
 
 	let startOffset: number;
 	if (n <= 2) {
-		// Heads-up: BTN/SB acts first preflop, BB acts first postflop.
-		startOffset = isPreflop ? effectiveBtnIdx : (effectiveBtnIdx + 1) % n;
+		// Heads-up house rule: the non-dealer (SB) acts first on every street.
+		startOffset = (effectiveBtnIdx + 1) % n;
 	} else {
 		// 3+ players: preflop starts UTG (3 left of btn), postflop starts SB (1 left of btn).
 		startOffset = isPreflop ? (effectiveBtnIdx + 3) % n : (effectiveBtnIdx + 1) % n;
@@ -635,9 +635,10 @@ export async function postBlinds(
 	const btnIdx = sorted.findIndex((p) => p.id === session.button_player_id);
 	const effectiveBtnIdx = btnIdx === -1 ? 0 : btnIdx;
 
-	const sbOffset = n <= 2 ? 0 : 1; // heads-up: BTN=SB; 3+: left of BTN=SB
-	const sbPlayer = sorted[(effectiveBtnIdx + sbOffset) % n];
-	const bbPlayer = sorted[(effectiveBtnIdx + sbOffset + 1) % n];
+	// SB sits left of the button at any table size. Heads-up (house rule) the +2
+	// offset wraps back onto the dealer, who posts the BB.
+	const sbPlayer = sorted[(effectiveBtnIdx + 1) % n];
+	const bbPlayer = sorted[(effectiveBtnIdx + 2) % n];
 
 	const sbAmount = Math.min(session.small_blind, sbPlayer.stack);
 	const bbAmount = Math.min(session.big_blind, bbPlayer.stack);
@@ -685,12 +686,31 @@ export async function startGame(session: Session, activePlayers: Player[]): Prom
 
 // Cash games with an escalation schedule climb the blinds automatically as seats
 // empty (busts and departures). Tournament levels advance on the timer instead.
+// The current_actor_id check means "a hand has been dealt": sessions are status
+// 'active' from setup, so without it a lobby kick (before any cards) raised blinds.
 export function cashEscalationActive(session: Session): boolean {
 	return (
 		session.status === 'active' &&
+		session.current_actor_id !== null &&
 		session.game_mode === 'cash' &&
 		(session.blind_schedule?.length ?? 0) > 0
 	);
+}
+
+// Host override from the blind schedule sheet: jump to `levelIdx` in either
+// direction. Takes effect when blinds are next posted — the next deal, or this
+// hand if the host follows up with Reset hand (which re-posts blinds).
+export async function setBlindLevel(session: Session, levelIdx: number): Promise<void> {
+	const level = session.blind_schedule?.[levelIdx];
+	if (!level) return;
+	await supabase
+		.from('sessions')
+		.update({
+			blind_level: levelIdx,
+			small_blind: level.small_blind,
+			big_blind: level.big_blind
+		})
+		.eq('id', session.id);
 }
 
 // Advances `count` levels (one per emptied seat). Each step is CAS-guarded on

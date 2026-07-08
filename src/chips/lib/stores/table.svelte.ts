@@ -22,6 +22,7 @@ import {
 	startGame as startGameService,
 	advanceBlindLevel as advanceBlindLevelService,
 	advanceBlindLevels as advanceBlindLevelsService,
+	setBlindLevel as setBlindLevelService,
 	cashEscalationActive,
 	reorderSeats as reorderSeatsService,
 	playersBeforeTarget,
@@ -609,6 +610,14 @@ export function createTableStore(sessionId: string, identityId: string) {
 		}
 
 		await endHandService(dealSession, players, winner, potTotal);
+
+		// Last player standing wins: nobody is left to deal to, so the game is over and
+		// everyone lands on the cashout page. The current_actor_id check keeps a stray
+		// lobby "Next hand" tap (game not started, one player seated) from ending it.
+		if (session.current_actor_id !== null) {
+			const withChips = players.filter((p) => p.is_active && p.stack > 0);
+			if (withChips.length <= 1) await endSessionService(sessionId);
+		}
 	}
 
 	async function performVoidHand() {
@@ -617,6 +626,13 @@ export function createTableStore(sessionId: string, identityId: string) {
 		handPotTotal = 0;
 		resetAwards();
 		await voidHandService(session, players);
+
+		// Same last-player-standing check as performEndHand, with refunds counted —
+		// voiding is how the host moves on after everyone else has left mid-hand.
+		if (session.current_actor_id !== null) {
+			const withChips = players.filter((p) => p.is_active && p.stack + p.hand_total_bet > 0);
+			if (withChips.length <= 1) await endSessionService(sessionId);
+		}
 	}
 
 	async function performResetHand() {
@@ -666,6 +682,22 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (!session) return;
 		const activePlayers = players.filter((p) => p.is_active);
 		await reorderSeatsService(session, activePlayers, newOrder);
+	}
+
+	// Host picks a schedule level to apply from the next deal. The local session is
+	// updated optimistically so an immediate Reset hand re-posts the new blinds even
+	// before the realtime echo lands.
+	async function performSetBlindLevel(levelIdx: number) {
+		if (!session) return;
+		const level = session.blind_schedule?.[levelIdx];
+		if (!level) return;
+		session = {
+			...session,
+			blind_level: levelIdx,
+			small_blind: level.small_blind,
+			big_blind: level.big_blind
+		};
+		await setBlindLevelService(session, levelIdx);
 	}
 
 	async function performGiveChips(recipientId: string, amount: number) {
@@ -769,6 +801,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		endSession: performEndSession,
 		leaveTable: performLeaveTable,
 		startGame: performStartGame,
+		setBlindLevel: performSetBlindLevel,
 		kickPlayer: performKickPlayer,
 		reorderSeats: performReorderSeats
 	};
