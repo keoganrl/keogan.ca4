@@ -287,8 +287,8 @@
     await store?.awardBestHand(winners);
   }
 
-  // Blinds changed mid-session (escalation after a bust/departure, or the host picking
-  // a level from the schedule sheet) — tell everyone, whichever client triggered it.
+  // Blinds changed mid-session (doubled after a hand with an elimination, or the host
+  // picking a level from the schedule sheet) — tell everyone, whichever client triggered it.
   let blindsToast = $state<string | null>(null);
   let blindsToastTimer: ReturnType<typeof setTimeout> | null = null;
   let prevBigBlind = $state<number | null>(null);
@@ -1132,8 +1132,12 @@
             <div class="player-name-line">
               {#if isCurrentActor}<span class="turn-mark" aria-hidden="true">→</span>{/if}
               <span class="player-name" class:is-actor={isCurrentActor}>{player.display_name}</span>
+              <!-- Folded without ever acting or betting = dealt out at join time
+                   (mid-hand joiners start folded); every real fold sets acted_on_street. -->
               {#if !player.is_active}<span class="pill">out</span
                 >{:else if isBusted}<span class="pill">busted</span
+                >{:else if player.folded && player.acted_on_street === null && player.hand_total_bet === 0}<span
+                  class="pill">next hand</span
                 >{:else if player.folded}<span class="pill">folded</span>{/if}
               {#if isButton && !player.folded}<span class="pill pill-dark">dealer</span>{/if}
               {#if isSB && !player.folded}<span class="pill">SB</span>{/if}

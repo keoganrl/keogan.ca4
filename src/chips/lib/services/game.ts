@@ -121,11 +121,19 @@ export async function joinSession(
 			.eq('session_id', sessionId)
 			.order('seat_order', { ascending: false })
 			.limit(1),
-		supabase.from('sessions').select('starting_stack').eq('id', sessionId).single()
+		supabase
+			.from('sessions')
+			.select('starting_stack, current_actor_id')
+			.eq('id', sessionId)
+			.single()
 	]);
 
 	const nextSeat = currentPlayers?.length ? currentPlayers[0].seat_order + 1 : 1;
 	const buyIn = sessionRow?.starting_stack ?? 1000;
+	// A hand in progress (current_actor_id set) can't absorb a new player: joining
+	// unfolded would add them to the turn order mid-street and stall isStreetOver.
+	// They start folded (dealt out) and endHand's reset deals them into the next hand.
+	const handInProgress = (sessionRow?.current_actor_id ?? null) !== null;
 
 	const { data: inserted, error } = await supabase
 		.from('players')
@@ -136,6 +144,7 @@ export async function joinSession(
 			stack: buyIn,
 			total_buyin: buyIn,
 			is_host: false,
+			folded: handInProgress,
 			seat_order: nextSeat
 		})
 		.select('id')

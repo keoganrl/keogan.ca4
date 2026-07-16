@@ -607,12 +607,6 @@ export async function leaveTable(
 	await supabase.from('players').update({ is_active: false }).eq('id', player.id);
 	await logEvent(session.id, 'leave', { playerId: player.id });
 
-	// A seat with chips has emptied — climb the escalation ladder one rung. Busted
-	// players (no chips in play) already advanced the blinds when they busted.
-	if (cashEscalationActive(session) && player.stack + player.hand_total_bet > 0) {
-		await advanceBlindLevels(session, 1);
-	}
-
 	// If the leaving player holds the button, rotate it to the next active player.
 	if (session.button_player_id === player.id) {
 		const remaining = allPlayers.filter((p) => p.is_active && p.id !== player.id);
@@ -695,8 +689,8 @@ export async function startGame(session: Session, activePlayers: Player[]): Prom
 	await postBlinds(session, activePlayers);
 }
 
-// Cash games with an escalation schedule climb the blinds automatically as seats
-// empty (busts and departures). Tournament levels advance on the timer instead.
+// Cash games with an escalation schedule climb one rung of the doubling ladder
+// after any hand that eliminated somebody. Tournament levels advance on the timer.
 // The current_actor_id check means "a hand has been dealt": sessions are status
 // 'active' from setup, so without it a lobby kick (before any cards) raised blinds.
 export function cashEscalationActive(session: Session): boolean {
@@ -722,24 +716,6 @@ export async function setBlindLevel(session: Session, levelIdx: number): Promise
 			big_blind: level.big_blind
 		})
 		.eq('id', session.id);
-}
-
-// Advances `count` levels (one per emptied seat). Each step is CAS-guarded on
-// blind_level by advanceBlindLevel, so a double-fire can't skip ahead.
-export async function advanceBlindLevels(session: Session, count: number): Promise<void> {
-	let current = session;
-	for (let i = 0; i < count; i++) {
-		const nextIdx = (current.blind_level ?? 0) + 1;
-		if (nextIdx >= (current.blind_schedule?.length ?? 0)) return;
-		await advanceBlindLevel(current);
-		const next = current.blind_schedule[nextIdx];
-		current = {
-			...current,
-			blind_level: nextIdx,
-			small_blind: next.small_blind,
-			big_blind: next.big_blind
-		};
-	}
 }
 
 export async function advanceBlindLevel(session: Session): Promise<void> {
@@ -780,11 +756,6 @@ export async function kickPlayer(
 
 	await supabase.from('players').update({ is_active: false }).eq('id', targetPlayer.id);
 	await logEvent(session.id, 'kick', { playerId: targetPlayer.id });
-
-	// Same seat-emptied escalation as leaveTable (folding above doesn't touch the stack).
-	if (cashEscalationActive(session) && targetPlayer.stack + targetPlayer.hand_total_bet > 0) {
-		await advanceBlindLevels(session, 1);
-	}
 
 	if (session.button_player_id === targetPlayer.id) {
 		const remaining = allPlayers.filter((p) => p.is_active && p.id !== targetPlayer.id);

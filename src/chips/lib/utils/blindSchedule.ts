@@ -46,11 +46,11 @@ export function suggestCashBlinds(
 	return NICE_BLINDS[idx];
 }
 
-// Levels are arithmetic multiples of the starting blinds (25/50 → 50/100 →
-// 75/150 → 100/200): every rung stays a clean multiple of the initial stakes.
-// NICE_BLINDS only picks the start. (Doubling was tried and rose too fast.)
+// Every rung doubles the one before (25/50 → 50/100 → 100/200): elimination
+// rounds climb exactly one rung, so "someone busted" always means "blinds
+// doubled". NICE_BLINDS only picks the start.
 function blindsAtLevel(start: [number, number], level: number): [number, number] {
-	return [start[0] * (level + 1), start[1] * (level + 1)];
+	return [start[0] * 2 ** level, start[1] * 2 ** level];
 }
 
 const PACE_MINUTES: Record<Pace, number> = {
@@ -75,9 +75,9 @@ export function generateTournamentSchedule(
 	});
 }
 
-// The ladder starts at the same blinds the session length suggests, then escalates.
-// A fixed nine-step ladder covers any table size (3 to 9 players): blinds only ever
-// climb as seats empty, so extra rungs simply go unused at a small table.
+// The ladder starts at the same blinds the session length suggests, then doubles
+// each rung. Nine rungs (up to 256× the start) is more than any table survives;
+// unused rungs just sit in the schedule sheet.
 export function generateCashEscalationSchedule(
 	buyIn: number,
 	sessionMinutes: CashSessionLength = 120,

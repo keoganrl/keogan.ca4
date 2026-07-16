@@ -22,7 +22,6 @@ import {
 	advanceStreet as advanceStreetService,
 	startGame as startGameService,
 	advanceBlindLevel as advanceBlindLevelService,
-	advanceBlindLevels as advanceBlindLevelsService,
 	setBlindLevel as setBlindLevelService,
 	cashEscalationActive,
 	reorderSeats as reorderSeatsService,
@@ -595,19 +594,20 @@ export function createTableStore(sessionId: string, identityId: string) {
 		handPotTotal = 0;
 		resetAwards();
 
-		// Cash escalation: every seat emptied this hand climbs the blinds one rung.
-		// Newly busted = dealt in (hand_total_bet > 0) but out of chips after awards;
-		// players dealt out earlier have hand_total_bet 0 so they never recount. Runs
-		// before the deal so postBlinds posts the new blinds for the very next hand.
+		// Cash escalation: a hand that eliminated anybody climbs one rung of the
+		// doubling ladder — once, no matter how many players busted. Newly busted =
+		// dealt in (hand_total_bet > 0) but out of chips after awards; players dealt
+		// out earlier have hand_total_bet 0 so they never recount. Runs before the
+		// deal so postBlinds posts the new blinds for the very next hand.
 		let dealSession = session;
 		if (cashEscalationActive(session)) {
-			const busted = players.filter(
+			const anyBusted = players.some(
 				(p) => p.is_active && p.stack === 0 && p.hand_total_bet > 0
-			).length;
-			if (busted > 0) {
-				await advanceBlindLevelsService(session, busted);
+			);
+			if (anyBusted) {
+				await advanceBlindLevelService(session);
 				const schedule = session.blind_schedule;
-				const target = Math.min((session.blind_level ?? 0) + busted, schedule.length - 1);
+				const target = Math.min((session.blind_level ?? 0) + 1, schedule.length - 1);
 				const level = schedule[target];
 				dealSession = {
 					...session,

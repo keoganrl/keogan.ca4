@@ -21,8 +21,9 @@
   let enableEscalation = $state(true);
   let sessionMinutes = $state<CashSessionLength>(60);
 
-  // A fixed nine-step ladder runs quietly in the background: enough rungs for any
-  // table, climbed only as players leave. Never edited or shown here.
+  // A fixed nine-rung doubling ladder runs quietly in the background: blinds climb
+  // one rung (a double) after any hand that eliminates somebody, and the host can
+  // pick a rung mid-game from the schedule sheet. Never edited or shown here.
   const schedule = $derived(
     enableEscalation ? generateCashEscalationSchedule(BUY_IN, sessionMinutes) : []
   );
@@ -103,7 +104,7 @@
     <label class="cswitch escalation-toggle">
       <input type="checkbox" bind:checked={enableEscalation} />
       <span class="track" aria-hidden="true"></span>
-      Raise blinds as players leave
+      Double blinds when someone busts
     </label>
   </div>
 
