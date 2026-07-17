@@ -8,7 +8,8 @@ export async function getStaticPaths() {
 }
 
 const { article } = Astro.props;
-const { Content } = await render(article);
+const { Content, remarkPluginFrontmatter } = await render(article);
+const { readingTime } = remarkPluginFrontmatter;
 ---
 
 <BaseLayout
@@ -19,6 +20,9 @@ const { Content } = await render(article);
   <h1 class="name" transition:name="page-heading">{article.data.title}</h1>
   <p class="article-meta">
     <span class="article-year">{article.data.year}</span>
+    <span>·</span>
+    <span class="article-readtime">{readingTime}</span>
+    {article.data.tags.length > 0 && <span>·</span>}
     {article.data.tags.map(tag => <span class="article-tag">{tag}</span>)}
   </p>
   <div class="article-body">

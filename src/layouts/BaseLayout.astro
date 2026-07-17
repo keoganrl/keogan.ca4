@@ -8,12 +8,14 @@ interface Props {
   title?: string;
   description?: string;
   ogImage?: string;
+  bodyClass?: string;
 }
 
 const {
   title = 'Keogan Larade',
   description = "Keogan Larade — writing, projects, and notes on quantum computing, music, and art.",
   ogImage = '/images/canoe.jpg',
+  bodyClass,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
@@ -54,7 +56,18 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
     <SpeedInsights />
     <ClientRouter />
   </head>
-  <body>
+  <body class={bodyClass}>
     <slot />
   </body>
 </html>
+
+<style>
+  /* Home page's desktop split needs to break out of the default
+     reading-column padding/max-width; mobile/tablet stay unchanged. */
+  @media (min-width: 1100px) {
+    body.is-home {
+      max-width: none;
+      padding: 0;
+    }
+  }
+</style>
