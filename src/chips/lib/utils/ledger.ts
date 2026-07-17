@@ -76,6 +76,10 @@ export function describeEvent(event: GameEvent, name: string, targetName?: strin
 			return `${name} rebuys ${amt}`;
 		case 'give':
 			return `${name} gives ${amt} to ${targetName ?? 'someone'}`;
+		case 'adjust':
+			return amt >= 0
+				? `${name} was credited ${amt} (host correction)`
+				: `${name} was debited ${-amt} (host correction)`;
 		case 'join':
 			return `${name} joined`;
 		case 'leave':

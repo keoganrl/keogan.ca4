@@ -10,6 +10,7 @@ import {
 	endSession as endSessionService,
 	doRebuy as doRebuyService,
 	giveChips as giveChipsService,
+	adjustChips as adjustChipsService,
 	kickPlayer as kickPlayerService,
 	leaveTable as leaveTableService,
 	advanceTurn as advanceTurnService,
@@ -201,9 +202,34 @@ export function createTableStore(sessionId: string, identityId: string) {
 		}, 10000);
 	}
 
+	// Chip conservation: every chip on the table was bought in, so at any settled
+	// moment sum(stacks) + pot === sum(total buy-ins) — rebuys raise both sides,
+	// gives/awards/blinds/merges all move chips without minting them. A persistent
+	// non-zero difference means a write was lost (chips silently vanished or
+	// duplicated); positive = table short.
+	const chipImbalance = $derived.by(() => {
+		if (!session || !players.length) return 0;
+		const buyins = players.reduce((sum, p) => sum + p.total_buyin, 0);
+		const stacks = players.reduce((sum, p) => sum + p.stack, 0);
+		return buyins - stacks - (session.pot ?? 0);
+	});
+
+	// Mid-action states legitimately break the invariant for a beat (a call writes
+	// the player row and the pot as separate updates), so only a mismatch that holds
+	// steady for several seconds is surfaced.
+	let confirmedImbalance = $state(0);
+	let imbalanceTicks = 0;
+	let lastImbalance = 0;
+
 	function startClock() {
 		clockInterval = setInterval(() => {
 			now = Date.now();
+
+			const imbalance = actionPending ? 0 : chipImbalance;
+			imbalanceTicks = imbalance !== 0 && imbalance === lastImbalance ? imbalanceTicks + 1 : 0;
+			lastImbalance = imbalance;
+			confirmedImbalance = imbalanceTicks >= 5 ? imbalance : 0;
+
 			const level = session?.blind_level ?? -1;
 			if (
 				blindTimeRemaining !== null &&
@@ -709,6 +735,21 @@ export function createTableStore(sessionId: string, identityId: string) {
 		await setBlindLevelService(session, levelIdx);
 	}
 
+	// Applies the confirmed imbalance to one player's stack (host picks who, guided
+	// by the ledger). Uses the confirmed value, not the live one, so a mid-action
+	// blip can't be "repaired" into a real imbalance.
+	async function performAdjustChips(playerId: string) {
+		if (!session) return;
+		const amount = confirmedImbalance;
+		if (amount === 0) return;
+		const target = players.find((p) => p.id === playerId);
+		if (!target) return;
+		players = players.map((p) => (p.id === playerId ? { ...p, stack: p.stack + amount } : p));
+		confirmedImbalance = 0;
+		imbalanceTicks = 0;
+		await adjustChipsService(sessionId, target, amount);
+	}
+
 	async function performGiveChips(recipientId: string, amount: number) {
 		if (!me) return;
 		const recipient = players.find((p) => p.id === recipientId);
@@ -782,6 +823,10 @@ export function createTableStore(sessionId: string, identityId: string) {
 		get runOut() {
 			return runOut;
 		},
+		// Non-zero only after the mismatch has held steady for ~5s; positive = short.
+		get chipImbalance() {
+			return confirmedImbalance;
+		},
 		get canRaise() {
 			return canRaise;
 		},
@@ -799,6 +844,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 			runExclusive(() => awardBestHand(winnerIds), undefined),
 		giveChips: (recipientId: string, amount: number) =>
 			runExclusive(() => performGiveChips(recipientId, amount), undefined),
+		adjustChips: (playerId: string) => runExclusive(() => performAdjustChips(playerId), undefined),
 		resetAwards,
 		confirmNextStreet: () => runExclusive(confirmNextStreet, undefined),
 		passTurn: (outOfTurn = false) => runExclusive(() => passTurn(outOfTurn), undefined),

@@ -81,6 +81,21 @@ export async function startSession(
 	await logEvent(sessionId, 'join', { playerId: playerData.id });
 }
 
+// Merges duplicate lifetime identities into one (the private-tab problem: every
+// incognito visit mints a fresh players_identity row, so one human shows up on the
+// leaderboard several times). Every player row belonging to a ghost identity is
+// repointed at `keepId`, then the ghost identity rows are deleted. lifetime_stats
+// groups by identity, so the history collapses into a single entry — and because
+// sessions_played counts distinct sessions, a game where the person accidentally
+// played under two identities still counts once.
+export async function mergeIdentities(keepId: string, ghostIds: string[]): Promise<void> {
+	const ghosts = ghostIds.filter((id) => id !== keepId);
+	if (!keepId || !ghosts.length) return;
+	// Repoint before deleting: players.identity_id references players_identity.
+	await supabase.from('players').update({ identity_id: keepId }).in('identity_id', ghosts);
+	await supabase.from('players_identity').delete().in('id', ghosts);
+}
+
 export async function getSession(sessionId: string): Promise<Session | null> {
 	const { data } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
 	return (data as Session) ?? null;

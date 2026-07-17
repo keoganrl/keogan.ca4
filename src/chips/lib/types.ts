@@ -63,6 +63,7 @@ export type GameEventType =
 	| 'win'
 	| 'rebuy'
 	| 'give' // player-to-player chip transfer; player_id gives, target_player_id receives
+	| 'adjust' // host chip-conservation correction; amount signed (+credit / −debit)
 	| 'join'
 	| 'leave'
 	| 'kick';

@@ -406,7 +406,20 @@ export async function endHand(
 		});
 	}
 
-	const activePlayers = players.filter((p) => p.is_active);
+	// Deal from committed truth, not the caller's snapshot. The award writes are
+	// already committed when this runs, but the caller's `players` comes from the
+	// realtime cache, which a delayed echo or an in-flight load() can have reverted
+	// to pre-award values. postBlinds below writes SB/BB stacks as ABSOLUTE numbers,
+	// so dealing from a stale snapshot erases a just-awarded pot (seen live: a
+	// fold-win's 950 vanished because the winner posted the next big blind from a
+	// stack that predated the award).
+	const { data: freshRows } = await supabase
+		.from('players')
+		.select('*')
+		.eq('session_id', session.id);
+	const basePlayers = (freshRows as Player[] | null) ?? players;
+
+	const activePlayers = basePlayers.filter((p) => p.is_active);
 	if (!activePlayers.length) return;
 
 	// Busted players (stack 0 after awards) are dealt out of the next hand: they start
@@ -454,9 +467,19 @@ export async function endHand(
 // out). No hand record is written — there was no winner.
 async function redealHand(
 	session: Session,
-	activePlayers: Player[],
+	callerPlayers: Player[],
 	buttonId: string | null
 ): Promise<void> {
+	// Same stale-snapshot hazard as endHand: the refund below writes stacks as
+	// absolute values (stack + hand_total_bet), so compute it from freshly read
+	// rows rather than the caller's realtime cache.
+	const { data: freshRows } = await supabase
+		.from('players')
+		.select('*')
+		.eq('session_id', session.id);
+	const activePlayers = ((freshRows as Player[] | null) ?? callerPlayers).filter(
+		(p) => p.is_active
+	);
 	if (!activePlayers.length) return;
 	await Promise.all([
 		...activePlayers.map((p) =>
@@ -812,6 +835,22 @@ export async function reorderSeats(
 		folded: bustedAfterRefund(p)
 	}));
 	await postBlinds({ ...session, pot: 0, current_bet: 0 }, freshPlayers, false);
+}
+
+// Host correction for a chip-conservation mismatch: credits (or debits) a player's
+// stack without touching total_buyin, restoring sum(stacks) + pot == sum(buy-ins).
+// Logged as an 'adjust' event so the fix is visible in the ledger.
+export async function adjustChips(
+	sessionId: string,
+	player: Player,
+	amount: number
+): Promise<void> {
+	if (!Number.isInteger(amount) || amount === 0) return;
+	await supabase
+		.from('players')
+		.update({ stack: player.stack + amount })
+		.eq('id', player.id);
+	await logEvent(sessionId, 'adjust', { playerId: player.id, amount });
 }
 
 // Transfers chips from one player's stack to another's — the app equivalent of handing

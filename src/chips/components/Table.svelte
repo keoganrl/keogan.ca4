@@ -1086,6 +1086,31 @@
       </div>
     {/if}
 
+    <!-- Chip-conservation warning (host only). Stacks + pot stopped adding up to the
+         buy-ins, meaning a write was lost somewhere. The ledger shows what happened
+         last; tapping a player applies the correction to their stack. -->
+    {#if s.me?.is_host && s.chipImbalance !== 0}
+      <div transition:fade={{ duration: 300 }} class="banner banner-imbalance">
+        <p>
+          table is <strong>{Math.abs(s.chipImbalance)}</strong> chips
+          {s.chipImbalance > 0 ? 'short' : 'over'} — check Activity, then tap who to
+          {s.chipImbalance > 0 ? 'credit' : 'debit'}
+        </p>
+        <div class="btn-row wrap">
+          {#each s.players.filter((p) => p.is_active) as p (p.id)}
+            <button
+              class="cbtn cbtn-small"
+              onclick={() => s.adjustChips(p.id)}
+              disabled={s.actionPending}
+            >
+              {p.display_name}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+
     <!-- Player list -->
     <div class="players">
       {#if canReorder}
@@ -1560,6 +1585,16 @@
     letter-spacing: 0.08em;
   }
   .banner-wait { color: var(--faint); }
+  .banner-imbalance {
+    border: 1px solid var(--down);
+    border-radius: 4px;
+    padding: 0.6rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .banner-imbalance p { color: var(--down); }
+  .banner-imbalance .btn-row { justify-content: center; }
   .banner-done {
     color: var(--muted);
     font-style: italic;
