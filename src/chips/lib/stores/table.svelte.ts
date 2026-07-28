@@ -394,6 +394,14 @@ export function createTableStore(sessionId: string, identityId: string) {
 		return players.some((p) => p.is_active && !p.folded && p.id !== me!.id && p.stack > 0);
 	});
 
+	// Fewest chips `me` must add for a legal raise (or opening bet), capped at their
+	// stack — when the full min-raise is unaffordable, all-in is the only raise. The
+	// UI floors its slider and default here so illegal raises can't be dialled in.
+	const minRaiseAdd = $derived.by(() => {
+		if (!me || !session) return 0;
+		return Math.min(minRaiseTotal(session) - me.current_round_bet, me.stack);
+	});
+
 	async function confirmNextStreet() {
 		if (!session || !streetComplete) return;
 		// advanceStreet is street-scoped (CAS on session.street), so a double confirm —
@@ -443,10 +451,28 @@ export function createTableStore(sessionId: string, identityId: string) {
 		}
 	}
 
+	// Smallest legal round total for a raise (or opening bet): double the current
+	// bet, or the big blind when opening. Exposed so the UI can floor its slider at
+	// the same value it's validated against.
+	function minRaiseTotal(s: Session): number {
+		return s.current_bet > 0 ? s.current_bet * 2 : s.big_blind;
+	}
+
 	async function placeBet(amount: number, outOfTurn = false): Promise<string> {
 		if (!me || !session) return 'Not ready';
 		if (amount <= 0) return 'Enter a bet amount.';
 		if (amount > me.stack) return "You don't have enough chips.";
+
+		// A raise must bring the round total to at least the minimum (double the
+		// current bet). Below that isn't a raise — it wouldn't even match the bet, as
+		// with 25 tossed over a 100 bet. Moving all-in for less is the one exception.
+		const minTotal = minRaiseTotal(session);
+		const isAllIn = amount === me.stack;
+		if (me.current_round_bet + amount < minTotal && !isAllIn) {
+			return session.current_bet > 0
+				? `Raise to at least ${minTotal}.`
+				: `Bet at least ${minTotal}.`;
+		}
 
 		if (outOfTurn) await resolveInterveningBeforeMe();
 		if (!me || !session) return 'Not ready';
@@ -826,6 +852,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 		// Non-zero only after the mismatch has held steady for ~5s; positive = short.
 		get chipImbalance() {
 			return confirmedImbalance;
+		},
+		get minRaiseAdd() {
+			return minRaiseAdd;
 		},
 		get canRaise() {
 			return canRaise;

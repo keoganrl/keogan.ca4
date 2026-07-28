@@ -356,10 +356,18 @@
     }
   });
 
-  // Pot-fraction presets snap to the current blind step so bets stay in clean units.
+  // Pot-fraction presets snap to the current blind step so bets stay in clean units,
+  // floored at the minimum legal raise so a preset can't dial in an illegal one.
   function potBet(fraction: number) {
     const raw = Math.round((store?.session?.pot ?? 0) * fraction);
-    return snapToStep(raw, betStep, store?.me?.stack ?? 0);
+    const snapped = snapToStep(raw, betStep, store?.me?.stack ?? 0);
+    return Math.max(store?.minRaiseAdd ?? 0, snapped);
+  }
+
+  // Opening the raise panel seeds the slider at the smallest legal raise.
+  function openRaise() {
+    showBetting = !showBetting;
+    if (showBetting) betAmount = store?.minRaiseAdd ?? betAmount;
   }
 
   // Pending out-of-turn action awaiting confirmation (null = none).
@@ -1239,12 +1247,7 @@
               >
             {/if}
             {#if s.canRaise}
-              <button
-                class="act act-raise"
-                onclick={() => {
-                  showBetting = !showBetting;
-                }}
-              >
+              <button class="act act-raise" onclick={openRaise}>
                 {showBetting ? 'Close bet' : 'Raise'}
               </button>
             {/if}
@@ -1401,7 +1404,7 @@
               <button
                 class="cstep"
                 onclick={() => {
-                  betAmount = Math.max(0, betAmount - betStep);
+                  betAmount = Math.max(s.minRaiseAdd, betAmount - betStep);
                 }}
                 aria-label="Decrease bet"
               >
@@ -1409,7 +1412,7 @@
               </button>
               <input
                 type="range"
-                min="0"
+                min={s.minRaiseAdd}
                 max={s.me?.stack ?? 0}
                 step={betStep}
                 bind:value={betAmount}
@@ -1450,7 +1453,11 @@
               onclick={handlePlaceBet}
               disabled={s.actionPending}
             >
-              {s.actionPending ? 'Sending…' : `Confirm raise — ${betAmount} chips`}
+              {s.actionPending
+                ? 'Sending…'
+                : (s.session?.current_bet ?? 0) > 0
+                  ? `Raise to ${(s.me?.current_round_bet ?? 0) + betAmount}`
+                  : `Bet ${betAmount}`}
             </button>
           </div>
         {/if}
