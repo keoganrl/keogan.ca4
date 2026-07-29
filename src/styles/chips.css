@@ -61,6 +61,22 @@ body.chips {
 /* Rapid taps on steppers must register as clicks, not double-tap zoom (iOS Safari). */
 body.chips button { touch-action: manipulation; }
 
+/* The table is a game board, not a document. Holding a seat to drag it into a new
+   position used to smear a text selection across neighbouring rows, and every other
+   press-and-hold risks the same. Nothing here is meant to be selected — the join
+   code and invite link are copied by tapping them, not by selecting. */
+body.chips {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* …except what you type: a field you can't select is a field you can't edit. */
+body.chips input:not([type='range']),
+body.chips textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Reading-column pages (home, setup, join, cashout, leaderboard) */
 .chips-page {
   max-width: 480px;

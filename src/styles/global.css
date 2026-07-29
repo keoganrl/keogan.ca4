@@ -43,6 +43,63 @@ body {
   position: relative;
 }
 
+/* ---- Selection -----------------------------------------------------------
+   Buttons, navigation links, and images are furniture: dragging across them
+   only ever produced glitchy half-selections. Prose is the exception — writing
+   is meant to be quoted, so it stays selectable. Base rule is off; the three
+   blocks below opt text back in, in ascending specificity. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Static text: anything that reads as content rather than a control. */
+p,
+h1,
+h2,
+h3,
+h4,
+li,
+blockquote,
+code,
+pre,
+figcaption,
+time,
+.name,
+.blurb,
+.article-body,
+.guestbook-entry {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Furniture — unselectable even when it sits inside prose. */
+a,
+button,
+img,
+svg {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* An inline link is part of the sentence around it, so it stays selectable:
+   otherwise dragging across a paragraph silently drops the linked words. Only
+   standalone navigation (the directory, footers, listings) stays furniture. */
+.article-body a,
+.blurb a,
+.guestbook-entry a {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* A field you can't select is a field you can't edit. */
+input:not([type='range']),
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .name {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: 2rem;
