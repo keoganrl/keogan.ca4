@@ -42,24 +42,36 @@ export async function startSession(
 	smallBlind: number,
 	bigBlind: number,
 	gameMode: GameMode = 'cash',
-	blindSchedule: BlindLevel[] = []
+	blindSchedule: BlindLevel[] = [],
+	autoEscalate = true
 ): Promise<void> {
 	const blindLevelStartedAt =
 		gameMode === 'tournament' && blindSchedule.length > 0 ? new Date().toISOString() : null;
 
-	const { error: sessionError } = await supabase
+	const settings = {
+		small_blind: smallBlind,
+		big_blind: bigBlind,
+		starting_stack: buyIn,
+		status: 'active',
+		game_mode: gameMode,
+		blind_schedule: blindSchedule,
+		blind_level: 0,
+		blind_level_started_at: blindLevelStartedAt
+	};
+
+	let { error: sessionError } = await supabase
 		.from('sessions')
-		.update({
-			small_blind: smallBlind,
-			big_blind: bigBlind,
-			starting_stack: buyIn,
-			status: 'active',
-			game_mode: gameMode,
-			blind_schedule: blindSchedule,
-			blind_level: 0,
-			blind_level_started_at: blindLevelStartedAt
-		})
+		.update({ ...settings, auto_escalate: autoEscalate })
 		.eq('id', sessionId);
+	// sessions.auto_escalate was added later; if a database hasn't had the migration
+	// run yet, start the game without it rather than failing outright (escalation
+	// then falls back to on — see cashEscalationActive).
+	if (sessionError) {
+		({ error: sessionError } = await supabase
+			.from('sessions')
+			.update(settings)
+			.eq('id', sessionId));
+	}
 	if (sessionError) throw new Error('Failed to update session');
 
 	const { data: playerData, error: playerError } = await supabase

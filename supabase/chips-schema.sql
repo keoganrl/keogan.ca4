@@ -41,6 +41,12 @@ create table sessions (
   blind_level int not null default 0,
   blind_level_started_at timestamptz,
   blind_schedule jsonb not null default '[]',
+  -- do eliminations climb the blind ladder automatically? The schedule is always
+  -- populated (it sets the starting blinds and backs the host's manual override),
+  -- so this flag is what the setup toggle controls.
+  -- Added 2026-07: existing databases need
+  --   alter table sessions add column auto_escalate boolean not null default true;
+  auto_escalate boolean not null default true,
   button_player_id uuid,
   current_actor_id uuid,
   current_bet int not null default 0,
@@ -124,8 +130,13 @@ create table events (
 
 create index events_session_seq_idx on events (session_id, seq);
 
--- lifetime_stats: per-identity aggregates over ended sessions
-create view lifetime_stats as
+-- lifetime_stats: per-identity aggregates over ended sessions.
+--
+-- Written as CREATE OR REPLACE so this statement is also the migration: re-run it
+-- on an existing database to pick up new columns. Postgres only allows *appending*
+-- columns to a replaced view, which is why times_first sits at the end rather than
+-- next to times_last where it reads more naturally.
+create or replace view lifetime_stats as
 select
   pi.id as identity_id,
   pi.display_name,
@@ -139,7 +150,16 @@ select
       where p2.session_id = p.session_id
     )
   ) as times_last,
-  coalesce(sum(p.total_buyin), 0) as total_buyin
+  coalesce(sum(p.total_buyin), 0) as total_buyin,
+  -- Sessions this player finished with the biggest stack at the table. A tie counts
+  -- for everyone level at the top, same as times_last treats a tie for the bottom.
+  count(*) filter (
+    where p.stack = (
+      select max(p2.stack)
+      from players p2
+      where p2.session_id = p.session_id
+    )
+  ) as times_first
 from players_identity pi
 join players p on p.identity_id = pi.id
 join sessions s on s.id = p.session_id and s.status = 'ended'

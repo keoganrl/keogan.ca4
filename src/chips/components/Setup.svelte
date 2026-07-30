@@ -18,18 +18,17 @@
   let loading = $state(false);
 
   // Blind settings — always on screen, cash-only.
-  let enableEscalation = $state(true);
+  let autoEscalate = $state(true);
   let sessionMinutes = $state<CashSessionLength>(60);
 
-  // A fixed nine-rung doubling ladder runs quietly in the background: blinds climb
-  // one rung (a double) after any hand that eliminates somebody, and the host can
-  // pick a rung mid-game from the schedule sheet. Never edited or shown here.
-  const schedule = $derived(
-    enableEscalation ? generateCashEscalationSchedule(BUY_IN, sessionMinutes) : []
-  );
+  // The nine-rung doubling ladder is always built, whatever the toggle says: rung one
+  // sets the opening blinds (the session length picks it), and the full ladder backs
+  // the host's manual override from the schedule sheet mid-game. The toggle only
+  // decides whether eliminations climb it on their own. Never edited or shown here.
+  const schedule = $derived(generateCashEscalationSchedule(BUY_IN, sessionMinutes));
 
-  const startingSmallBlind = $derived(schedule.length > 0 ? schedule[0].small_blind : 1);
-  const startingBigBlind = $derived(schedule.length > 0 ? schedule[0].big_blind : 2);
+  const startingSmallBlind = $derived(schedule[0].small_blind);
+  const startingBigBlind = $derived(schedule[0].big_blind);
 
   onMount(async () => {
     await initIdentity();
@@ -60,7 +59,8 @@
         startingSmallBlind,
         startingBigBlind,
         'cash',
-        schedule
+        schedule,
+        autoEscalate
       );
       go(`/table?session=${sessionId}`);
     } catch (e) {
@@ -102,7 +102,7 @@
     </div>
 
     <label class="cswitch escalation-toggle">
-      <input type="checkbox" bind:checked={enableEscalation} />
+      <input type="checkbox" bind:checked={autoEscalate} />
       <span class="track" aria-hidden="true"></span>
       Double blinds when someone busts
     </label>

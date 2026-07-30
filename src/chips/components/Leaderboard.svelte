@@ -2,9 +2,13 @@
   import { onMount } from 'svelte';
   import { supabase } from '../lib/supabase';
   import { mergeIdentities } from '../lib/services/game';
+  import {
+    sortLifetimeStats,
+    type LeaderboardSortKey
+  } from '../lib/utils/leaderboard';
   import type { LifetimeStat } from '../lib/types';
 
-  type SortKey = 'total_net' | 'sessions_played' | 'biggest_win' | 'times_last';
+  type SortKey = LeaderboardSortKey;
 
   let stats = $state<LifetimeStat[]>([]);
   let loading = $state(true);
@@ -70,17 +74,12 @@
     }
   }
 
-  let sorted = $derived.by(() => {
-    return [...stats].sort((a, b) => {
-      if (sortBy === 'times_last') return a.times_last - b.times_last;
-      return b[sortBy] - a[sortBy];
-    });
-  });
+  let sorted = $derived(sortLifetimeStats(stats, sortBy));
 
   const columns: { key: SortKey; label: string }[] = [
     { key: 'total_net', label: 'net' },
-    { key: 'sessions_played', label: 'sessions' },
     { key: 'biggest_win', label: 'best win' },
+    { key: 'times_first', label: 'times first' },
     { key: 'times_last', label: 'times last' }
   ];
 
@@ -96,7 +95,7 @@
 <div class="chips-page">
   <p class="chips-back"><a href="/chips">← chips</a></p>
   <h1 class="chips-title">Leaderboard</h1>
-  <p class="chips-sub">Lifetime records, across every game.</p>
+  <p class="chips-sub">Lifetime records across every game</p>
 
   <nav class="sorts">
     {#each columns as col (col.key)}
@@ -147,9 +146,9 @@
             {#if sortBy === 'total_net'}
               <span class="stat-num {netClass(player.total_net)}">{netStr(player.total_net)}</span>
               <span class="stat-label">lifetime net</span>
-            {:else if sortBy === 'sessions_played'}
-              <span class="stat-num">{player.sessions_played}</span>
-              <span class="stat-label">sessions</span>
+            {:else if sortBy === 'times_first'}
+              <span class="stat-num net-up">{player.times_first ?? 0}</span>
+              <span class="stat-label">times first</span>
             {:else if sortBy === 'biggest_win'}
               <span class="stat-num {netClass(player.biggest_win)}">{netStr(player.biggest_win)}</span>
               <span class="stat-label">best session</span>

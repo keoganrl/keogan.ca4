@@ -419,6 +419,7 @@
       showFoldWarning = true;
       return;
     }
+    showBetting = false;
     void store?.fold();
   }
 
@@ -582,6 +583,7 @@
             class="cbtn cbtn-danger"
             onclick={() => {
               showFoldWarning = false;
+              showBetting = false;
               void s.fold();
             }}
           >
@@ -1386,8 +1388,10 @@
           </div>
         {/if}
 
-        <!-- Raise / Bet panel -->
-        {#if showBetting && s.canRaise && !s.streetComplete}
+        <!-- Raise / Bet panel. Folded (or all-in) means there is nothing left to raise
+             with, so the panel closes itself however you got there — your own fold,
+             an out-of-turn fold, or a kick that auto-folded you. -->
+        {#if showBetting && s.canRaise && !s.streetComplete && !s.me.folded && s.me.stack > 0}
           <div class="bet-panel">
             <div class="btn-row wrap">
               {#each [[0.5, '½ pot'], [0.75, '¾ pot'], [1, '1× pot'], [2, '2× pot']] as [frac, label] (frac)}

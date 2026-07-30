@@ -21,6 +21,10 @@ export interface Session {
 	blind_level: number;
 	blind_level_started_at: string | null;
 	blind_schedule: BlindLevel[];
+	// Whether eliminations automatically climb the ladder. The schedule is always
+	// present (it sets the starting blinds and backs the host's manual override),
+	// so this is what the setup toggle actually controls.
+	auto_escalate: boolean;
 	button_player_id: string | null;
 	current_actor_id: string | null;
 	current_bet: number;
@@ -87,6 +91,7 @@ export interface LifetimeStat {
 	sessions_played: number;
 	total_net: number;
 	biggest_win: number;
+	times_first: number;
 	times_last: number;
 	total_buyin: number;
 }

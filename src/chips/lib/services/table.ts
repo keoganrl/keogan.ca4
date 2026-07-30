@@ -619,7 +619,35 @@ export async function claimHost(myPlayer: Player, currentHost: Player | undefine
 }
 
 export async function endSession(sessionId: string): Promise<void> {
-	await supabase.from('sessions').update({ status: 'ended' }).eq('id', sessionId);
+	// Hand back anything still on the felt — blinds included — before the books close.
+	// The leaderboard reads net as stack − buy-in, so chips abandoned in an unfinished
+	// pot would score as permanent losses for whoever had bet them. Inactive players
+	// are refunded too: someone who left mid-hand keeps their hand_total_bet, and their
+	// net has to come out right as well.
+	//
+	// Read the rows fresh rather than trusting a caller snapshot: these are absolute
+	// stack writes, and a stale realtime cache is exactly how chips have gone missing
+	// before (see endHand).
+	const { data: rows } = await supabase.from('players').select('*').eq('session_id', sessionId);
+	const owed = ((rows as Player[] | null) ?? []).filter((p) => p.hand_total_bet > 0);
+	if (owed.length) {
+		await Promise.all(
+			owed.map((p) =>
+				supabase
+					.from('players')
+					.update({
+						stack: p.stack + p.hand_total_bet,
+						hand_total_bet: 0,
+						current_round_bet: 0
+					})
+					.eq('id', p.id)
+			)
+		);
+	}
+	await supabase
+		.from('sessions')
+		.update({ status: 'ended', pot: 0, current_bet: 0 })
+		.eq('id', sessionId);
 }
 
 export async function leaveTable(
@@ -721,7 +749,11 @@ export function cashEscalationActive(session: Session): boolean {
 		session.status === 'active' &&
 		session.current_actor_id !== null &&
 		session.game_mode === 'cash' &&
-		(session.blind_schedule?.length ?? 0) > 0
+		(session.blind_schedule?.length ?? 0) > 0 &&
+		// Host turned automatic escalation off at setup; the schedule still exists so
+		// they can move the blinds by hand. Undefined means the column predates the
+		// migration — treat that as on, matching the old behaviour.
+		session.auto_escalate !== false
 	);
 }
 
