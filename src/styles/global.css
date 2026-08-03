@@ -368,6 +368,11 @@ select {
 .guestbook-submit {
   font-family: inherit;
   font-size: 0.9rem;
+  /* Charter's metrics sit the label high on Android Chrome — centre it ourselves. */
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 1px solid #ccc;
   border-radius: 2rem;

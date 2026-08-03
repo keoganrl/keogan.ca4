@@ -157,6 +157,13 @@ body.chips textarea {
 .cbtn {
   font-family: inherit;
   font-size: 0.95rem;
+  /* Flex-centre the label with an explicit line-height: Charter's vertical
+     metrics resolve differently on Android Chrome, so leaving the text to sit
+     on its font-metric line box makes the padding look lopsided there. */
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 1px solid var(--rule);
   border-radius: 2rem;
@@ -192,6 +199,10 @@ body.chips textarea {
 .cchoice {
   font-family: inherit;
   font-size: 0.85rem;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 1px solid var(--rule);
   border-radius: 2rem;

@@ -24,7 +24,9 @@
   let giveAmount = $state(0);
   let showLedger = $state(false);
   let ledgerScrollEl = $state<HTMLDivElement | null>(null);
-  let rebuyAmount = $state(200);
+  // Rebuys are a fixed size — half the buy-in — so the menu is one confirm tap,
+  // not an amount picker.
+  const rebuyAmount = $derived(Math.floor((store?.session?.starting_stack ?? 1000) / 2));
   let showLeaveConfirm = $state(false);
   let showVoidConfirm = $state(false);
   let showResetConfirm = $state(false);
@@ -688,18 +690,6 @@
             </button>
           {:else}
             <div class="menu-sub">
-              <p class="clabel">Rebuy amount</p>
-              <div class="choices">
-                {#each [100, 200, 500, 1000] as amount (amount)}
-                  <button
-                    class="cchoice"
-                    class:active={rebuyAmount === amount}
-                    onclick={() => (rebuyAmount = amount)}
-                  >
-                    {amount}
-                  </button>
-                {/each}
-              </div>
               <button class="cbtn cbtn-primary cbtn-block" onclick={handleDoRebuy}>
                 Rebuy {rebuyAmount} chips
               </button>
