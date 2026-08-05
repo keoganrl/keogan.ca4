@@ -229,13 +229,30 @@ export async function foldHand(
 }
 
 // Calls the current bet: deducts the outstanding amount and advances the turn.
+//
+// The chip arithmetic is computed from freshly read rows, never the caller's realtime
+// cache. These are absolute writes, and the deal is written by the HOST's client — the
+// caller only learns their own blind left their stack via a realtime echo. A dropped
+// echo leaves the cache at the pre-blind stack with current_round_bet 0, so a call
+// computed from it deducts the full current_bet from a stack the blind already left:
+// the pot gains the whole call while the stack only drops the difference, minting
+// exactly one blind of extra chips. (Seen live as the intermittent "table is 50 over"
+// banner — the small blind is the usual victim, since the big blind mostly checks and
+// a check never writes the stack.)
 export async function callBet(
 	session: Session,
 	player: Player,
 	activePlayers: Player[]
 ): Promise<void> {
-	const owed = session.current_bet - player.current_round_bet;
-	const callAmount = Math.min(owed, player.stack);
+	const [{ data: freshPlayer }, { data: freshSession }] = await Promise.all([
+		supabase.from('players').select('*').eq('id', player.id).single(),
+		supabase.from('sessions').select('*').eq('id', session.id).single()
+	]);
+	const p = (freshPlayer as Player | null) ?? player;
+	const s = (freshSession as Session | null) ?? session;
+
+	const owed = s.current_bet - p.current_round_bet;
+	const callAmount = Math.min(owed, p.stack);
 	if (callAmount <= 0) {
 		await supabase.from('players').update({ acted_on_street: session.street }).eq('id', player.id);
 		await logEvent(session.id, 'check', { playerId: player.id, street: session.street });
@@ -246,15 +263,15 @@ export async function callBet(
 		supabase
 			.from('players')
 			.update({
-				stack: player.stack - callAmount,
-				current_round_bet: player.current_round_bet + callAmount,
+				stack: p.stack - callAmount,
+				current_round_bet: p.current_round_bet + callAmount,
 				acted_on_street: session.street,
-				hand_total_bet: player.hand_total_bet + callAmount
+				hand_total_bet: p.hand_total_bet + callAmount
 			})
 			.eq('id', player.id),
 		supabase
 			.from('sessions')
-			.update({ pot: session.pot + callAmount })
+			.update({ pot: s.pot + callAmount })
 			.eq('id', session.id)
 	]);
 	await logEvent(session.id, 'call', {
@@ -560,6 +577,8 @@ export async function setDealer(
 }
 
 // Awards a pot slice to a winner: increments their stack and decrements session.pot.
+// The stack/pot bases are read fresh (see callBet — absolute writes from a stale cache
+// mint or vanish chips); winnerStack/remainingPot are only fallbacks if the reads fail.
 export async function awardPot(
 	sessionId: string,
 	winnerId: string,
@@ -567,33 +586,51 @@ export async function awardPot(
 	amount: number,
 	remainingPot: number
 ): Promise<void> {
+	const [{ data: freshWinner }, { data: freshSession }] = await Promise.all([
+		supabase.from('players').select('stack').eq('id', winnerId).single(),
+		supabase.from('sessions').select('pot').eq('id', sessionId).single()
+	]);
+	const stackBase = freshWinner?.stack ?? winnerStack;
+	const potBase = freshSession?.pot ?? remainingPot;
 	await Promise.all([
 		supabase
 			.from('players')
-			.update({ stack: winnerStack + amount })
+			.update({ stack: stackBase + amount })
 			.eq('id', winnerId),
 		supabase
 			.from('sessions')
-			.update({ pot: remainingPot - amount })
+			.update({ pot: potBase - amount })
 			.eq('id', sessionId)
 	]);
 	await logEvent(sessionId, 'win', { playerId: winnerId, amount });
 }
 
-// Awards one showdown round's payouts (see resolveAward): each winner's stack is set to
-// its post-award value and session.pot drops by the round total. One 'win' ledger line
-// per winner. newStack values must already include the payout — the caller computed them
-// from its optimistic state.
+// Awards one showdown round's payouts (see resolveAward): each winner's stack rises by
+// their amount and session.pot drops by the round total. One 'win' ledger line per
+// winner. Stack/pot bases are read fresh (see callBet — absolute writes from a stale
+// cache mint or vanish chips); the caller's newStack/newPot are only fallbacks.
 export async function awardPayouts(
 	sessionId: string,
 	payouts: { playerId: string; newStack: number; amount: number }[],
 	newPot: number
 ): Promise<void> {
+	const [{ data: freshRows }, { data: freshSession }] = await Promise.all([
+		supabase.from('players').select('id, stack').eq('session_id', sessionId),
+		supabase.from('sessions').select('pot').eq('id', sessionId).single()
+	]);
+	const stackById = new Map((freshRows ?? []).map((r) => [r.id as string, r.stack as number]));
+	const total = payouts.reduce((sum, w) => sum + w.amount, 0);
+	const potBase = freshSession?.pot;
 	await Promise.all([
-		...payouts.map((w) =>
-			supabase.from('players').update({ stack: w.newStack }).eq('id', w.playerId)
-		),
-		supabase.from('sessions').update({ pot: newPot }).eq('id', sessionId)
+		...payouts.map((w) => {
+			const base = stackById.get(w.playerId);
+			const stack = base !== undefined ? base + w.amount : w.newStack;
+			return supabase.from('players').update({ stack }).eq('id', w.playerId);
+		}),
+		supabase
+			.from('sessions')
+			.update({ pot: potBase !== undefined ? potBase - total : newPot })
+			.eq('id', sessionId)
 	]);
 	for (const w of payouts) {
 		await logEvent(sessionId, 'win', { playerId: w.playerId, amount: w.amount });
@@ -837,6 +874,19 @@ export async function reorderSeats(
 	// This current_actor_id reset is intentionally NOT street-scoped: reorderSeats is host-only
 	// and preflop-only (UI gates it on is_host && street === 'preflop'), so it runs outside the
 	// concurrent street-transition window that the advanceTurn / setCurrentActor guards protect.
+	//
+	// The refund is computed from freshly read rows, not the host's realtime cache — these
+	// are absolute stack writes, the class of write that has minted/vanished chips before
+	// (see callBet / endHand).
+	const { data: freshRows } = await supabase
+		.from('players')
+		.select('*')
+		.eq('session_id', session.id);
+	if (freshRows?.length) {
+		const freshById = new Map((freshRows as Player[]).map((p) => [p.id, p]));
+		activePlayers = activePlayers.map((p) => freshById.get(p.id) ?? p);
+	}
+
 	await Promise.all([
 		...activePlayers.map((p) =>
 			supabase

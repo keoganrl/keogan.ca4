@@ -477,14 +477,27 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (outOfTurn) await resolveInterveningBeforeMe();
 		if (!me || !session) return 'Not ready';
 
+		// The chip arithmetic below is a set of ABSOLUTE writes, so compute it from
+		// freshly read rows, never the realtime cache: a dropped echo of my own blind
+		// posting (the host's client wrote it) leaves the cache at my pre-blind stack,
+		// and spending from that both re-spends the blind and mints the difference
+		// into the pot — the intermittent "table is N chips over" imbalance.
+		const [{ data: freshMe }, { data: freshSession }] = await Promise.all([
+			supabase.from('players').select('*').eq('id', me.id).single(),
+			supabase.from('sessions').select('*').eq('id', sessionId).single()
+		]);
+		const meRow = (freshMe as Player | null) ?? me;
+		const sRow = (freshSession as Session | null) ?? session;
+		if (amount > meRow.stack) return "You don't have enough chips.";
+
 		// A raise tops an existing bet; otherwise it's an opening bet (postflop, current_bet 0).
-		const eventType = session.current_bet > 0 ? 'raise' : 'bet';
+		const eventType = sRow.current_bet > 0 ? 'raise' : 'bet';
 		const eventStreet = session.street;
-		const newStack = me.stack - amount;
-		const newPot = session.pot + amount;
-		const newRoundBet = me.current_round_bet + amount;
-		const newHandTotalBet = me.hand_total_bet + amount;
-		const newSessionBet = Math.max(session.current_bet, newRoundBet);
+		const newStack = meRow.stack - amount;
+		const newPot = sRow.pot + amount;
+		const newRoundBet = meRow.current_round_bet + amount;
+		const newHandTotalBet = meRow.hand_total_bet + amount;
+		const newSessionBet = Math.max(sRow.current_bet, newRoundBet);
 
 		players = players.map((p) => {
 			if (p.id === me!.id)
@@ -776,6 +789,91 @@ export function createTableStore(sessionId: string, identityId: string) {
 		await adjustChipsService(sessionId, target, amount);
 	}
 
+	// Everything a bug report about an imbalance needs, as a JSON string: what this
+	// client believed (the realtime cache), what the database actually holds, chip
+	// sums for both, and the event log from the start of the PRECEDING hand onward.
+	// Cache-vs-database divergence is the signature of the lost-write bugs the
+	// imbalance banner exists to catch, which is why both snapshots are included.
+	async function buildDebugReport(): Promise<string> {
+		const cachedSession = session;
+		const cachedPlayers = players;
+
+		const [{ data: freshSession }, { data: freshPlayers }, { data: recentEvents }] =
+			await Promise.all([
+				supabase.from('sessions').select('*').eq('id', sessionId).single(),
+				supabase.from('players').select('*').eq('session_id', sessionId).order('seat_order'),
+				supabase
+					.from('events')
+					.select('*')
+					.eq('session_id', sessionId)
+					.order('seq', { ascending: false })
+					.limit(300)
+			]);
+
+		const dbSession = (freshSession as Session | null) ?? null;
+		const dbPlayers = (freshPlayers as Player[] | null) ?? [];
+
+		// Names for annotating events; fall back to a short id for departed rows.
+		const nameOf = (id: string | null) => {
+			if (!id) return null;
+			const p =
+				dbPlayers.find((x) => x.id === id) ?? cachedPlayers.find((x) => x.id === id);
+			return p ? p.display_name : id.slice(0, 8);
+		};
+
+		const orderedEvents = ((recentEvents as GameEvent[] | null) ?? []).sort(
+			(a, b) => a.seq - b.seq
+		);
+		// Keep everything from the second-to-last 'deal' marker: the full preceding
+		// hand plus the current one.
+		const dealSeqs = orderedEvents.filter((e) => e.type === 'deal').map((e) => e.seq);
+		const fromSeq = dealSeqs.length >= 2 ? dealSeqs[dealSeqs.length - 2] : (dealSeqs[0] ?? 0);
+		const handEvents = orderedEvents
+			.filter((e) => e.seq >= fromSeq)
+			.map((e) => ({
+				seq: e.seq,
+				type: e.type,
+				player: nameOf(e.player_id),
+				target: nameOf(e.target_player_id),
+				amount: e.amount,
+				street: e.street,
+				at: e.created_at
+			}));
+
+		const sums = (rows: Player[], pot: number | null | undefined) => {
+			const buyins = rows.reduce((sum, p) => sum + p.total_buyin, 0);
+			const stacks = rows.reduce((sum, p) => sum + p.stack, 0);
+			const bets = rows.reduce((sum, p) => sum + p.hand_total_bet, 0);
+			return {
+				buyins,
+				stacks,
+				handBets: bets,
+				pot: pot ?? 0,
+				imbalance: buyins - stacks - (pot ?? 0)
+			};
+		};
+
+		return JSON.stringify(
+			{
+				generatedAt: new Date().toISOString(),
+				confirmedImbalance,
+				database: dbSession
+					? { sums: sums(dbPlayers, dbSession.pot), session: dbSession, players: dbPlayers }
+					: 'fetch failed',
+				thisClientCache: cachedSession
+					? {
+							sums: sums(cachedPlayers, cachedSession.pot),
+							session: cachedSession,
+							players: cachedPlayers
+						}
+					: null,
+				eventsSincePrecedingHand: handEvents
+			},
+			null,
+			2
+		);
+	}
+
 	async function performGiveChips(recipientId: string, amount: number) {
 		if (!me) return;
 		const recipient = players.find((p) => p.id === recipientId);
@@ -874,6 +972,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		giveChips: (recipientId: string, amount: number) =>
 			runExclusive(() => performGiveChips(recipientId, amount), undefined),
 		adjustChips: (playerId: string) => runExclusive(() => performAdjustChips(playerId), undefined),
+		buildDebugReport,
 		resetAwards,
 		confirmNextStreet: () => runExclusive(confirmNextStreet, undefined),
 		passTurn: (outOfTurn = false) => runExclusive(() => passTurn(outOfTurn), undefined),

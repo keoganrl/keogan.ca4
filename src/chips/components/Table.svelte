@@ -439,6 +439,26 @@
     else await runPlaceBet(true);
   }
 
+  // One tap in the imbalance banner copies a full diagnostic dump (database rows,
+  // this client's cached rows, chip sums for both, and the last two hands' events)
+  // for pasting into a bug report.
+  let debugCopied = $state(false);
+  let debugCopying = $state(false);
+  async function copyDebugReport() {
+    if (!store || debugCopying) return;
+    debugCopying = true;
+    try {
+      const report = await store.buildDebugReport();
+      await navigator.clipboard.writeText(report);
+      debugCopied = true;
+      setTimeout(() => (debugCopied = false), 2000);
+    } catch {
+      // Clipboard blocked (permissions / insecure context) — nothing sensible to do.
+    } finally {
+      debugCopying = false;
+    }
+  }
+
   async function handleDoRebuy() {
     await store?.doRebuy(rebuyAmount);
     showRebuy = false;
@@ -1106,6 +1126,11 @@
               {p.display_name}
             </button>
           {/each}
+        </div>
+        <div class="btn-row wrap">
+          <button class="cbtn cbtn-small" onclick={copyDebugReport} disabled={debugCopying}>
+            {debugCopied ? 'copied' : 'Copy debug report'}
+          </button>
         </div>
       </div>
     {/if}
