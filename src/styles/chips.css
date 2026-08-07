@@ -3,11 +3,18 @@
    Libre Baskerville for headings. Emphasis comes from weight, style, and
    hairlines — colour is reserved for money (up/down) and nothing else. */
 
+/* Metric overrides: keep identical to the ones in global.css (and keep the two
+   files' font-face blocks in sync — chips pages load this copy, not that one).
+   Charter's shipped metrics are lopsided (ascent 98% / descent 23.6%), which on
+   Android Chrome drew pill/button text sitting on the bottom border. */
 @font-face {
   font-family: Charter;
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  ascent-override: 80%;
+  descent-override: 20%;
+  line-gap-override: 20%;
   src: url('/fonts/charter/charter_regular.woff2') format('woff2');
 }
 @font-face {
@@ -15,6 +22,9 @@
   font-style: italic;
   font-weight: 400;
   font-display: swap;
+  ascent-override: 80%;
+  descent-override: 20%;
+  line-gap-override: 20%;
   src: url('/fonts/charter/charter_italic.woff2') format('woff2');
 }
 @font-face {
@@ -22,6 +32,9 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
+  ascent-override: 80%;
+  descent-override: 20%;
+  line-gap-override: 20%;
   src: url('/fonts/charter/charter_bold.woff2') format('woff2');
 }
 @font-face {
@@ -29,6 +42,9 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
+  ascent-override: 80%;
+  descent-override: 20%;
+  line-gap-override: 20%;
   src: url('/fonts/charter/charter_bold_italic.woff2') format('woff2');
 }
 

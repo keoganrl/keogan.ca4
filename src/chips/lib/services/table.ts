@@ -457,12 +457,16 @@ export async function endHand(
 			.eq('session_id', session.id)
 			.eq('is_active', true)
 			.gt('stack', 0),
+		// Everyone else — busted actives AND inactive rows (left / kicked / disconnected)
+		// — is dealt out with their hand state fully cleared. Inactive rows MUST be
+		// included: computePots sums hand_total_bet across every row it's given, so a
+		// leaver's uncleared bet would re-enter the pot math at every later showdown,
+		// paying their chips out again each hand.
 		supabase
 			.from('players')
 			.update({ folded: true, current_round_bet: 0, acted_on_street: null, hand_total_bet: 0 })
 			.eq('session_id', session.id)
-			.eq('is_active', true)
-			.eq('stack', 0)
+			.or('is_active.eq.false,stack.eq.0')
 	]);
 
 	await logEvent(session.id, 'deal');
@@ -494,17 +498,21 @@ async function redealHand(
 		.from('players')
 		.select('*')
 		.eq('session_id', session.id);
-	const activePlayers = ((freshRows as Player[] | null) ?? callerPlayers).filter(
-		(p) => p.is_active
-	);
+	// Refund EVERY row, inactive ones included: someone who left mid-hand keeps
+	// their hand_total_bet (their chips are in the voided pot), and leaving it
+	// uncleared both scores their bet as a permanent leaderboard loss and feeds
+	// computePots a phantom contribution at every later showdown. Only active
+	// players are dealt into the next hand (postBlinds below).
+	const allPlayers = (freshRows as Player[] | null) ?? callerPlayers;
+	const activePlayers = allPlayers.filter((p) => p.is_active);
 	if (!activePlayers.length) return;
 	await Promise.all([
-		...activePlayers.map((p) =>
+		...allPlayers.map((p) =>
 			supabase
 				.from('players')
 				.update({
 					stack: p.stack + p.hand_total_bet,
-					folded: bustedAfterRefund(p),
+					folded: !p.is_active || bustedAfterRefund(p),
 					current_round_bet: 0,
 					acted_on_street: null,
 					hand_total_bet: 0
