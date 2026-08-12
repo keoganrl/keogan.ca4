@@ -566,7 +566,12 @@
           {#if pendingOutOfTurn.action === 'check'}
             <strong>check</strong>.
           {:else if pendingOutOfTurn.action === 'call'}
-            <strong>call {(s.session?.current_bet ?? 0) - (s.me?.current_round_bet ?? 0)}</strong>.
+            {@const owed = (s.session?.current_bet ?? 0) - (s.me?.current_round_bet ?? 0)}
+            {#if owed >= (s.me?.stack ?? 0)}
+              <strong>go all in for {s.me?.stack ?? 0}</strong>.
+            {:else}
+              <strong>call {owed}</strong>.
+            {/if}
           {:else}
             <strong>raise to {pendingOutOfTurn.amount}</strong>.
           {/if}
@@ -1248,15 +1253,19 @@
     <!-- Action bar -->
     {#if s.me}
       <div class="action-bar">
-        <!-- Primary actions: Fold / Check+Call / Raise -->
-        {#if !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
+        <!-- Primary actions: Fold / Check+Call / Raise. Nothing is actionable until the
+             host deals the first hand (current_actor_id) — betting into a table that
+             hasn't started only ever confused people. -->
+        {#if s.session?.current_actor_id && !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
           <div class="btn-row">
             <button class="act act-fold" onclick={handleFold} disabled={s.actionPending}>
               Fold
             </button>
             {#if callAmount > 0}
+              <!-- Calling for everything you have is an all-in, not a call for more
+                   chips than you hold: name it that way and show the real number. -->
               <button class="act act-check" onclick={handleCall} disabled={s.actionPending}>
-                Call {callAmount}
+                {callAmount >= s.me.stack ? `All in ${s.me.stack}` : `Call ${callAmount}`}
               </button>
             {:else}
               <button class="act act-check" onclick={handleCheck} disabled={s.actionPending}
@@ -1406,7 +1415,7 @@
         <!-- Raise / Bet panel. Folded (or all-in) means there is nothing left to raise
              with, so the panel closes itself however you got there — your own fold,
              an out-of-turn fold, or a kick that auto-folded you. -->
-        {#if showBetting && s.canRaise && !s.streetComplete && !s.me.folded && s.me.stack > 0}
+        {#if showBetting && s.session?.current_actor_id && s.canRaise && !s.streetComplete && !s.me.folded && s.me.stack > 0}
           <div class="bet-panel">
             <div class="btn-row wrap">
               {#each [[0.5, '½ pot'], [0.75, '¾ pot'], [1, '1× pot'], [2, '2× pot']] as [frac, label] (frac)}

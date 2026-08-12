@@ -388,9 +388,12 @@ export function createTableStore(sessionId: string, identityId: string) {
 	);
 
 	// Raising is pointless when every other player still in the hand is already all-in:
-	// nobody is left who could call more chips. The UI collapses to call/fold.
+	// nobody is left who could call more chips. It is also impossible when matching the
+	// current bet already costs my whole stack — calling is then an all-in for less, not
+	// a raise. Either way the UI collapses to call/fold.
 	const canRaise = $derived.by(() => {
 		if (!me || !session) return false;
+		if (me.stack <= session.current_bet - me.current_round_bet) return false;
 		return players.some((p) => p.is_active && !p.folded && p.id !== me!.id && p.stack > 0);
 	});
 
