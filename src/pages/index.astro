@@ -53,22 +53,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   </div>
 
   <div class="home-mobile">
-    <h1 class="name">Keogan Larade</h1>
-    <p class="blurb">
-      Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
-    </p>
-    <div class="images">
-      <div class="left"><img src="/images/canoe.jpg" alt="Canoe on still water" /></div>
-      <div class="right"><img src="/images/portrait.jpg" alt="Portrait of Keogan Larade" /></div>
+    <div class="home-fold">
+      <h1 class="name">Keogan Larade</h1>
+      <p class="blurb">
+        Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
+      </p>
+      <div class="images">
+        <div class="left"><img src="/images/canoe.jpg" alt="Canoe on still water" /></div>
+        <div class="right"><img src="/images/portrait.jpg" alt="Portrait of Keogan Larade" /></div>
+      </div>
+      <section class="directory">
+        <h2>Directory</h2>
+        <ul>
+          <li><a href="/writing"><img class="link-logo" src="/images/slash.png" alt="" />writing</a></li>
+          <li><a href="/projects"><img class="link-logo" src="/images/slash.png" alt="" />projects</a></li>
+          <li><a href="/guestbook"><img class="link-logo" src="/images/slash.png" alt="" />guestbook</a></li>
+        </ul>
+      </section>
     </div>
-    <section class="directory">
-      <h2>Directory</h2>
-      <ul>
-        <li><a href="/writing"><img class="link-logo" src="/images/slash.png" alt="" />writing</a></li>
-        <li><a href="/projects"><img class="link-logo" src="/images/slash.png" alt="" />projects</a></li>
-        <li><a href="/guestbook"><img class="link-logo" src="/images/slash.png" alt="" />guestbook</a></li>
-      </ul>
-    </section>
     <footer class="footer">
       <a href="https://www.linkedin.com/in/keoganlarade/" target="_blank" rel="noopener">
         <img class="footer-logo" src="/images/linkedin.png" alt="LinkedIn" />
@@ -82,6 +84,56 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <style>
   .home-desktop { display: none; }
+
+  /* ---- Mobile / tablet: fit items 1–5 to the viewport ----------------------
+     The fold (name → blurb → images → directory) is one flex column as tall as
+     the small viewport, minus a small inset so the directory's last line sits
+     just above the bottom edge rather than flush against it.
+
+     The gaps used to be fixed margins of 7 / 4.5 / 5 / 5 rem (body padding-top,
+     then name, blurb, images). Here they become flex-grow factors in those same
+     ratios, so whatever space is left over after the text and images are laid
+     out gets shared between them in the original proportions — on any phone
+     height, and whether the blurb wraps to three lines or five.
+
+     Growth is applied to the elements themselves rather than to spacer divs:
+     .name and .blurb are block boxes whose text stays top-aligned, so their
+     extra height reads as the gap below them. .images must NOT grow (its
+     children are height: 100%, so a taller box would stretch the photos), so
+     the gap above the directory comes from growing .directory instead and
+     bottom-aligning its contents. */
+  @media (max-width: 1099px) {
+    .home-fold {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100vh - 2.5rem);
+      min-height: calc(100svh - clamp(1.75rem, 4svh, 3rem));
+    }
+
+    /* The old 7rem body padding-top, now elastic. min-height keeps a floor if
+       the content ever outgrows the viewport (large text sizes). */
+    .home-fold::before {
+      content: '';
+      flex: 7 0 0;
+      min-height: 2rem;
+    }
+
+    .home-fold > .name { flex: 4.5 0 auto; margin: 0; }
+    .home-fold > .blurb { flex: 5 0 auto; margin: 0; }
+    .home-fold > .images { flex: 0 0 auto; margin: 0; }
+
+    .home-fold > .directory {
+      flex: 5 0 auto;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    /* Below the fold. Kept in proportion with the gaps above it (it was the
+       largest of them at 8rem) so the scroll down to the icons feels the same. */
+    .home-mobile > .footer { margin-top: clamp(6rem, 21svh, 13rem); }
+  }
 
   @media (min-width: 1100px) {
     .home-mobile { display: none; }

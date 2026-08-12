@@ -63,11 +63,19 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
 
 <style>
   /* Home page's desktop split needs to break out of the default
-     reading-column padding/max-width; mobile/tablet stay unchanged. */
+     reading-column padding/max-width. */
   @media (min-width: 1100px) {
     body.is-home {
       max-width: none;
       padding: 0;
     }
+  }
+
+  /* On mobile the home page's top gap is elastic — it's the .home-fold::before
+     spacer in index.astro, which shares the leftover viewport height with the
+     other gaps. The fixed body padding-top would sit on top of that and break
+     the proportions, so drop it here. Side/bottom padding is unchanged. */
+  @media (max-width: 1099px) {
+    body.is-home { padding-top: 0; }
   }
 </style>
