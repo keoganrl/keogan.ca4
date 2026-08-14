@@ -10,22 +10,24 @@
 -- Derived by replaying the full `events` ledger and reconciling against the live
 -- `players` rows: the replay reproduced all six sessions' drift exactly, and
 -- matched per-player stacks in five of the six. Buy-ins are untouched — they were
--- always right — so the nets and the lifetime board come out correct.
+-- always right — so this moves nets and lifetime standings only.
 --
--- Verify with query 0b in ../session-audit.sql before and after. Expected after:
--- one row, 2026-08-04 at +50. That night also carried the leaver-mint bug (fixed
--- 2026-08-07 in 9749d35); the host's corrections at the table cancelled all but
--- 50 of it, and the remainder went into pots as they were won with no single
--- recipient to bill. Deliberately left unassigned rather than charged to someone
--- who may not have received it.
+-- 2026-08-04 also carried the leaver-mint defect (fixed 2026-08-07 in 9749d35).
+-- The host's corrections at the table cancelled all but 50 of it, and that
+-- remainder went into pots as they were won, with no one recipient to bill. It is
+-- charged to Keogan by the account owner's decision, not by derivation.
+--
+-- Verify with query 0b in ../session-audit.sql before and after: it should list
+-- six sessions before this runs and none after.
 
 begin;
 
--- 1. remove chips endSession refunded that the pot did not owe
+-- 1. remove chips endSession credited that the pot never owed
 --    2026-07-30
 update players set stack = stack - 50   where id = '7f15cd37-4201-49e4-8fa1-5f109a4d078a';  -- Owen the great and wonderful
 --    2026-08-04
 update players set stack = stack - 50   where id = '4ccc1198-d596-45ea-8332-d82fd384b381';  -- Emily
+update players set stack = stack - 50   where id = '1abc076c-07cf-4962-8d88-e08b82e796b2';  -- Keogan  (the unattributable leaver-mint remainder)
 --    2026-08-05
 update players set stack = stack - 175  where id = 'b47bbdaa-1268-4b43-a4cb-7a54ed51fa41';  -- Emily
 update players set stack = stack - 50   where id = 'fd9e5db0-2d73-4cbd-a970-2d0da52c1806';  -- Shaw-Ern
@@ -55,7 +57,7 @@ update sessions set pot = 0 where id = '79dfbe0a-cc4d-4261-a022-db304120c0f2';
 
 commit;
 
--- Confirm: expect exactly one row, 2026-08-04 / +50.
+-- Confirm: expect zero rows.
 select s.created_at::date as night, sum(p.stack) + s.pot - sum(p.total_buyin) as drift
 from sessions s
 join players p on p.session_id = s.id
