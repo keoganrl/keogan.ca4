@@ -1,8 +1,13 @@
 -- Chips — session audit: how to backtrack from a session_id.
 --
--- Paste these into the Supabase SQL editor ONE BLOCK AT A TIME, replacing the
--- id on the first line of the block. (The editor shows only the last result
--- when you run several statements at once.)
+-- Paste these into the Supabase SQL editor ONE BLOCK AT A TIME — the editor
+-- only shows the result of the last statement, so running the whole file at
+-- once throws away everything above it.
+--
+-- Every block runs as-is, against the MOST RECENT session. To point one at a
+-- different night, replace its first line with that session's id:
+--
+--     with s as (select 'a1b2c3d4-....'::uuid as id)
 --
 -- Read them in order: 0 finds the right session, 1-3 tell you *whether* the
 -- books balance, 4-8 tell you *where* they stopped balancing.
@@ -81,7 +86,7 @@ order by s.created_at;
 -- =====================================================================
 -- 1. The session header
 -- =====================================================================
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   ses.*,
   (select display_name from players where session_id = ses.id and is_host limit 1) as host_name
@@ -101,7 +106,7 @@ join s on s.id = ses.id;
 -- session whose status is 'ended' (chips stranded on the felt — endSession is
 -- supposed to refund those).
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   p.seat_order,
   p.display_name,
@@ -126,7 +131,7 @@ order by p.seat_order;
 -- drift = 0 means the books balance and the numbers people are disputing are
 -- real. drift > 0 means chips were minted; drift < 0 means chips vanished.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id),
+with s as (select id from sessions order by created_at desc limit 1),
 t as (
   select
     (select pot from sessions where id = (select id from s))            as pot,
@@ -155,7 +160,7 @@ from t;
 -- and a rebuy counted in total_buyin but never added to the stack reads as a
 -- pure loss on the leaderboard. All three columns should agree.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   p.display_name,
   p.total_buyin,
@@ -193,7 +198,7 @@ order by p.seat_order;
 --   deal               hand boundary; street: a divider. Both amount-less.
 -- So a "raise 400" line is a player at 400 total for the street, not 400 more.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   count(*) filter (where e.type = 'deal') over (order by e.seq rows unbounded preceding) as hand,
   e.seq,
@@ -224,7 +229,7 @@ order by e.seq;
 -- host (chips refunded with no 'win' event, shows negative), and a hand still
 -- in progress at the bottom of the list.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id),
+with s as (select id from sessions order by created_at desc limit 1),
 ev as (
   select
     e.*,
@@ -269,7 +274,7 @@ order by hand_no;
 -- changes without anyone winning a pot. If someone's number looks wrong by a
 -- round amount, look here first.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   e.seq,
   e.type,
@@ -292,7 +297,7 @@ order by e.seq;
 -- events are the actual stack credits. Two rows that disagree, or a hand count
 -- that doesn't match query 6, means an award ran twice or not at all.
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   (select count(*) from hands  where session_id = (select id from s))                        as hands_recorded,
   (select coalesce(sum(pot_total), 0) from hands where session_id = (select id from s))      as hands_pot_total,
@@ -338,7 +343,7 @@ select
 -- whose only session is this one, are the ones to merge (mergeIdentities in
 -- src/chips/lib/services/game.ts does that from the app).
 
-with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)
+with s as (select id from sessions order by created_at desc limit 1)
 select
   p.display_name                                  as name_this_session,
   p.identity_id,
