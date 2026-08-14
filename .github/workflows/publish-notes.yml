@@ -1,0 +1,69 @@
+name: Publish scheduled /her notes
+
+# Publishes pre-prepared handwritten-note commits to main on a schedule.
+#
+# Each note lives on its own `publish/YYYY-MM-DD` branch, stacked so that each
+# one contains every earlier note. This job pushes the newest branch whose
+# release time has passed, which makes it self-healing: a missed or delayed run
+# is corrected by the next one, and a late run still publishes everything due.
+#
+# To schedule another note: add a `publish/<date>` branch stacked on the last
+# one, add a line to RELEASES below, and add a cron entry.
+
+on:
+  schedule:
+    - cron: '5 17 14 8 *'   # Aug 14, 10:05 AM PDT
+    - cron: '5 10 15 8 *'   # Aug 15, 03:05 AM PDT
+    - cron: '5 10 16 8 *'   # Aug 16, 03:05 AM PDT
+    - cron: '*/20 * * * *'  # catch-up sweep; no-ops when nothing is due
+  workflow_dispatch:
+
+# Oldest first. Format: <release time, UTC> <branch>
+env:
+  RELEASES: |
+    2026-08-14T17:00:00Z publish/2026-08-14
+    2026-08-15T10:00:00Z publish/2026-08-15
+    2026-08-16T10:00:00Z publish/2026-08-16
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish whatever is due
+        run: |
+          set -euo pipefail
+          now=$(date -u +%s)
+
+          # Walk oldest to newest, keeping the last branch whose time has passed.
+          target=""
+          while read -r when branch; do
+            [ -z "${when:-}" ] && continue
+            if [ "$now" -ge "$(date -u -d "$when" +%s)" ]; then
+              target="$branch"
+            fi
+          done <<< "$RELEASES"
+
+          if [ -z "$target" ]; then
+            echo "Nothing due yet."
+            exit 0
+          fi
+
+          echo "Newest due branch: $target"
+          git fetch origin "$target"
+          sha=$(git rev-parse FETCH_HEAD)
+
+          # Already live? Then main contains it and there is nothing to do.
+          git fetch origin main
+          if git merge-base --is-ancestor "$sha" FETCH_HEAD; then
+            echo "main already contains $sha — nothing to publish."
+            exit 0
+          fi
+
+          echo "Fast-forwarding main to $sha"
+          git push origin "$sha:main"
