@@ -52,6 +52,33 @@ order by s.created_at desc;
 
 
 -- =====================================================================
+-- 0b. Every session that doesn't balance  ← run this to sweep history
+-- =====================================================================
+-- The same conservation check as query 3, across every session at once. This
+-- is ground truth: it reads the stacks themselves rather than replaying the
+-- ledger, so it catches drift whatever the cause. An empty result means every
+-- night's books are square. Anything listed, take to query 5 / query 6.
+--
+-- Sessions still in progress legitimately show chips in the pot; that's why
+-- pot is added in rather than ignored.
+
+select
+  s.id,
+  s.created_at::date              as night,
+  s.status,
+  count(p.id)                     as players,
+  sum(p.total_buyin)              as bought_in,
+  sum(p.stack)                    as final_stacks,
+  s.pot,
+  sum(p.stack) + s.pot - sum(p.total_buyin) as drift
+from sessions s
+join players p on p.session_id = s.id
+group by s.id
+having sum(p.stack) + s.pot <> sum(p.total_buyin)
+order by s.created_at;
+
+
+-- =====================================================================
 -- 1. The session header
 -- =====================================================================
 with s as (select 'PASTE_SESSION_ID_HERE'::uuid as id)

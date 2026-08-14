@@ -965,9 +965,21 @@ export async function adjustChips(
 	amount: number
 ): Promise<void> {
 	if (!Number.isInteger(amount) || amount === 0) return;
+	// Read the stack fresh: this is an absolute write, and the caller's `player` comes
+	// from the realtime cache, which can lag a pot award or a bet still echoing back.
+	// Correcting from a stale base silently reverts whatever landed in between — and a
+	// correction that doesn't stick is worse than none, since the host believes the
+	// books are square. Same reason awardPot and callBet re-read. (Suspected on
+	// 2026-08-14: a −210 correction is in the ledger but isn't reflected in the stacks.)
+	const { data: fresh } = await supabase
+		.from('players')
+		.select('stack')
+		.eq('id', player.id)
+		.single();
+	const base = fresh?.stack ?? player.stack;
 	await supabase
 		.from('players')
-		.update({ stack: player.stack + amount })
+		.update({ stack: base + amount })
 		.eq('id', player.id);
 	await logEvent(sessionId, 'adjust', { playerId: player.id, amount });
 }
