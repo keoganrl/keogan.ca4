@@ -673,19 +673,48 @@ export async function endSession(sessionId: string): Promise<void> {
 	// Read the rows fresh rather than trusting a caller snapshot: these are absolute
 	// stack writes, and a stale realtime cache is exactly how chips have gone missing
 	// before (see endHand).
-	const { data: rows } = await supabase.from('players').select('*').eq('session_id', sessionId);
-	const owed = ((rows as Player[] | null) ?? []).filter((p) => p.hand_total_bet > 0);
-	if (owed.length) {
+	//
+	// sessions.pot — NOT hand_total_bet — is what's actually owed. hand_total_bet is
+	// only cleared by the next deal (endHand), so after a hand plays to showdown it
+	// still holds everyone's commitment even though awardPayouts already paid that
+	// exact sum out as the pot. Ending the session there (the normal way a night
+	// finishes: last hand, then "end game") refunded the final hand a second time, on
+	// top of the pot the winners had just been credited. Seen live 2026-08-14: a
+	// 9000-chip night cashed out at 12290, over by exactly the last hand's 3290.
+	//
+	// So: refund at most the pot. pot == 0 means the hand was awarded and nothing is
+	// owed; pot > 0 means it was abandoned mid-hand and the chips on the felt go back.
+	// Between those, a partially-awarded showdown pays the largest contributors first
+	// (they hold the side-pot equity) until the pot is drained — whatever the split,
+	// the total handed back is exactly the pot, so chips are conserved either way.
+	const [{ data: rows }, { data: sessionRow }] = await Promise.all([
+		supabase.from('players').select('*').eq('session_id', sessionId),
+		supabase.from('sessions').select('pot').eq('id', sessionId).single()
+	]);
+	const players = (rows as Player[] | null) ?? [];
+	let remaining = Math.max(0, sessionRow?.pot ?? 0);
+
+	// Every player's hand columns get cleared, refund or not, so an ended session never
+	// leaves a stale commitment behind to be mistaken for chips owed.
+	const stale = players.filter((p) => p.hand_total_bet > 0 || p.current_round_bet > 0);
+	if (stale.length) {
+		const refunds = [...stale]
+			.sort((a, b) => b.hand_total_bet - a.hand_total_bet)
+			.map((p) => {
+				const refund = Math.min(p.hand_total_bet, remaining);
+				remaining -= refund;
+				return { player: p, refund };
+			});
 		await Promise.all(
-			owed.map((p) =>
+			refunds.map(({ player, refund }) =>
 				supabase
 					.from('players')
 					.update({
-						stack: p.stack + p.hand_total_bet,
+						stack: player.stack + refund,
 						hand_total_bet: 0,
 						current_round_bet: 0
 					})
-					.eq('id', p.id)
+					.eq('id', player.id)
 			)
 		);
 	}
