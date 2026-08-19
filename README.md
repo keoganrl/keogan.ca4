@@ -50,6 +50,28 @@ withheld entirely below three sessions, where a standard deviation is noise.
 Both read the `session_results` view (added by `chips-schema.sql`); a database that
 predates it still renders the board, just without the chart and chaos tab.
 
+### Extended player stats
+
+`supabase/player-stats.sql` creates a `player_stats` view with the poker-jargon
+numbers the leaderboard has no room for: VPIP, PFR and the gap between them,
+aggression factor, flop c-bet and fold-to-c-bet, steal attempts and fold-to-steal,
+WTSD, and a VPIP split by position. Run it once, after `chips-schema.sql`.
+
+The interesting part is that **position is reconstructed, not recorded**. The app
+only ever stores the *current* button, so there is no per-hand history of who sat
+where. But every hand posts blinds, and `post_sb` / `post_bb` name those players —
+combined with `seat_order` that pins the whole ring. Preflop this is exact rather
+than approximate, because action passes in seat order and everyone dealt in either
+posts a blind or gets a turn to act.
+
+Two things follow, and the file explains both at length:
+
+- At 3-handed there is no cutoff, so short-handed nights contribute nothing to the
+  CO columns rather than contributing something wrong.
+- Every percentage ships with its denominator (`cbet_opps`, `steal_opps`, …) and a
+  blunt `reliability` column, because a steal percentage off three opportunities is
+  an anecdote. Filter on the counts before quoting anything.
+
 ### Exporting the data for player analytics
 
 `supabase/analytics-export.sql` pulls the whole history out in analysis-ready

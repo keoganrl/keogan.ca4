@@ -189,6 +189,11 @@ join sessions s on s.id = p.session_id and s.status = 'ended'
 left join players_identity pi on pi.id = p.identity_id
 where p.identity_id is not null;
 
+-- Extended per-player statistics (VPIP, PFR, c-bet, steal, WTSD, positional splits)
+-- live in a separate file, supabase/player-stats.sql, because they are a few hundred
+-- lines of ledger reconstruction and have nothing to do with making the game work.
+-- Run that file too if you want the `player_stats` view; nothing here depends on it.
+
 -- ------------------------------------------------------------------- RLS
 
 alter table players_identity enable row level security;
