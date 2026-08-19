@@ -24,3 +24,14 @@ two), check that chips balance
 (`sum(stack) + pot == sum(total_buyin)`), then walk the `events` ledger to
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
+
+### Exporting the data for player analytics
+
+`supabase/analytics-export.sql` pulls the whole history out in analysis-ready
+shapes — a player-per-night fact table, the denormalized event ledger,
+playing-style stats (VPIP, PFR, aggression factor) that the leaderboard has no
+room for, running-total trend lines, and head-to-head records. Each block runs
+in the Supabase SQL editor and downloads as CSV; the header explains the psql
+`\copy` / `pg_dump` route for bigger pulls. Run the data-quality sweep at the
+bottom first — duplicate identities and unended sessions skew everything above
+it.
