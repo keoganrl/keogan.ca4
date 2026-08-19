@@ -289,11 +289,17 @@
      by the screen edge — that half-visible chip is the only affordance saying there is
      more to the right, so the bleed is load-bearing, not decoration. The matching
      padding keeps the first chip aligned with the text above it. */
+  /* The gap the tab row leaves beneath itself. Named because .explainer cancels it
+     back out, and the two have to move together. */
+  .chips-page {
+    --tab-gap: 2.5rem;
+  }
+
   .sorts {
     display: flex;
     flex-wrap: nowrap;
     gap: 0.5rem;
-    margin: 0 -1.75rem 2.5rem;
+    margin: 0 -1.75rem var(--tab-gap);
     padding-inline: 1.75rem;
     overflow-x: auto;
     /* A horizontal scroller at the edge of an iOS viewport otherwise hands the gesture
@@ -394,8 +400,12 @@
     border-radius: 4px;
   }
 
+  /* The blurb is a subtitle for the selected tab, so it hugs the tabs the way
+     .chips-sub hugs .chips-title — 0.5rem. Written as a cancellation of --tab-gap
+     rather than a bare -2rem so it stays correct if the tab spacing is ever changed;
+     the negative margin collapses against the tab row's positive one to leave 0.5rem. */
   .explainer {
-    margin: 0 0 1.5rem;
+    margin: calc(0.5rem - var(--tab-gap)) 0 1.5rem;
     max-width: 34rem;
   }
   .first .who-name {
