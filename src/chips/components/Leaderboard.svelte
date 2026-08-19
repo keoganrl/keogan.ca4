@@ -146,10 +146,7 @@
   {:else if stats.length === 0}
     <p class="cnote">No completed sessions yet.</p>
   {:else if sortBy === 'chaos'}
-    <p class="cnote explainer">
-      How wildly someone’s results swing from night to night — 100 is the streakiest
-      player here.
-    </p>
+    <p class="cnote explainer">Standard deviation of results across sessions</p>
     {#if chaos.length === 0}
       <p class="cnote">No completed sessions yet.</p>
     {:else}
