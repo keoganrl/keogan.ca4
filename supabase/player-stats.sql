@@ -182,13 +182,15 @@ reached as (
   group by session_id, hand_no
 ),
 
--- The flop continuation bet: the first bet on the flop, if the preflop aggressor made it.
-cbet as (
+-- The first bet on the flop, whoever made it. Needed on its own (not just as the c-bet
+-- below) because a bet by anyone ELSE before the aggressor's first flop action is what
+-- takes the aggressor's c-bet opportunity away.
+flop_bet as (
   select
     f.session_id,
     f.hand_no,
-    f.player_id as cbetter_id,
-    f.seq       as cbet_seq
+    f.player_id,
+    f.seq
   from (
     select
       e.session_id, e.hand_no, e.player_id, e.seq,
@@ -196,8 +198,19 @@ cbet as (
     from ev e
     where e.street = 'flop' and e.type in ('bet', 'raise')
   ) f
-  join preflop pf on pf.session_id = f.session_id and pf.hand_no = f.hand_no
-  where f.rn = 1 and f.player_id = pf.aggressor_id
+  where f.rn = 1
+),
+
+-- The flop continuation bet: the first bet on the flop, if the preflop aggressor made it.
+cbet as (
+  select
+    fb.session_id,
+    fb.hand_no,
+    fb.player_id as cbetter_id,
+    fb.seq       as cbet_seq
+  from flop_bet fb
+  join preflop pf on pf.session_id = fb.session_id and pf.hand_no = fb.hand_no
+  where fb.player_id = pf.aggressor_id
 ),
 
 -- A steal attempt: a raise from CO/BTN/SB that is the first voluntary action of the hand.
@@ -239,13 +252,18 @@ per_hand as (
     (rc.saw_showdown and not bool_or(e.type = 'fold'))                      as showdown,
 
     -- c-bet: they were the preflop aggressor and the first flop bet was theirs
-    (pf.aggressor_id = r.player_id)                                         as was_aggressor,
     (cb.cbetter_id = r.player_id)                                           as made_cbet,
 
-    -- took at least one flop action of their own. This is what makes a c-bet
-    -- OPPORTUNITY real: a preflop aggressor who is all-in reaches the flop of the
-    -- run-out without ever being able to bet it, and has no flop rows.
-    bool_or(e.street = 'flop')                                              as acted_on_flop,
+    -- c-bet OPPORTUNITY: the preflop aggressor could actually have made the first
+    -- bet of the flop. Two ways to not have the chance, both excluded here:
+    --   * they never took a flop action of their own — an all-in aggressor reaches
+    --     the run-out's flop without ever being able to bet it, and has no flop rows;
+    --   * somebody bet the flop before their first action (a donk bet) — facing a
+    --     bet they can only raise, and a raise is not a c-bet.
+    (pf.aggressor_id = r.player_id
+      and bool_or(e.street = 'flop')
+      and (fb.seq is null
+           or min(e.seq) filter (where e.street = 'flop') <= fb.seq))       as cbet_opp,
 
     -- faced a c-bet: someone else c-bet and they still had an action to take after it.
     -- Folding to it means their FIRST flop action after the c-bet was the fold —
@@ -259,12 +277,17 @@ per_hand as (
       and (array_agg(e.type order by e.seq)
              filter (where e.seq > cb.cbet_seq and e.street = 'flop'))[1] = 'fold') as folded_to_cbet,
 
-    -- steal: had the chance to open from CO/BTN/SB with the pot still unopened
+    -- steal: had the chance to open from CO/BTN/SB with the pot still unopened. The
+    -- player must have taken a preflop action of their own — a blind who was all-in
+    -- from the post never gets a turn, and a chance they never had is not an
+    -- opportunity (same reasoning as the c-bet denominator above).
     (r.position in ('CO', 'BTN', 'SB')
+      and min(e.seq) filter (where e.street = 'preflop'
+                               and e.type in ('call','raise','fold')) is not null
       and (pf.first_voluntary_seq is null
-           or pf.first_voluntary_seq >= coalesce(
-                min(e.seq) filter (where e.street = 'preflop' and e.type in ('call','raise','fold')),
-                pf.first_voluntary_seq)))                                   as steal_opportunity,
+           or pf.first_voluntary_seq >=
+              min(e.seq) filter (where e.street = 'preflop'
+                                   and e.type in ('call','raise','fold'))))  as steal_opportunity,
     (st.stealer_id = r.player_id)                                           as attempted_steal,
 
     -- defending a blind against someone else's steal. Folding to it means their FIRST
@@ -283,15 +306,16 @@ per_hand as (
   from ring r
   join ev e
     on e.session_id = r.session_id and e.hand_no = r.hand_no and e.player_id = r.player_id
-  left join reached rc on rc.session_id = r.session_id and rc.hand_no = r.hand_no
-  left join preflop pf on pf.session_id = r.session_id and pf.hand_no = r.hand_no
-  left join cbet cb    on cb.session_id = r.session_id and cb.hand_no = r.hand_no
-  left join steal st   on st.session_id = r.session_id and st.hand_no = r.hand_no
+  left join reached rc  on rc.session_id = r.session_id and rc.hand_no = r.hand_no
+  left join preflop pf  on pf.session_id = r.session_id and pf.hand_no = r.hand_no
+  left join flop_bet fb on fb.session_id = r.session_id and fb.hand_no = r.hand_no
+  left join cbet cb     on cb.session_id = r.session_id and cb.hand_no = r.hand_no
+  left join steal st    on st.session_id = r.session_id and st.hand_no = r.hand_no
   where e.type not in ('rebuy', 'adjust', 'give', 'join', 'leave', 'kick')
   group by
     r.session_id, r.hand_no, r.player_id, r.position,
     rc.saw_flop, rc.saw_showdown, pf.aggressor_id, pf.first_voluntary_seq,
-    cb.cbetter_id, cb.cbet_seq, st.stealer_id, st.steal_seq
+    fb.seq, cb.cbetter_id, cb.cbet_seq, st.stealer_id, st.steal_seq
 ),
 
 -- Collapse seats onto lifetime identities. Seats with no identity are dropped: they
@@ -306,9 +330,10 @@ by_identity as (
     sum(h.aggressive)                                                       as aggressive_actions,
     sum(h.calls)                                                            as calls,
 
-    -- acted_on_flop, not saw_flop: an all-in aggressor reaches the run-out's flop
-    -- without a chance to bet it, and a chance they never had is not an opportunity.
-    count(*) filter (where h.was_aggressor and h.acted_on_flop)             as cbet_opps,
+    -- cbet_opp, not "was aggressor and saw the flop": an all-in aggressor reaches the
+    -- run-out's flop without a chance to bet it, and an aggressor facing a donk bet
+    -- can only raise — neither ever had the chance the percentage claims to measure.
+    count(*) filter (where h.cbet_opp)                                      as cbet_opps,
     count(*) filter (where h.made_cbet)                                     as cbets,
     count(*) filter (where h.faced_cbet)                                    as faced_cbet_opps,
     count(*) filter (where h.folded_to_cbet)                                as folds_to_cbet,

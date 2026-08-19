@@ -76,7 +76,11 @@ select
   p.total_buyin,
   p.stack                                           as final_stack,
   p.stack - p.total_buyin                           as net,
-  round((p.stack - p.total_buyin)::numeric / nullif(s.big_blind, 0), 1)     as net_bb,
+  -- Starting big blind, not s.big_blind: escalation rewrites big_blind in place, so at
+  -- session end it holds the night's final rung. Same divisor as session_results.
+  round((p.stack - p.total_buyin)::numeric
+        / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
+                          s.big_blind), 0), 1)      as net_bb,
   round((p.stack - p.total_buyin)::numeric / nullif(s.starting_stack, 0), 2) as net_buyins,
   coalesce(r.rebuy_count, 0)                        as rebuys,
   coalesce(r.rebuy_total, 0)                        as rebuy_chips,
@@ -268,13 +272,17 @@ select
   p.identity_id,
   s.created_at::date                                      as night,
   p.stack - p.total_buyin                                 as net,
+  -- Starting big blind, not s.big_blind — see query 1.
   round((p.stack - p.total_buyin)::numeric
-        / nullif(s.big_blind, 0), 1)                      as net_bb,
+        / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
+                          s.big_blind), 0), 1)            as net_bb,
   sum(p.stack - p.total_buyin) over (
     partition by p.identity_id order by s.created_at
     rows unbounded preceding
   )                                                       as running_net,
-  round(sum((p.stack - p.total_buyin)::numeric / nullif(s.big_blind, 0)) over (
+  round(sum((p.stack - p.total_buyin)::numeric
+            / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
+                              s.big_blind), 0)) over (
     partition by p.identity_id order by s.created_at
     rows unbounded preceding
   ), 1)                                                   as running_net_bb,

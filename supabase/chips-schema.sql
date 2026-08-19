@@ -179,6 +179,14 @@ group by pi.id, pi.display_name;
 -- net_bb normalises a night's result to big blinds. Raw net is not comparable across
 -- stakes — a 5/10 tournament dwarfs a 1/2 cash game — so anything that averages or
 -- takes a standard deviation across nights must use net_bb, not net.
+--
+-- The divisor is the night's STARTING big blind (blind_schedule's first rung), NOT
+-- sessions.big_blind: escalation rewrites big_blind in place all night, so by the end
+-- it holds whatever rung the night finished on — often 2-8x where it started, and
+-- higher exactly on the wild nights with eliminations. Dividing by the final blind
+-- shrank precisely the results the chaos score exists to surface, and made two nights
+-- at the same starting stakes incomparable. Sessions that predate blind schedules
+-- have an empty schedule and fall back to big_blind, which for them never changed.
 create or replace view session_results as
 select
   p.identity_id,
@@ -187,7 +195,9 @@ select
   s.created_at,
   s.big_blind,
   p.stack - p.total_buyin                                                   as net,
-  round((p.stack - p.total_buyin)::numeric / nullif(s.big_blind, 0), 2)     as net_bb
+  round((p.stack - p.total_buyin)::numeric
+        / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
+                          s.big_blind), 0), 2)                              as net_bb
 from players p
 join sessions s on s.id = p.session_id and s.status = 'ended'
 left join players_identity pi on pi.id = p.identity_id
