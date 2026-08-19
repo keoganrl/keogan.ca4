@@ -137,6 +137,18 @@ create index events_session_seq_idx on events (session_id, seq);
 -- columns to a replaced view, which is why times_first sits at the end rather than
 -- next to times_last where it reads more naturally.
 create or replace view lifetime_stats as
+-- Best and worst net at each table, computed once per session rather than as a
+-- correlated subquery per player. Deliberately spans EVERY seat, including ones with
+-- no identity: a guest who wins the night really did win it, and should deny the
+-- credit to everyone else rather than handing second place a first.
+with session_extremes as (
+  select
+    session_id,
+    min(stack - total_buyin) as worst_net,
+    max(stack - total_buyin) as best_net
+  from players
+  group by session_id
+)
 select
   pi.id as identity_id,
   pi.display_name,
@@ -148,25 +160,28 @@ select
   -- deep and up from their last one is still down overall. Same grading as the
   -- placement column in analytics-export.sql. A tie counts for everyone level at the
   -- bottom (and times_first treats a tie at the top the same way).
+  --
+  -- best_net <> worst_net is what makes a session a CONTEST. Without it two degenerate
+  -- shapes hand out credits nobody earned, and both occur in real data:
+  --   * a one-player session — min and max are the same person, so they collect a
+  --     first AND a last for sitting alone;
+  --   * a session nobody played, every seat flat at zero — every player at the table
+  --     collects both, which inflates whoever attends most.
+  -- Neither is a placement, so a session with no spread now awards nothing to anyone.
   count(*) filter (
-    where p.stack - p.total_buyin = (
-      select min(p2.stack - p2.total_buyin)
-      from players p2
-      where p2.session_id = p.session_id
-    )
+    where se.best_net <> se.worst_net
+      and p.stack - p.total_buyin = se.worst_net
   ) as times_last,
   coalesce(sum(p.total_buyin), 0) as total_buyin,
   -- Sessions this player finished with the best net result at the table.
   count(*) filter (
-    where p.stack - p.total_buyin = (
-      select max(p2.stack - p2.total_buyin)
-      from players p2
-      where p2.session_id = p.session_id
-    )
+    where se.best_net <> se.worst_net
+      and p.stack - p.total_buyin = se.best_net
   ) as times_first
 from players_identity pi
 join players p on p.identity_id = pi.id
 join sessions s on s.id = p.session_id and s.status = 'ended'
+join session_extremes se on se.session_id = p.session_id
 group by pi.id, pi.display_name;
 
 -- session_results: one row per player per ended session — the per-night grain the

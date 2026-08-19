@@ -42,6 +42,11 @@ Two rules worth knowing before editing it:
   the chips paper. Don't reorder or hand-pick a replacement without re-validating.
   See the header of `src/styles/chips.css`.
 
+`times_first` / `times_last` are graded by net, and only sessions that were an actual
+contest award them: a table where the best and worst net are equal — one player sitting
+alone, or a session nobody played — awards nothing rather than crediting everyone at it
+with both a first and a last.
+
 The chaos tab ranks players by the standard deviation of their per-session results,
 measured in **big blinds** — raw chips would mostly rank people by which stakes they
 turned up for. The figure shown is that deviation itself, not a score out of anything:

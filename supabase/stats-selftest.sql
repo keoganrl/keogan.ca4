@@ -10,6 +10,8 @@
 --   * a donk bet into the preflop aggressor (kills the c-bet opportunity)
 --   * a preflop all-in run-out, which logs only street='showdown' (no flop marker)
 --   * a small blind all-in from the post, who never gets a turn at all
+--   * placement on degenerate tables: a solo session and a session nobody played,
+--     neither of which is a contest and neither of which may award a first or a last
 --
 -- Everything runs inside one transaction and ROLLS BACK, so it is safe to run
 -- against a live database: nothing is left behind. Run it with psql
@@ -30,7 +32,9 @@ insert into players_identity (id, display_name) values
   ('bbbbbbbb-0000-0000-0000-00000000000b', 'selftest B'),
   ('cccccccc-0000-0000-0000-00000000000c', 'selftest C'),
   ('dddddddd-0000-0000-0000-00000000000d', 'selftest D'),
-  ('eeeeeeee-0000-0000-0000-00000000000e', 'selftest E');
+  ('eeeeeeee-0000-0000-0000-00000000000e', 'selftest E'),
+  ('ffffffff-0000-0000-0000-00000000000f', 'selftest F'),
+  ('99999999-0000-0000-0000-000000000009', 'selftest G');
 
 -- s1: flat 1/2 game (no schedule). s2: escalated night that started at 25/50 and
 -- ended at 100/200 — net_bb must divide by the 50, not the 200.
@@ -48,6 +52,24 @@ insert into players (id, session_id, identity_id, display_name, stack, total_buy
   ('cccccccc-1111-0000-0000-00000000000c', '11111111-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-00000000000c', 'C',  950, 1000, 2),
   ('dddddddd-1111-0000-0000-00000000000d', '11111111-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-00000000000d', 'D',  940, 1000, 3),
   ('eeeeeeee-2222-0000-0000-00000000000e', '22222222-0000-0000-0000-000000000002', 'eeeeeeee-0000-0000-0000-00000000000e', 'E', 1500, 1000, 0);
+
+-- Placement fixtures for lifetime_stats. No events: these exist only to exercise
+-- which sessions are allowed to award a first or a last, and F/G play no hands so
+-- they never appear in player_stats.
+--   s3  one player alone  -> not a contest, awards nothing
+--   s4  two players, both flat at zero (nobody played) -> awards nothing
+--   s5  a real contest    -> F first, G last
+insert into sessions (id, join_code, status, small_blind, big_blind, starting_stack) values
+  ('33333333-0000-0000-0000-000000000003', 'selftest-solo', 'ended', 1, 2, 200),
+  ('44444444-0000-0000-0000-000000000004', 'selftest-flat', 'ended', 1, 2, 200),
+  ('55555555-0000-0000-0000-000000000005', 'selftest-real', 'ended', 1, 2, 200);
+
+insert into players (session_id, identity_id, display_name, stack, total_buyin, seat_order) values
+  ('33333333-0000-0000-0000-000000000003', 'ffffffff-0000-0000-0000-00000000000f', 'selftest F', 300, 200, 0),
+  ('44444444-0000-0000-0000-000000000004', 'ffffffff-0000-0000-0000-00000000000f', 'selftest F', 200, 200, 0),
+  ('44444444-0000-0000-0000-000000000004', '99999999-0000-0000-0000-000000000009', 'selftest G', 200, 200, 1),
+  ('55555555-0000-0000-0000-000000000005', 'ffffffff-0000-0000-0000-00000000000f', 'selftest F', 300, 200, 0),
+  ('55555555-0000-0000-0000-000000000005', '99999999-0000-0000-0000-000000000009', 'selftest G', 100, 200, 1);
 
 -- The ledger, in exact chronological order. Amount conventions match logEvent:
 -- blinds = blind size; bet/raise = raise-to total; call = chips added; win = pot slice.
@@ -199,6 +221,17 @@ sr_exp(display_name, net, net_bb) as (values
 sr_act as (
   select display_name, net, net_bb from session_results
   where display_name in ('selftest A', 'selftest E')
+),
+-- lifetime_stats placement. F plays three sessions but only ONE of them is a contest:
+-- the solo table and the flat table must award nothing to anybody.
+lt_exp(display_name, sessions_played, times_first, times_last) as (values
+  ('selftest F', 3::bigint, 1::bigint, 0::bigint),
+  ('selftest G', 2::bigint, 0::bigint, 1::bigint)
+),
+lt_act as (
+  select display_name, sessions_played, times_first, times_last
+  from lifetime_stats
+  where display_name in ('selftest F', 'selftest G')
 )
 select mismatch, details from (
   select 'player_stats: expected, view disagrees' as mismatch, to_jsonb(x) as details
@@ -212,6 +245,12 @@ select mismatch, details from (
   union all
   select 'session_results: view produced, not expected', to_jsonb(w)
     from (table sr_act except table sr_exp) w
+  union all
+  select 'lifetime_stats: expected, view disagrees', to_jsonb(m)
+    from (table lt_exp except table lt_act) m
+  union all
+  select 'lifetime_stats: view produced, not expected', to_jsonb(n)
+    from (table lt_act except table lt_exp) n
 ) t
 order by mismatch;
 
