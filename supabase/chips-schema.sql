@@ -143,19 +143,23 @@ select
   count(distinct p.session_id) as sessions_played,
   coalesce(sum(p.stack - p.total_buyin), 0) as total_net,
   coalesce(max(p.stack - p.total_buyin), 0) as biggest_win,
+  -- Placement is by NET (stack − buy-in), never raw stack: with rebuys in play the
+  -- biggest stack at the table can belong to the night's biggest loser — three rebuys
+  -- deep and up from their last one is still down overall. Same grading as the
+  -- placement column in analytics-export.sql. A tie counts for everyone level at the
+  -- bottom (and times_first treats a tie at the top the same way).
   count(*) filter (
-    where p.stack = (
-      select min(p2.stack)
+    where p.stack - p.total_buyin = (
+      select min(p2.stack - p2.total_buyin)
       from players p2
       where p2.session_id = p.session_id
     )
   ) as times_last,
   coalesce(sum(p.total_buyin), 0) as total_buyin,
-  -- Sessions this player finished with the biggest stack at the table. A tie counts
-  -- for everyone level at the top, same as times_last treats a tie for the bottom.
+  -- Sessions this player finished with the best net result at the table.
   count(*) filter (
-    where p.stack = (
-      select max(p2.stack)
+    where p.stack - p.total_buyin = (
+      select max(p2.stack - p2.total_buyin)
       from players p2
       where p2.session_id = p.session_id
     )
