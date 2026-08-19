@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chaosScores, MIN_CHAOS_SESSIONS } from './chaos';
+import { chaosScores, MIN_CHAOS_SESSIONS, CHAOS_FULL_SCALE_BB } from './chaos';
 import type { SessionResult } from '../types';
 
 function rows(identity: string, netBbs: number[], bigBlind = 2): SessionResult[] {
@@ -18,14 +18,43 @@ const find = (list: ReturnType<typeof chaosScores>, id: string) =>
 	list.find((s) => s.identityId === id)!;
 
 describe('chaosScores', () => {
-	it('scores the wildest qualifying player 100 and ranks the rest below', () => {
+	it('scores on an absolute scale where a 100bb deviation is 100', () => {
+		// values -50, 50 repeated → sample sd of exactly 100bb would score 100;
+		// this set lands well under it and must not be inflated to 100.
 		const scores = chaosScores([
 			...rows('wild', [-100, 100, -80, 90]),
 			...rows('steady', [1, -1, 2, -2])
 		]);
-		expect(find(scores, 'wild').score).toBe(100);
-		expect(find(scores, 'steady').score!).toBeLessThan(100);
+		const wild = find(scores, 'wild');
+		expect(wild.score).toBe(Math.min(100, Math.round(wild.swing)));
+		expect(find(scores, 'steady').score!).toBeLessThan(10);
 		expect(scores[0].identityId).toBe('wild');
+	});
+
+	it('does not move a player’s score when someone else has a big session', () => {
+		const ada = rows('ada', [10, -10, 20, -20]);
+		const alone = find(chaosScores(ada), 'ada').score;
+		const withWildcard = find(chaosScores([...ada, ...rows('wild', [-900, 900, -800])]), 'ada').score;
+		expect(withWildcard).toBe(alone);
+	});
+
+	it('clamps at 100 but still ranks two clamped players by their real swing', () => {
+		const scores = chaosScores([
+			...rows('big', [-200, 200, -150]),
+			...rows('bigger', [-600, 600, -500])
+		]);
+		expect(find(scores, 'big').score).toBe(100);
+		expect(find(scores, 'bigger').score).toBe(100);
+		// the cap ties the displayed score, so ordering must come from the raw swing
+		expect(scores[0].identityId).toBe('bigger');
+	});
+
+	it('scores a deviation of exactly the full-scale value as 100', () => {
+		// -100, 100 has a sample sd of ~141; use a set whose sd is exactly 100:
+		// -100, 0, 100 → sd 100
+		const scores = chaosScores(rows('exact', [-100, 0, 100]));
+		expect(find(scores, 'exact').swing).toBeCloseTo(CHAOS_FULL_SCALE_BB);
+		expect(find(scores, 'exact').score).toBe(100);
 	});
 
 	it('gives a perfectly consistent player a swing of zero', () => {

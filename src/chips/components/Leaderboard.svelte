@@ -166,9 +166,9 @@
             </span>
             <span class="stat">
               <span class="stat-num">{p.score === null ? '—' : p.score}</span>
-              <span class="stat-label">
-                {p.score === null ? 'not enough data' : `±${Math.round(p.swing)}bb a night`}
-              </span>
+              <!-- The score IS the standard deviation in big blinds, so the old
+                   "±NNbb" sublabel printed the same number twice. -->
+              <span class="stat-label">{p.score === null ? 'not enough data' : 'of 100'}</span>
             </span>
           </li>
         {/each}
@@ -400,12 +400,14 @@
     border-radius: 4px;
   }
 
-  /* The blurb is a subtitle for the selected tab, so it hugs the tabs the way
-     .chips-sub hugs .chips-title — 0.5rem. Written as a cancellation of --tab-gap
-     rather than a bare -2rem so it stays correct if the tab spacing is ever changed;
-     the negative margin collapses against the tab row's positive one to leave 0.5rem. */
+  /* The blurb is a subtitle for the selected tab, so it sits just under the tabs —
+     a shade looser than the 0.5rem .chips-sub leaves under .chips-title, because the
+     tab row's rounded chips carry more visual weight than a line of text does.
+     Written as a cancellation of --tab-gap rather than a bare negative value so it
+     stays correct if the tab spacing changes; the negative margin collapses against
+     the tab row's positive one to leave the difference. */
   .explainer {
-    margin: calc(0.5rem - var(--tab-gap)) 0 1.5rem;
+    margin: calc(0.9rem - var(--tab-gap)) 0 1.5rem;
     max-width: 34rem;
   }
   .first .who-name {

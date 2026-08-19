@@ -16,22 +16,30 @@ export interface ChaosScore {
 	score: number | null;
 }
 
+/** A standard deviation of this many big blinds scores 100. */
+export const CHAOS_FULL_SCALE_BB = 100;
+
 /**
- * Ranks players by how violently their results swing from night to night.
+ * Ranks players by how violently their results swing from session to session.
  *
  * Measured in big blinds, never raw chips: a 5/10 tournament and a 1/2 cash game produce
  * results an order of magnitude apart, so a raw-chip standard deviation would mostly rank
  * people by which stakes they happened to show up for.
  *
- * The score is relative — the wildest qualifying player is 100 and everyone else is a
- * share of that. There is no absolute scale for "chaotic" to measure against, and a
- * self-calibrating one stays meaningful as the group's stakes drift over time. It does
- * mean a score only compares within one rendering of the board.
+ * The scale is ABSOLUTE — a standard deviation of 100bb scores 100 — which makes the
+ * score mean the same thing every time it is rendered. An earlier version scored everyone
+ * relative to the wildest player in the group; that manufactured a hierarchy out of noise
+ * whenever the group swung by similar amounts, and a player's score moved when somebody
+ * else had a big session. The number is now just their standard deviation in big blinds,
+ * clamped at 100.
  *
- * Uses the sample standard deviation (n-1). These nights are a sample of how someone
- * plays, not the complete population of every night they will ever play, and with the
- * handful of sessions a home game accumulates the n-1 correction is not a rounding
- * detail — at n=3 it is a 22% difference.
+ * Because of that clamp, ordering uses the raw swing rather than the score: two players
+ * pinned at 100 are still ranked correctly against each other.
+ *
+ * Uses the sample standard deviation (n-1). These sessions are a sample of how someone
+ * plays, not the complete population of every session they will ever play, and with the
+ * handful a home game accumulates the n-1 correction is not a rounding detail — at n=3
+ * it is a 22% difference.
  */
 export function chaosScores(rows: SessionResult[]): ChaosScore[] {
 	const byPlayer = new Map<string, { name: string; values: number[] }>();
@@ -64,10 +72,9 @@ export function chaosScores(rows: SessionResult[]): ChaosScore[] {
 		};
 	});
 
-	const qualifying = scored.filter((s) => s.sessionsPlayed >= MIN_CHAOS_SESSIONS);
-	const wildest = Math.max(0, ...qualifying.map((s) => s.swing));
-	for (const s of qualifying) {
-		s.score = wildest > 0 ? Math.round((s.swing / wildest) * 100) : 0;
+	for (const s of scored) {
+		if (s.sessionsPlayed < MIN_CHAOS_SESSIONS) continue;
+		s.score = Math.min(100, Math.round((s.swing / CHAOS_FULL_SCALE_BB) * 100));
 	}
 
 	// Qualifying players first, wildest to steadiest; everyone still short of the minimum
