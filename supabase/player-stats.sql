@@ -31,8 +31,12 @@
 --   * At 3-handed there is no cutoff — the ring is SB, BB, button — and at 2-handed no
 --     early position either. Short-handed nights therefore contribute nothing to the CO
 --     columns rather than contributing something wrong.
---   * `n_players` counts players who appear in the hand's ledger. See the note on
---     hands_dealt below for the one case where that differs from who was seated.
+--   * `n_players` counts the players who appear in that hand's ledger, which is the only
+--     record of who was in it. The one way that drifts from who actually sat down is a
+--     deleted `players` row: events.player_id is ON DELETE SET NULL, so those actions lose
+--     their owner, the hand's ring shrinks, and the positions for that hand shift. Leaving
+--     and being kicked both only flip is_active, so in normal use nothing is ever deleted
+--     and this stays theoretical.
 --
 -- ---------------------------------------------------------------------------
 -- WHAT THE COLUMNS MEAN
