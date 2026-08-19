@@ -25,6 +25,30 @@ two), check that chips balance
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
 
+### Leaderboard: net chart and chaos score
+
+The net tab opens with a cumulative-net line chart, one line per player, over every
+ended session. The list underneath is also the legend — each name carries its line's
+colour, and tapping a row highlights that line and dims the rest, which is the only
+thing that scales past a handful of players.
+
+Two rules worth knowing before editing it:
+
+- **Colour follows the player, never their rank.** Slots are handed out in debut
+  order, so a colour is stable for good. Rank-ordered colour would repaint the whole
+  chart after every session and nobody could follow their own line across two visits.
+- **The palette's slot order is a colourblind-safety guarantee**, validated against
+  the chips paper. Don't reorder or hand-pick a replacement without re-validating.
+  See the header of `src/styles/chips.css`.
+
+The chaos tab ranks players by the standard deviation of their per-night result,
+measured in **big blinds** — raw chips would mostly rank people by which stakes they
+turned up for. It's scored out of 100 against the wildest player in the group, and
+withheld entirely below three sessions, where a standard deviation is noise.
+
+Both read the `session_results` view (added by `chips-schema.sql`); a database that
+predates it still renders the board, just without the chart and chaos tab.
+
 ### Exporting the data for player analytics
 
 `supabase/analytics-export.sql` pulls the whole history out in analysis-ready

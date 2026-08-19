@@ -95,3 +95,16 @@ export interface LifetimeStat {
 	times_last: number;
 	total_buyin: number;
 }
+
+// One row per player per ended session (the `session_results` view). The per-night
+// grain behind the net chart and the chaos score; `net_bb` is net normalised to big
+// blinds, which is the only form comparable across nights at different stakes.
+export interface SessionResult {
+	identity_id: string;
+	display_name: string;
+	session_id: string;
+	created_at: string;
+	big_blind: number;
+	net: number;
+	net_bb: number;
+}

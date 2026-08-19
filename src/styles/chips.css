@@ -1,7 +1,30 @@
 /* Chips — the poker night companion, dressed like the rest of the house.
    Same paper, same ink, same type: Charter for text and numbers,
    Libre Baskerville for headings. Emphasis comes from weight, style, and
-   hairlines — colour is reserved for money (up/down) and nothing else. */
+   hairlines.
+
+   Colour does exactly two jobs, and nothing else may claim it:
+
+   1. MONEY — --up / --down on a number that is a result. Never on a label,
+      a border, or a background.
+   2. IDENTITY — the eight categorical series colours below, which say *which
+      player* a line on the net chart belongs to.
+
+   The two never share a surface: money colours only ever land on numerals,
+   identity colours only ever on a mark (a chart line, a swatch). That is what
+   keeps a red line from reading as a loss.
+
+   The series palette is not free-hand. Its slot ORDER is the colourblind-safety
+   mechanism — consecutive slots are the pairs most likely to touch, and this
+   ordering is the one validated for protanopia and deuteranopia against this
+   paper. Adding, reordering, or eyeballing a replacement breaks that guarantee;
+   re-validate if you must change it. Three slots sit under 3:1 contrast on
+   paper, which is licensed only because identity is never carried by colour
+   alone: every line is also named, with its swatch, in the list beneath the
+   chart. Keep that list and the chart in sync or the palette stops being legal.
+
+   The canonical values live in src/chips/lib/utils/netSeries.ts (SERIES_COLORS);
+   the tokens below mirror them for CSS that needs them. */
 
 /* Metric overrides: keep identical to the ones in global.css (and keep the two
    files' font-face blocks in sync — chips pages load this copy, not that one).
@@ -60,6 +83,16 @@
   /* Money, and only money */
   --up: #3e6b47;
   --down: #9c4432;
+  /* Player identity — the net chart's series, in validated slot order.
+     Mirrors SERIES_COLORS in src/chips/lib/utils/netSeries.ts. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
   --serif-display: 'Libre Baskerville', Georgia, serif;
 }
 

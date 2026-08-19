@@ -165,6 +165,30 @@ join players p on p.identity_id = pi.id
 join sessions s on s.id = p.session_id and s.status = 'ended'
 group by pi.id, pi.display_name;
 
+-- session_results: one row per player per ended session — the per-night grain the
+-- lifetime board can't show. Backs the net chart (cumulative net over time) and the
+-- chaos score (volatility of a player's results).
+--
+-- Like lifetime_stats this is CREATE OR REPLACE so the statement doubles as its own
+-- migration; re-run it on an existing database to add the view.
+--
+-- net_bb normalises a night's result to big blinds. Raw net is not comparable across
+-- stakes — a 5/10 tournament dwarfs a 1/2 cash game — so anything that averages or
+-- takes a standard deviation across nights must use net_bb, not net.
+create or replace view session_results as
+select
+  p.identity_id,
+  coalesce(pi.display_name, p.display_name)                                  as display_name,
+  s.id                                                                      as session_id,
+  s.created_at,
+  s.big_blind,
+  p.stack - p.total_buyin                                                   as net,
+  round((p.stack - p.total_buyin)::numeric / nullif(s.big_blind, 0), 2)     as net_bb
+from players p
+join sessions s on s.id = p.session_id and s.status = 'ended'
+left join players_identity pi on pi.id = p.identity_id
+where p.identity_id is not null;
+
 -- ------------------------------------------------------------------- RLS
 
 alter table players_identity enable row level security;
@@ -188,7 +212,7 @@ create policy "anon full access" on events for all to anon using (true) with che
 -- (Identity columns need no separate sequence grant.)
 grant all on table players_identity, sessions, players, rebuys, hands, events
   to anon, authenticated, service_role;
-grant select on lifetime_stats to anon, authenticated, service_role;
+grant select on lifetime_stats, session_results to anon, authenticated, service_role;
 
 -- -------------------------------------------------------------- realtime
 
