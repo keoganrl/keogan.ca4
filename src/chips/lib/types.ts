@@ -82,6 +82,11 @@ export interface GameEvent {
 	street: string | null;
 	// recipient for 'give' events; null elsewhere
 	target_player_id: string | null;
+	// True when this action emptied the player's stack — the moment they went all in.
+	// Set on the action itself rather than logged as an extra ledger line, so the log
+	// still reads as one line per thing that happened. Databases that predate the
+	// column (see logEvent) hand back undefined, which is why this is optional.
+	all_in?: boolean;
 	created_at: string;
 }
 
@@ -94,6 +99,10 @@ export interface LifetimeStat {
 	times_first: number;
 	times_last: number;
 	total_buyin: number;
+	// Bets, raises and calls that left the player with nothing behind. Blind posts that
+	// happened to be all-in are excluded — see the column in chips-schema.sql. Optional
+	// because a database that predates events.all_in has no such column in the view.
+	all_ins?: number;
 }
 
 // One row per player per ended session (the `session_results` view). The per-night

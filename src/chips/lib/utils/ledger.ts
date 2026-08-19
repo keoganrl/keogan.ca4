@@ -52,8 +52,16 @@ export function streetLabel(street: string | null): string {
  * Human-readable line for a single event, given the actor's display name (and the
  * recipient's, for 'give' events). Returns '' for events that aren't rendered as
  * lines (`deal`, and `street` which is a divider).
+ *
+ * An action that emptied the player's stack picks up an "— all in" tail rather than a
+ * line of its own, so the ledger stays one line per thing that happened at the table.
  */
 export function describeEvent(event: GameEvent, name: string, targetName?: string): string {
+	const line = describeAction(event, name, targetName);
+	return line && event.all_in ? `${line} — all in` : line;
+}
+
+function describeAction(event: GameEvent, name: string, targetName?: string): string {
 	const amt = event.amount ?? 0;
 	switch (event.type) {
 		case 'post_sb':

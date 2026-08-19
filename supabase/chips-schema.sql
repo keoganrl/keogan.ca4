@@ -125,10 +125,33 @@ create table events (
   --   alter table events add column target_player_id uuid
   --     references players(id) on delete set null;
   target_player_id uuid references players(id) on delete set null,
+  -- Did this action leave the player with nothing behind? Set by the app on the bet,
+  -- raise, call or blind post that emptied a stack, so an all-in annotates the action
+  -- that caused it instead of taking a ledger line of its own.
+  --
+  -- Recorded rather than reconstructed. The ledger holds every chip movement, so in
+  -- principle a stack can be replayed from it — but all-in detection needs the replayed
+  -- stack to land on exactly zero, and session-audit.sql exists precisely because those
+  -- totals do sometimes drift. One chip of drift would quietly turn an all-in into an
+  -- ordinary bet, and nothing would look wrong. The app knows the stack for certain at
+  -- the moment it writes the row, so that is where the fact gets captured.
+  --
+  -- Added 2026-08: existing databases need
+  --   alter table events add column all_in boolean not null default false;
+  -- Rows that predate the column read as false, so all-in counts only cover nights
+  -- played after the migration. Nothing else depends on it.
+  all_in boolean not null default false,
   created_at timestamptz not null default now()
 );
 
 create index events_session_seq_idx on events (session_id, seq);
+
+-- lifetime_stats counts all-ins with a per-player subquery over the whole ledger, which
+-- would otherwise scan every event once per player row. Partial, because all-ins are a
+-- handful of rows in every thousand, so the index stays tiny.
+-- Added 2026-08 alongside events.all_in: existing databases need
+--   create index events_all_in_player_idx on events (player_id) where all_in;
+create index events_all_in_player_idx on events (player_id) where all_in;
 
 -- lifetime_stats: per-identity aggregates over ended sessions.
 --
@@ -163,7 +186,27 @@ select
       from players p2
       where p2.session_id = p.session_id
     )
-  ) as times_first
+  ) as times_first,
+  -- Times this player pushed their whole stack in BY CHOICE: a bet, raise or call that
+  -- left nothing behind (events.all_in).
+  --
+  -- Blind posts are excluded even though they carry the same flag. Being short enough
+  -- that a forced blind swallows your stack is not a decision, and counting it would
+  -- rank the column by who most often plays down to the felt — which is what times_last
+  -- already measures. What this column is for is the opposite: who chooses to shove.
+  --
+  -- Counted per player ROW and then summed per identity, so it survives an identity
+  -- merge (events point at player rows, and merging only repoints players.identity_id).
+  -- Cast because sum() over bigint yields numeric, and PostgREST hands numeric back as
+  -- a JSON string; every other column on this view arrives as a number and the client
+  -- sorts on it arithmetically.
+  coalesce(sum((
+    select count(*)
+    from events e
+    where e.player_id = p.id
+      and e.all_in
+      and e.type in ('bet', 'raise', 'call')
+  )), 0)::int as all_ins
 from players_identity pi
 join players p on p.identity_id = pi.id
 join sessions s on s.id = p.session_id and s.status = 'ended'

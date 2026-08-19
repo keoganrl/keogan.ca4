@@ -35,11 +35,25 @@ describe('sortLifetimeStats', () => {
 		expect(names(sortLifetimeStats(rows, 'times_last'))).toEqual(['never', 'often']);
 	});
 
+	it('ranks all-ins highest-first', () => {
+		const rows = [
+			row('nit', { all_ins: 1 }),
+			row('maniac', { all_ins: 12 }),
+			row('steady', { all_ins: 4 })
+		];
+		expect(names(sortLifetimeStats(rows, 'all_ins'))).toEqual(['maniac', 'steady', 'nit']);
+	});
+
 	it('treats a missing times_first as zero (database mid-migration)', () => {
 		const stale = row('stale');
 		delete (stale as Partial<LifetimeStat>).times_first;
 		const rows = [stale, row('winner', { times_first: 3 })];
 		expect(names(sortLifetimeStats(rows, 'times_first'))).toEqual(['winner', 'stale']);
+	});
+
+	it('treats a missing all_ins as zero — the column postdates events.all_in', () => {
+		const rows = [row('stale'), row('shover', { all_ins: 7 })];
+		expect(names(sortLifetimeStats(rows, 'all_ins'))).toEqual(['shover', 'stale']);
 	});
 
 	it('does not mutate the array it was given', () => {

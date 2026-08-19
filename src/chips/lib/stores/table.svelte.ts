@@ -409,9 +409,12 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (!session || !streetComplete) return;
 		// advanceStreet is street-scoped (CAS on session.street), so a double confirm —
 		// host and dealer tapping at the same time — applies exactly once.
+		// `players` carries the inactive rows too, which is how a dead button — somebody
+		// left mid-hand holding it — keeps its seat when the first postflop actor is picked.
 		await advanceStreetService(
 			session,
-			players.filter((p) => p.is_active)
+			players.filter((p) => p.is_active),
+			players
 		);
 	}
 
@@ -553,7 +556,10 @@ export function createTableStore(sessionId: string, identityId: string) {
 		await logEvent(sessionId, eventType, {
 			playerId: me.id,
 			amount: newRoundBet,
-			street: eventStreet
+			street: eventStreet,
+			// Nothing behind: this bet or raise was a shove. newStack comes off the freshly
+			// read row, so it is the real remainder rather than a cached one.
+			allIn: newStack === 0
 		});
 
 		if (session)
@@ -751,7 +757,8 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (!session) return;
 		await startGameService(
 			session,
-			players.filter((p) => p.is_active)
+			players.filter((p) => p.is_active),
+			players
 		);
 	}
 
