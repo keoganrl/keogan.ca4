@@ -30,7 +30,8 @@ the Supabase SQL editor.
 The net tab opens with a cumulative-net line chart, one line per player, over every
 ended session. The list underneath is also the legend — each name carries its line's
 colour, and tapping a row highlights that line and dims the rest, which is the only
-thing that scales past a handful of players.
+thing that scales past a handful of players. Swatches appear on the net tab only:
+elsewhere there is no chart to key them to, so they would be colour for its own sake.
 
 Two rules worth knowing before editing it:
 

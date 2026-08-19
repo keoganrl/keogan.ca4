@@ -147,10 +147,8 @@
     <p class="cnote">No completed sessions yet.</p>
   {:else if sortBy === 'chaos'}
     <p class="cnote explainer">
-      How violently someone’s results swing from night to night — the standard deviation
-      of their per-night result, measured in big blinds so a big-stakes night doesn’t
-      count for more than a small one. 100 is the wildest player here; everyone else is
-      scored against them. A steady grinder scores low whether they win or lose.
+      How wildly someone’s results swing from night to night — 100 is the streakiest
+      player here.
     </p>
     {#if chaos.length === 0}
       <p class="cnote">No completed sessions yet.</p>
@@ -160,15 +158,7 @@
           <li class="board-row" class:first={i === 0 && p.score !== null}>
             <span class="rank">{p.score === null ? '·' : i + 1}</span>
             <span class="who">
-              <span class="who-name">
-                {#if colorOf.has(p.identityId)}
-                  <span
-                    class="swatch"
-                    class:dashed={colorOf.get(p.identityId)!.dashed}
-                    style="--swatch: {colorOf.get(p.identityId)!.color}"
-                  ></span>
-                {/if}{p.displayName}
-              </span>
+              <span class="who-name">{p.displayName}</span>
               <span class="who-detail">
                 {#if p.score === null}
                   needs {MIN_CHAOS_SESSIONS - p.sessionsPlayed} more session{MIN_CHAOS_SESSIONS - p.sessionsPlayed === 1 ? '' : 's'}
@@ -221,7 +211,10 @@
           <span class="rank">{i + 1}</span>
           <span class="who">
             <span class="who-name">
-              {#if colorOf.has(player.identity_id)}
+              <!-- Only the net tab shows swatches: there they are the chart's legend and
+                   carry meaning. On the other tabs there is no chart to key them to, so
+                   they would be colour for its own sake. -->
+              {#if sortBy === 'total_net' && colorOf.has(player.identity_id)}
                 <span
                   class="swatch"
                   class:dashed={colorOf.get(player.identity_id)!.dashed}
@@ -294,11 +287,33 @@
 </div>
 
 <style>
+  /* One row that scrolls sideways rather than wrapping to two. The negative margin
+     cancels .chips-page's padding so the row spans the full width and a chip is clipped
+     by the screen edge — that half-visible chip is the only affordance saying there is
+     more to the right, so the bleed is load-bearing, not decoration. The matching
+     padding keeps the first chip aligned with the text above it. */
   .sorts {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.5rem;
-    margin: 0 0 2.5rem;
+    margin: 0 -1.75rem 2.5rem;
+    padding-inline: 1.75rem;
+    overflow-x: auto;
+    /* A horizontal scroller at the edge of an iOS viewport otherwise hands the gesture
+       to the browser's back-swipe halfway through a drag. */
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .sorts::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Chips keep their natural width; without this they compress to fit instead of
+     overflowing, and nothing ever scrolls. */
+  .sorts :global(.cchoice) {
+    flex-shrink: 0;
   }
 
   .board {
