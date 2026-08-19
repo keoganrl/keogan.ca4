@@ -73,12 +73,13 @@ predates it still renders the board, just without the chart and chaos tab.
 
 ### Leaderboard: all-ins
 
-The all-ins tab counts the bets, raises and calls that left a player with nothing behind.
+The all-ins tab is a plain lifetime tally: every bet, raise or call that left a player
+with nothing behind, summed over every game they have ever played. Not a rate, not a
+per-night average — the number on the row is the count itself.
+
 Blind posts that swallowed a short stack are flagged in the ledger but **not** counted:
 being too short to cover a blind isn't a decision, and counting it would just re-rank the
 column by who plays down to the felt most often — which is what `times last` already says.
-The raw count is the headline; the per-night rate sits in the detail line, since the count
-on its own rewards turning up.
 
 All-ins are **recorded, not reconstructed**. `events.all_in` is set by the app on the
 action that emptied the stack, because that is the one moment the stack is known for

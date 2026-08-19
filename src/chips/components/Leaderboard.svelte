@@ -114,14 +114,6 @@
     { key: 'chaos', label: 'chaos' }
   ];
 
-  // Shoves per night, alongside the raw count. The count is the headline — "who has shoved
-  // the most" is the question people actually ask — but on its own it just rewards turning
-  // up, so the rate rides along in the detail line where the session count already sits.
-  function allInRate(player: LifetimeStat) {
-    if (!player.sessions_played) return '0';
-    return ((player.all_ins ?? 0) / player.sessions_played).toFixed(1);
-  }
-
   function toggleHighlight(id: string) {
     highlighted = highlighted === id ? '' : id;
   }
@@ -186,8 +178,9 @@
   {:else}
     {#if sortBy === 'all_ins'}
       <p class="cnote explainer">
-        Bets, raises and calls that put a whole stack in. Blinds you were too short to
-        cover don’t count — those aren’t a decision.
+        Every time a whole stack went in — a bet, a raise or a call, counted across every
+        game ever played. Blinds you were too short to cover don’t count; those aren’t a
+        decision.
       </p>
     {/if}
     {#if sortBy === 'total_net' && netData.series.length > 0}
@@ -235,10 +228,7 @@
               {/if}{player.display_name}
             </span>
             <span class="who-detail">
-              {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}{sortBy ===
-              'all_ins'
-                ? ` · ${allInRate(player)} per night`
-                : ''}
+              {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
             </span>
           </span>
           <span class="stat">
