@@ -18,8 +18,12 @@
 -- reconstructed, not read:
 --
 --   every hand posts blinds, and post_sb / post_bb name those two players. Combined with
---   players.seat_order that pins the entire ring: seats are walked forward from the small
---   blind, so SB = 0 seats after the SB, BB = 1, the button = n-1, the cutoff = n-2.
+--   players.seat_order that pins the entire ring: the hand's participants are ranked by
+--   seat and walked forward from the small blind, so SB = 0 seats after the SB, BB = 1,
+--   the button = n-1, the cutoff = n-2. The walk uses each player's RANK among that
+--   hand's participants, never raw seat_order differences — seat numbers are not
+--   contiguous once someone busts (dealt out) or leaves (their row keeps its seat), and
+--   raw differences would smear the button/cutoff labels across the wrong seats.
 --
 -- This is exact rather than approximate for the preflop street, which is the only street
 -- position is used for. Preflop, action passes around the table in seat order, so every
@@ -27,7 +31,7 @@
 -- reconstruction to miss. (Players with a zero stack are dealt out entirely and correctly
 -- absent.)
 --
--- Two consequences worth knowing:
+-- Three consequences worth knowing:
 --   * At 3-handed there is no cutoff — the ring is SB, BB, button — and at 2-handed no
 --     early position either. Short-handed nights therefore contribute nothing to the CO
 --     columns rather than contributing something wrong.
@@ -37,6 +41,11 @@
 --     their owner, the hand's ring shrinks, and the positions for that hand shift. Leaving
 --     and being kicked both only flip is_active, so in normal use nothing is ever deleted
 --     and this stays theoretical.
+--   * seat_order is read as it stands NOW. The host's mid-session "reorder seats" rewrites
+--     those values in place, so hands played before a reorder are walked against the new
+--     arrangement: SB and BB stay right (they come from events), but BTN/CO/EARLY labels
+--     for those earlier hands can shift. Reordering is rare and the blinds columns are
+--     immune, so this is accepted rather than modeled.
 --
 -- ---------------------------------------------------------------------------
 -- WHAT THE COLUMNS MEAN
@@ -47,10 +56,10 @@
 --   pfr_pct            % of hands with a preflop raise. vpip minus pfr is passive limping.
 --   af                 aggression factor, (bets + raises) / calls across all streets.
 --                      >2 aggressive, <1 a calling station. NULL if they never called.
---   cbet_flop_pct      as the preflop raiser, how often they bet the flop when they saw one
---   fold_to_cbet_pct   facing a flop c-bet, how often they folded
+--   cbet_flop_pct      as the preflop raiser, how often they bet the flop when they could
+--   fold_to_cbet_pct   facing a flop c-bet, how often their immediate response was a fold
 --   steal_pct          from CO/BTN/SB with everyone before them folded, how often they raised
---   fold_to_steal_pct  in a blind facing a steal attempt, how often they folded
+--   fold_to_steal_pct  in a blind facing a steal, how often their immediate response was a fold
 --   wtsd_pct           having seen a flop, how often they reached showdown
 --   vpip_early/late/blinds_pct   the same VPIP split by where they were sitting
 --
@@ -94,34 +103,52 @@ dealt as (
 ),
 
 -- The ring, with each seat's position label for that hand.
+--
+-- seats-after-the-SB is computed from each player's RANK among the hand's participants
+-- ordered by seat, rotated so the small blind is rank zero. It must NOT be computed from
+-- raw seat_order differences: seat numbers stop being contiguous the moment a player
+-- busts (dealt out, absent from the hand) or leaves (their row keeps its seat), and with
+-- a gap in the ring the raw arithmetic assigns BTN/CO to the wrong seats — it can even
+-- label two players BTN in the same hand. The rank walk is gap-proof.
 ring as (
   select
-    d.session_id,
-    d.hand_no,
-    d.player_id,
-    b.sb_id,
-    b.bb_id,
-    n.n_players,
+    session_id,
+    hand_no,
+    player_id,
+    sb_id,
+    bb_id,
+    n_players,
     case
-      when d.player_id = b.sb_id then 'SB'
-      when d.player_id = b.bb_id then 'BB'
-      when off.seats_after_sb = n.n_players - 1 then 'BTN'
-      when off.seats_after_sb = n.n_players - 2 then 'CO'
+      when player_id = sb_id then 'SB'
+      when player_id = bb_id then 'BB'
+      when (seat_rank - sb_rank + n_players) % n_players = n_players - 1 then 'BTN'
+      when (seat_rank - sb_rank + n_players) % n_players = n_players - 2 then 'CO'
       else 'EARLY'
     end as position
-  from dealt d
-  join blinds b on b.session_id = d.session_id and b.hand_no = d.hand_no
-  join players p on p.id = d.player_id
-  join players sbp on sbp.id = b.sb_id
-  cross join lateral (
-    select count(*) as n_players
-    from dealt d2
-    where d2.session_id = d.session_id and d2.hand_no = d.hand_no
-  ) n
-  cross join lateral (
-    select ((p.seat_order - sbp.seat_order) + n.n_players) % n.n_players as seats_after_sb
-  ) off
-  where b.sb_id is not null and b.bb_id is not null
+  from (
+    select
+      rb.*,
+      -- the SB always appears in its own hand (it posted a blind), so this is never null
+      max(rb.seat_rank) filter (where rb.player_id = rb.sb_id)
+        over (partition by rb.session_id, rb.hand_no) as sb_rank
+    from (
+      select
+        d.session_id,
+        d.hand_no,
+        d.player_id,
+        b.sb_id,
+        b.bb_id,
+        count(*) over (partition by d.session_id, d.hand_no) as n_players,
+        row_number() over (
+          partition by d.session_id, d.hand_no
+          order by p.seat_order, d.player_id
+        ) as seat_rank
+      from dealt d
+      join blinds b on b.session_id = d.session_id and b.hand_no = d.hand_no
+      join players p on p.id = d.player_id
+      where b.sb_id is not null and b.bb_id is not null
+    ) rb
+  ) ranked
 ),
 
 -- Per hand: the last preflop raiser (the preflop aggressor), and the seq of the first
@@ -138,12 +165,18 @@ preflop as (
 ),
 
 -- Hands that reached each street, and whether they reached showdown.
+--
+-- A showdown implies a flop even when no 'flop' row exists: an all-in run-out skips the
+-- per-street markers and logs only street = 'showdown' (advanceStreet jumps straight
+-- there), but the board still gets dealt. Without that implication every preflop all-in
+-- disappears from the WTSD denominator while still counting in its numerator — the
+-- hands MOST likely to reach showdown go missing, and the stat can exceed 100%.
 reached as (
   select
     session_id,
     hand_no,
-    bool_or(street = 'flop')     as saw_flop,
-    bool_or(street = 'showdown') as saw_showdown
+    bool_or(street in ('flop', 'showdown')) as saw_flop,
+    bool_or(street = 'showdown')            as saw_showdown
   from ev
   where type = 'street'
   group by session_id, hand_no
@@ -209,13 +242,22 @@ per_hand as (
     (pf.aggressor_id = r.player_id)                                         as was_aggressor,
     (cb.cbetter_id = r.player_id)                                           as made_cbet,
 
-    -- faced a c-bet: someone else c-bet and they still had an action to take after it
+    -- took at least one flop action of their own. This is what makes a c-bet
+    -- OPPORTUNITY real: a preflop aggressor who is all-in reaches the flop of the
+    -- run-out without ever being able to bet it, and has no flop rows.
+    bool_or(e.street = 'flop')                                              as acted_on_flop,
+
+    -- faced a c-bet: someone else c-bet and they still had an action to take after it.
+    -- Folding to it means their FIRST flop action after the c-bet was the fold —
+    -- calling the c-bet and then folding to a later raise on the same street is a fold
+    -- to the raise, not to the c-bet, and must not count here.
     (cb.cbet_seq is not null
       and cb.cbetter_id <> r.player_id
       and bool_or(e.seq > cb.cbet_seq and e.street = 'flop'))               as faced_cbet,
     (cb.cbet_seq is not null
       and cb.cbetter_id <> r.player_id
-      and bool_or(e.seq > cb.cbet_seq and e.street = 'flop' and e.type = 'fold')) as folded_to_cbet,
+      and (array_agg(e.type order by e.seq)
+             filter (where e.seq > cb.cbet_seq and e.street = 'flop'))[1] = 'fold') as folded_to_cbet,
 
     -- steal: had the chance to open from CO/BTN/SB with the pot still unopened
     (r.position in ('CO', 'BTN', 'SB')
@@ -225,7 +267,9 @@ per_hand as (
                 pf.first_voluntary_seq)))                                   as steal_opportunity,
     (st.stealer_id = r.player_id)                                           as attempted_steal,
 
-    -- defending a blind against someone else's steal
+    -- defending a blind against someone else's steal. Folding to it means their FIRST
+    -- preflop action after the steal was the fold — a blind that 3-bets the steal and
+    -- later folds to a 4-bet fought back and lost, which is not folding to the steal.
     (st.steal_seq is not null
       and st.stealer_id <> r.player_id
       and r.position in ('SB', 'BB')
@@ -233,7 +277,8 @@ per_hand as (
     (st.steal_seq is not null
       and st.stealer_id <> r.player_id
       and r.position in ('SB', 'BB')
-      and bool_or(e.seq > st.steal_seq and e.street = 'preflop' and e.type = 'fold')) as folded_to_steal
+      and (array_agg(e.type order by e.seq)
+             filter (where e.seq > st.steal_seq and e.street = 'preflop'))[1] = 'fold') as folded_to_steal
 
   from ring r
   join ev e
@@ -261,7 +306,9 @@ by_identity as (
     sum(h.aggressive)                                                       as aggressive_actions,
     sum(h.calls)                                                            as calls,
 
-    count(*) filter (where h.was_aggressor and h.saw_flop)                  as cbet_opps,
+    -- acted_on_flop, not saw_flop: an all-in aggressor reaches the run-out's flop
+    -- without a chance to bet it, and a chance they never had is not an opportunity.
+    count(*) filter (where h.was_aggressor and h.acted_on_flop)             as cbet_opps,
     count(*) filter (where h.made_cbet)                                     as cbets,
     count(*) filter (where h.faced_cbet)                                    as faced_cbet_opps,
     count(*) filter (where h.folded_to_cbet)                                as folds_to_cbet,
