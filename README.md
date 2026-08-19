@@ -42,10 +42,13 @@ Two rules worth knowing before editing it:
   the chips paper. Don't reorder or hand-pick a replacement without re-validating.
   See the header of `src/styles/chips.css`.
 
-The chaos tab ranks players by the standard deviation of their per-night result,
+The chaos tab ranks players by the standard deviation of their per-session results,
 measured in **big blinds** — raw chips would mostly rank people by which stakes they
-turned up for. It's scored out of 100 against the wildest player in the group, and
-withheld entirely below three sessions, where a standard deviation is noise.
+turned up for. The figure shown is that deviation itself, not a score out of anything:
+there is no natural maximum for how wildly someone can run, so any ceiling would be
+invented, and capping at one would hide the difference between a wild player and a very
+wild player. It's withheld below three sessions, where a deviation is noise rather than
+a read.
 
 Both read the `session_results` view (added by `chips-schema.sql`); a database that
 predates it still renders the board, just without the chart and chaos tab.

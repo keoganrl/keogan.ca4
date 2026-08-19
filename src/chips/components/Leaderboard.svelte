@@ -152,12 +152,12 @@
     {:else}
       <ul class="board">
         {#each chaos as p, i (p.identityId)}
-          <li class="board-row" class:first={i === 0 && p.score !== null}>
-            <span class="rank">{p.score === null ? '·' : i + 1}</span>
+          <li class="board-row" class:first={i === 0 && p.qualified}>
+            <span class="rank">{p.qualified ? i + 1 : '·'}</span>
             <span class="who">
               <span class="who-name">{p.displayName}</span>
               <span class="who-detail">
-                {#if p.score === null}
+                {#if !p.qualified}
                   needs {MIN_CHAOS_SESSIONS - p.sessionsPlayed} more session{MIN_CHAOS_SESSIONS - p.sessionsPlayed === 1 ? '' : 's'}
                 {:else}
                   best +{Math.round(p.bestNight)}bb · worst {Math.round(p.worstNight)}bb
@@ -165,10 +165,10 @@
               </span>
             </span>
             <span class="stat">
-              <span class="stat-num">{p.score === null ? '—' : p.score}</span>
-              <!-- The score IS the standard deviation in big blinds, so the old
-                   "±NNbb" sublabel printed the same number twice. -->
-              <span class="stat-label">{p.score === null ? 'not enough data' : 'of 100'}</span>
+              <!-- The figure is the standard deviation itself, so the label gives its
+                   unit rather than implying a ceiling it doesn't have. -->
+              <span class="stat-num">{p.qualified ? Math.round(p.swing) : '—'}</span>
+              <span class="stat-label">{p.qualified ? 'bb swing' : 'not enough data'}</span>
             </span>
           </li>
         {/each}

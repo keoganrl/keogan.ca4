@@ -7,34 +7,30 @@ export interface ChaosScore {
 	identityId: string;
 	displayName: string;
 	sessionsPlayed: number;
-	/** Standard deviation of this player's per-night results, in big blinds. */
+	/** Standard deviation of this player's per-session results, in big blinds. */
 	swing: number;
-	/** Biggest single-night win and loss, in big blinds — what the swing is made of. */
+	/** Biggest single-session win and loss, in big blinds — what the swing is made of. */
 	bestNight: number;
 	worstNight: number;
-	/** 0-100, scaled against the wildest player in the group. Null when under the minimum. */
-	score: number | null;
+	/** False below MIN_CHAOS_SESSIONS, where a deviation is noise rather than a read. */
+	qualified: boolean;
 }
-
-/** A standard deviation of this many big blinds scores 100. */
-export const CHAOS_FULL_SCALE_BB = 100;
 
 /**
  * Ranks players by how violently their results swing from session to session.
  *
- * Measured in big blinds, never raw chips: a 5/10 tournament and a 1/2 cash game produce
- * results an order of magnitude apart, so a raw-chip standard deviation would mostly rank
- * people by which stakes they happened to show up for.
+ * The number reported IS the standard deviation, in big blinds. Not a score out of
+ * anything: there is no natural maximum for how wildly someone can run, so any ceiling
+ * would be invented, and capping at one would both discard the difference between a wild
+ * player and a very wild player and tie them at the top. Two earlier attempts got this
+ * wrong in opposite directions — scoring everyone relative to the wildest player in the
+ * group manufactured a hierarchy out of noise and moved your number when somebody else
+ * had a big session; clamping to an arbitrary 100 threw away the tail. A raw deviation
+ * has neither problem and means the same thing every time it renders.
  *
- * The scale is ABSOLUTE — a standard deviation of 100bb scores 100 — which makes the
- * score mean the same thing every time it is rendered. An earlier version scored everyone
- * relative to the wildest player in the group; that manufactured a hierarchy out of noise
- * whenever the group swung by similar amounts, and a player's score moved when somebody
- * else had a big session. The number is now just their standard deviation in big blinds,
- * clamped at 100.
- *
- * Because of that clamp, ordering uses the raw swing rather than the score: two players
- * pinned at 100 are still ranked correctly against each other.
+ * Big blinds, never raw chips: a 5/10 tournament and a 1/2 cash game produce results an
+ * order of magnitude apart, so a raw-chip deviation would mostly rank people by which
+ * stakes they happened to show up for.
  *
  * Uses the sample standard deviation (n-1). These sessions are a sample of how someone
  * plays, not the complete population of every session they will ever play, and with the
@@ -68,20 +64,15 @@ export function chaosScores(rows: SessionResult[]): ChaosScore[] {
 			swing,
 			bestNight: Math.max(...values),
 			worstNight: Math.min(...values),
-			score: null as number | null
+			qualified: n >= MIN_CHAOS_SESSIONS
 		};
 	});
-
-	for (const s of scored) {
-		if (s.sessionsPlayed < MIN_CHAOS_SESSIONS) continue;
-		s.score = Math.min(100, Math.round((s.swing / CHAOS_FULL_SCALE_BB) * 100));
-	}
 
 	// Qualifying players first, wildest to steadiest; everyone still short of the minimum
 	// trails behind in session order so they can see how close they are to appearing.
 	return scored.sort((a, b) => {
-		if ((a.score === null) !== (b.score === null)) return a.score === null ? 1 : -1;
-		if (a.score === null) return b.sessionsPlayed - a.sessionsPlayed;
+		if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
+		if (!a.qualified) return b.sessionsPlayed - a.sessionsPlayed;
 		return b.swing - a.swing;
 	});
 }
