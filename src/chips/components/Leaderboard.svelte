@@ -176,13 +176,6 @@
       </ul>
     {/if}
   {:else}
-    {#if sortBy === 'all_ins'}
-      <p class="cnote explainer">
-        Every time a whole stack went in — a bet, a raise or a call, counted across every
-        game ever played. Blinds you were too short to cover don’t count; those aren’t a
-        decision.
-      </p>
-    {/if}
     {#if sortBy === 'total_net' && netData.series.length > 0}
       <NetChart data={netData} {highlighted} />
     {/if}
