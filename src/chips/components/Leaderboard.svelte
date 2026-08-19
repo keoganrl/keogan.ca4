@@ -11,8 +11,8 @@
   import NetChart from './NetChart.svelte';
   import type { LifetimeStat, SessionResult } from '../lib/types';
 
-  // The four stat columns rank the lifetime board; 'chaos' is its own view with its
-  // own rows, so it is a tab rather than another sort of the same list.
+  // The five stat columns are all sorts of the same lifetime board; 'chaos' is its own
+  // view with its own rows, so it is a tab rather than another sort of that list.
   type Tab = LeaderboardSortKey | 'chaos';
 
   let stats = $state<LifetimeStat[]>([]);
@@ -110,6 +110,7 @@
     { key: 'biggest_win', label: 'best win' },
     { key: 'times_first', label: 'times first' },
     { key: 'times_last', label: 'times last' },
+    { key: 'all_ins', label: 'all-ins' },
     { key: 'chaos', label: 'chaos' }
   ];
 
@@ -175,6 +176,13 @@
       </ul>
     {/if}
   {:else}
+    {#if sortBy === 'all_ins'}
+      <p class="cnote explainer">
+        Every time a whole stack went in — a bet, a raise or a call, counted across every
+        game ever played. Blinds you were too short to cover don’t count; those aren’t a
+        decision.
+      </p>
+    {/if}
     {#if sortBy === 'total_net' && netData.series.length > 0}
       <NetChart data={netData} {highlighted} />
     {/if}
@@ -233,6 +241,9 @@
             {:else if sortBy === 'biggest_win'}
               <span class="stat-num {netClass(player.biggest_win)}">{netStr(player.biggest_win)}</span>
               <span class="stat-label">best session</span>
+            {:else if sortBy === 'all_ins'}
+              <span class="stat-num">{player.all_ins ?? 0}</span>
+              <span class="stat-label">all-ins</span>
             {:else}
               <span class="stat-num net-down">{player.times_last}</span>
               <span class="stat-label">times last</span>

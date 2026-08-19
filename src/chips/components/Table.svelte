@@ -9,6 +9,7 @@
   import { renderSVG } from 'uqr';
   import { groupEventsByHand, describeEvent, streetLabel } from '../lib/utils/ledger';
   import { resolveAward } from '../lib/utils/pots';
+  import { buttonIndexIn } from '../lib/services/table';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -151,16 +152,21 @@
   const seatsInHand = $derived(activeBySeat.filter((p) => p.stack > 0 || p.hand_total_bet > 0));
 
   // SB/BB badge holders, computed once per state change instead of per player row.
-  // Matches postBlinds: SB is left of the button at any table size, and heads-up the
-  // +2 offset wraps back onto the dealer, who posts the BB (house rule).
+  // Matches postBlinds exactly, dead button included: buttonIndexIn keeps the button on
+  // the seat of a player who busted or walked mid-hand, so the badges stay put instead of
+  // sliding a seat the moment somebody leaves. Its result can be -1 (button on a seat
+  // ahead of the whole list), hence the extra +length before the modulo.
   const badgeButtonIdx = $derived(
-    Math.max(
-      seatsInHand.findIndex((p) => p.id === store?.session?.button_player_id),
-      0
-    )
+    store?.session
+      ? (buttonIndexIn(seatsInHand, store.session, store.players) ?? 0)
+      : 0
   );
-  const sbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 1) % seatsInHand.length]?.id);
-  const bbBadgeId = $derived(seatsInHand[(badgeButtonIdx + 2) % seatsInHand.length]?.id);
+  const sbBadgeId = $derived(
+    seatsInHand[(badgeButtonIdx + 1 + seatsInHand.length) % seatsInHand.length]?.id
+  );
+  const bbBadgeId = $derived(
+    seatsInHand[(badgeButtonIdx + 2 + seatsInHand.length) % seatsInHand.length]?.id
+  );
 
   function cancelLongPress() {
     if (longPressTimer) clearTimeout(longPressTimer);

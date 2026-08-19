@@ -1,10 +1,15 @@
 import type { LifetimeStat } from '../types';
 
-export type LeaderboardSortKey = 'total_net' | 'biggest_win' | 'times_first' | 'times_last';
+export type LeaderboardSortKey =
+	| 'total_net'
+	| 'biggest_win'
+	| 'times_first'
+	| 'times_last'
+	| 'all_ins';
 
-// times_first only exists once lifetime_stats has been re-created with that column,
-// so every stat is read defensively — a database mid-migration should rank as zeroes
-// rather than NaN (which sorts unpredictably).
+// times_first and all_ins only exist once lifetime_stats has been re-created with those
+// columns, so every stat is read defensively — a database mid-migration should rank as
+// zeroes rather than NaN (which sorts unpredictably).
 const stat = (s: LifetimeStat, key: LeaderboardSortKey): number => s[key] ?? 0;
 
 /**

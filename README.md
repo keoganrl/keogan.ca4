@@ -25,6 +25,24 @@ two), check that chips balance
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
 
+### The button when somebody leaves
+
+The button does **not** move when a player stands up mid-hand. It stays on their empty
+seat as a *dead button* until the next deal, exactly as it would at a real table, and
+`endHand` then rotates off that seat. Rotating at the moment somebody left was the old
+behaviour and it was wrong twice over: it shifted the blinds and the action order under a
+hand that was already being played, and then `endHand` rotated *again*, so the button
+jumped two seats and skipped whoever was next.
+
+That means the button can point at an inactive player for the rest of a hand, so every
+function that orders play goes through `buttonIndexIn` (`lib/services/table.ts`), which
+places the button by *seat* rather than by position in the list of players still sitting
+down. It needs the full roster — inactive rows included — which is why `getActionOrder`,
+`postBlinds`, `firstPostflopActor`, `advanceStreet` and `nextButtonPlayerId` all take an
+`allPlayers` argument. Handing them only the active players is what made the button
+collapse back to seat 0, which is the bug people saw as "the order went funny after
+someone left".
+
 ### Leaderboard: net chart and chaos score
 
 The net tab opens with a cumulative-net line chart, one line per player, over every
@@ -57,6 +75,32 @@ a read.
 
 Both read the `session_results` view (added by `chips-schema.sql`); a database that
 predates it still renders the board, just without the chart and chaos tab.
+
+### Leaderboard: all-ins
+
+The all-ins tab is a plain lifetime tally: every bet, raise or call that left a player
+with nothing behind, summed over every game they have ever played. Not a rate, not a
+per-night average — the number on the row is the count itself.
+
+Blind posts that swallowed a short stack are flagged in the ledger but **not** counted:
+being too short to cover a blind isn't a decision, and counting it would just re-rank the
+column by who plays down to the felt most often — which is what `times last` already says.
+
+All-ins are **recorded, not reconstructed**. `events.all_in` is set by the app on the
+action that emptied the stack, because that is the one moment the stack is known for
+certain. Replaying the ledger to find the same thing would need the replayed stack to land
+on exactly zero, and `session-audit.sql` exists precisely because those totals sometimes
+drift — one chip out and an all-in silently reads as an ordinary bet.
+
+The consequence is that the counts only cover nights played after the migration:
+
+```sql
+alter table events add column all_in boolean not null default false;
+create index events_all_in_player_idx on events (player_id) where all_in;
+```
+
+then re-run the `lifetime_stats` block of `chips-schema.sql` to pick up the `all_ins`
+column. Until those are run the tab renders with zeroes rather than failing.
 
 ### Extended player stats
 
