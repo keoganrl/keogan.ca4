@@ -151,13 +151,17 @@ the realtime publication, so heartbeats alone cost `6N²` messages a minute —
 
 For the daily lunchtime game (5-8 players, an hour, ~20 sessions a month) that
 lands around 20-35% of the 2M/month realtime message allowance and 7-15% of the
-5 GB egress. Comfortable, with room for a few times that.
+5 GB egress. A longer sitting costs proportionally: seven players for 1.5 hours
+is ~40k messages, so about 50 of those a month — roughly two per weekday —
+before messages run out.
 
-Note the free plan's summary card doesn't list realtime limits at all — they're
-in the full comparison table under Realtime (historically 200 peak concurrent
-connections, 2M messages/month). Peak connections is the one a spreading game
-could reach: one phone is one connection, so 200 is ~25-40 simultaneous tables.
-Concurrent tables, not total players.
+Messages are the binding limit, not connections or egress. Egress allows ~2.5x
+more sessions than messages do, and only overtakes them if a postgres_changes
+payload turns out to exceed ~2.5 KB. Peak connections (200) sounds tighter than
+it is: one phone is one connection, so it caps *simultaneous* tables at ~28
+seven-handed ones — sustaining that many overlapping would exhaust the month's
+messages in days. Max message size (256 KB) never applies; a row here is about
+a kilobyte.
 
 So what's rationed is seats × minutes, not the invite list. If a month gets
 tight, fix the heartbeat first: move `last_heartbeat_at` to a table outside the

@@ -35,19 +35,21 @@
 --   * File storage is unused — the app stores no files.
 --
 -- The realtime limits are NOT on that summary card. They live further down the
--- pricing page in the full plan-comparison table, under Realtime, and on the
--- free plan have historically been 200 peak concurrent connections and
--- 2,000,000 messages a month. Check that row before trusting blocks 4-6 —
--- they price against 2M, in an editable `limits` CTE at the top of each block.
--- If the message cap has been dropped, the message columns become advisory and
--- egress is the only ceiling realtime traffic can hit, which is the more
--- comfortable of the two readings anyway.
+-- pricing page in the full plan-comparison table, under Realtime: 200 peak
+-- concurrent connections, 2,000,000 messages a month, 256 KB max message size.
+-- The message count is the one that binds, and blocks 4-6 price against it.
 --
--- Peak connections is the one limit a lunchtime game could plausibly reach by
--- spreading rather than by playing longer: one phone is one connection, so 200
--- is roughly 25-40 simultaneous tables of this size. Concurrent tables, not
--- total players — the whole company could have the link as long as they aren't
--- all sat down at once.
+-- Max message size never will: a postgres_changes payload here is one players
+-- or events row, on the order of a kilobyte against a 256 KB ceiling. Nothing
+-- in this schema has a wide or unbounded column — blind_schedule is the widest
+-- and it holds a handful of rungs.
+--
+-- Peak connections sounds like the limit a spreading game would hit first, but
+-- it isn't: one phone is one connection, so 200 is 25-40 simultaneous tables of
+-- this size (concurrent tables, not total players — the whole company can hold
+-- the link as long as they aren't all sat down at once). Sustaining that many
+-- overlapping tables would burn the monthly message budget in a couple of days.
+-- Messages run out first unless the games are short and heavily simultaneous.
 --
 -- WHAT SQL CAN AND CANNOT SEE
 --
@@ -320,8 +322,10 @@ order by m.month desc;
 -- ledger is: `ledger_events_per_hour` is measured from sessions long enough to
 -- be representative, falling back to 300 on a database with nothing in it yet.
 --
--- `hours` defaults to 1 for the lunchtime game. Raise it if you're pricing a
--- longer sitting.
+-- `hours` and `sessions_per_month` are the two dials. They default to the
+-- lunchtime game — an hour, twenty times a month — so set them to whatever
+-- you're actually pricing: a 1.5-hour sitting twice a weekday is
+-- hours := 1.5, sessions_per_month := 44.
 
 with limits as (
   select 2000000::numeric                  as msgs_per_month,
@@ -343,6 +347,7 @@ observed as (
 ),
 assumptions as (
   select 1::numeric    as hours,
+         20::numeric   as sessions_per_month,
          10::numeric   as heartbeat_seconds,
          3::numeric    as writes_per_event,
          1000::numeric as bytes_per_msg
@@ -352,18 +357,24 @@ priced as (
     seats,
     a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
       + a.hours * o.ledger_events_per_hour * a.writes_per_event * seats as msgs,
-    a.bytes_per_msg                                                     as bytes_per_msg
+    a.bytes_per_msg                                                     as bytes_per_msg,
+    a.sessions_per_month                                                as per_month
   from generate_series(2, 10) as seats, assumptions a, observed o
 )
 select
   p.seats,
   round(p.msgs)::bigint                                                 as msgs_per_session,
   pg_size_pretty(round(p.msgs * p.bytes_per_msg)::bigint)               as egress_per_session,
-  floor(l.msgs_per_month / p.msgs)                                      as sessions_per_month_on_msgs,
-  floor(l.egress_bytes_per_month / (p.msgs * p.bytes_per_msg))          as sessions_per_month_on_egress,
-  -- Against a daily lunch game: ~20 sessions a month.
-  round(100 * 20 * p.msgs / l.msgs_per_month, 1)                        as pct_of_msgs_at_20_a_month,
-  round(100 * 20 * p.msgs * p.bytes_per_msg / l.egress_bytes_per_month, 1)
-                                                                        as pct_of_egress_at_20_a_month
+  floor(l.msgs_per_month / p.msgs)                                      as max_sessions_on_msgs,
+  floor(l.egress_bytes_per_month / (p.msgs * p.bytes_per_msg))          as max_sessions_on_egress,
+  -- Peak concurrent connections is a cap on tables sat down AT ONCE, not per
+  -- month — one phone is one connection. It only binds if more tables overlap
+  -- than the message budget above allows in a whole month, which for a game
+  -- that runs once a day it never will.
+  floor(200 / seats)                                                    as concurrent_tables_on_connections,
+  -- What the configured cadence actually spends.
+  round(100 * p.per_month * p.msgs / l.msgs_per_month, 1)               as pct_of_msgs,
+  round(100 * p.per_month * p.msgs * p.bytes_per_msg / l.egress_bytes_per_month, 1)
+                                                                        as pct_of_egress
 from priced p, limits l
 order by p.seats;
