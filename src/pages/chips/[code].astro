@@ -3,11 +3,12 @@ import ChipsLayout from '../../layouts/ChipsLayout.astro';
 import Invite from '../../chips/components/Invite.svelte';
 import { WORDS } from '../../chips/lib/utils/joinCode';
 
-// Join codes come from a fixed 15-word pool, so every shareable invite URL
-// (keogan.ca/chips/WOLF) can be prerendered. The component resolves the code
-// against live sessions at visit time. Static routes are case-sensitive, so we
-// prerender each word cased three ways — WOLF, wolf, Wolf — and let visitors
-// reach a game whether they type or share the code in any of them.
+// Join codes come from a fixed word pool (src/chips/lib/utils/joinCode.ts), so
+// every shareable invite URL (keogan.ca/chips/WOLF) can be prerendered. The
+// component resolves the code against live sessions at visit time. Static
+// routes are case-sensitive, so we prerender each word cased three ways — WOLF,
+// wolf, Wolf — and let visitors reach a game whether they type or share the
+// code in any of them.
 export function getStaticPaths() {
   const seen = new Set<string>();
   const paths: { params: { code: string } }[] = [];

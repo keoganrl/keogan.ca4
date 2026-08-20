@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from '../lib/supabase';
   import { mergeIdentities } from '../lib/services/game';
+  import { initIdentity, displayName } from '../lib/stores/identity';
   import {
     sortLifetimeStats,
     type LeaderboardSortKey
@@ -55,7 +56,19 @@
     }
   }
 
-  onMount(loadStats);
+  onMount(() => {
+    loadStats();
+    // Populates $displayName from this device's saved identity — the merge tool
+    // below is gated on it.
+    initIdentity();
+  });
+
+  // Merging rewrites other people's history, so the tool is only offered on the
+  // owner's device. Deliberately soft: the name lives in localStorage and anyone
+  // who wanted to could set it, so this hides a footgun from guests rather than
+  // enforcing a permission.
+  const OWNER_NAME = 'keogan';
+  let isOwner = $derived($displayName.trim().toLowerCase() === OWNER_NAME);
 
   // Merge mode: collapse duplicate identities (someone who joins from a private tab
   // gets a fresh identity every visit, so one human shows up several times). Select
@@ -248,42 +261,45 @@
     </ul>
 
     <!-- Duplicate cleanup: joins from a private tab mint a fresh identity each
-         visit, so the same person can appear several times. -->
-    <div class="merge-controls">
-      {#if !mergeMode}
-        {#if stats.length > 1}
-          <button class="cbtn cbtn-small" onclick={() => (mergeMode = true)}>
-            Merge duplicate players
-          </button>
-        {/if}
-      {:else if choosingKeep}
-        <div class="keep-picker">
-          {#each selectedStats as s (s.identity_id)}
-            <button
-              class="cbtn"
-              onclick={() => confirmMerge(s.identity_id)}
-              disabled={merging}
-            >
-              Keep “{s.display_name}”
+         visit, so the same person can appear several times. Owner-only — see
+         isOwner above. -->
+    {#if isOwner}
+      <div class="merge-controls">
+        {#if !mergeMode}
+          {#if stats.length > 1}
+            <button class="cbtn cbtn-small" onclick={() => (mergeMode = true)}>
+              Merge duplicate players
             </button>
-          {/each}
-          <button class="cbtn cbtn-small" onclick={() => (choosingKeep = false)} disabled={merging}
-            >Back</button
-          >
-        </div>
-      {:else}
-        <div class="keep-picker">
-          <button
-            class="cbtn cbtn-primary"
-            onclick={() => (choosingKeep = true)}
-            disabled={selectedIds.length < 2}
-          >
-            Merge {selectedIds.length < 2 ? 'selected' : `${selectedIds.length} entries`}…
-          </button>
-          <button class="cbtn cbtn-small" onclick={exitMergeMode}>Cancel</button>
-        </div>
-      {/if}
-    </div>
+          {/if}
+        {:else if choosingKeep}
+          <div class="keep-picker">
+            {#each selectedStats as s (s.identity_id)}
+              <button
+                class="cbtn"
+                onclick={() => confirmMerge(s.identity_id)}
+                disabled={merging}
+              >
+                Keep “{s.display_name}”
+              </button>
+            {/each}
+            <button class="cbtn cbtn-small" onclick={() => (choosingKeep = false)} disabled={merging}
+              >Back</button
+            >
+          </div>
+        {:else}
+          <div class="keep-picker">
+            <button
+              class="cbtn cbtn-primary"
+              onclick={() => (choosingKeep = true)}
+              disabled={selectedIds.length < 2}
+            >
+              Merge {selectedIds.length < 2 ? 'selected' : `${selectedIds.length} entries`}…
+            </button>
+            <button class="cbtn cbtn-small" onclick={exitMergeMode}>Cancel</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
