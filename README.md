@@ -134,3 +134,28 @@ in the Supabase SQL editor and downloads as CSV; the header explains the psql
 `\copy` / `pg_dump` route for bigger pulls. Run the data-quality sweep at the
 bottom first — duplicate identities and unended sessions skew everything above
 it.
+
+### Free-tier headroom
+
+`supabase/free-tier-usage.sql` measures the project against Supabase's free
+plan. Disk is not the constraint — a night is ~100 KB of rows, so 500 MB holds
+thousands of them. **Realtime messages are**, and they scale with the square of
+the table size.
+
+Every phone subscribes to `postgres_changes` on `sessions`, `players` and
+`events`, and messages are billed per delivery, so one row change at an N-seat
+table is N messages. The dominant writer isn't gameplay: each client UPDATEs
+its own `players` row every 10s as a presence heartbeat, and `players` is in
+the realtime publication, so heartbeats alone cost `6N²` messages a minute —
+about 75% of all traffic, and ~52k of a six-handed four-hour night's ~56k
+messages. Against the 2M/month quota that's roughly 35 six-handed nights a
+month, or 13 ten-handed ones.
+
+So the thing to ration is seats × hours, not the invite list. If the month gets
+tight, fix the heartbeat before restricting who can play: move
+`last_heartbeat_at` to a table outside the publication (its only reader is the
+stale-host check), or raise the interval — the saving is linear in it.
+
+Blocks 0-2 are exact; 4-6 are estimates, since realtime and egress are metered
+by the platform and aren't visible from SQL. The dashboard (Project Settings →
+Usage, Reports → Realtime) is the ground truth to check them against.
