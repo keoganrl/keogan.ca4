@@ -30,9 +30,10 @@
 --   identity_id null       → no such player. Check the spelling against
 --                            will_appear_as on a name you know is right; if
 --                            they're genuinely new, block 4 creates them.
---   two rows for one name  → the same person exists as two identities. Merge
---                            first (mergeIdentities in lib/services/game.ts) or
---                            this night lands on whichever one sorts first.
+--   two rows for one name  → the same person exists as several identities. This
+--                            is what happened here: Owen came back four times.
+--                            Block 3 pins ids to cope with it; block 1b says
+--                            whether the extras also need merging.
 --   sessions_on_record 0   → suspicious for a regular. Usually means the name
 --                            here isn't the one stored on their identity.
 --
@@ -64,6 +65,55 @@ order by n.name;
 
 
 -- =====================================================================
+-- 1b. Are Owen's four identities splitting his history?
+-- =====================================================================
+-- Four identities on one name is not by itself a problem. lifetime_stats joins
+-- sessions with status = 'ended', so an identity whose only seats sit in a game
+-- that was abandoned rather than ended contributes nothing to the board — it is
+-- a husk and can be left alone. One holding ended seats is a second Owen on the
+-- leaderboard, splitting his totals.
+--
+-- This tells you which kind each of the four is. Tonight's insert doesn't depend
+-- on the answer (block 3 pins the id either way) — his lifetime numbers do.
+--
+-- For any row that says merge, repoint the seats onto efbb9068 and drop the
+-- husk. Same two steps as mergeIdentities in lib/services/game.ts:
+--
+--   update players set identity_id = 'efbb9068-c837-4063-b2bf-1282e380e883'
+--    where identity_id in ('<ghost>', '<ghost>');
+--   delete from players_identity where id in ('<ghost>', '<ghost>');
+--
+-- Safe against double-counting: sessions_played counts DISTINCT session_id, so a
+-- night he played under two identities still counts once. Both seats' nets do
+-- land, which is right — both really did buy in.
+--
+-- 4d5dbe5d holds no seats at all, so it is a husk whatever this returns:
+--   delete from players_identity where id = '4d5dbe5d-ed33-493e-9a2a-1d5190d5b750';
+
+select
+  pi.id                                                          as identity_id,
+  count(p.id)                                                    as seats_total,
+  count(p.id) filter (where s.status = 'ended')                  as seats_in_ended,
+  count(distinct p.session_id) filter (where s.status = 'ended') as ended_sessions,
+  coalesce(sum(p.stack - p.total_buyin)
+           filter (where s.status = 'ended'), 0)                 as net_on_board,
+  max(s.created_at) filter (where s.status = 'ended')::date      as last_played,
+  case
+    when pi.id = 'efbb9068-c837-4063-b2bf-1282e380e883'
+      then 'the keeper — leave it'
+    when count(p.id) filter (where s.status = 'ended') = 0
+      then 'husk — invisible to the leaderboard, leave it'
+    else 'SHOWS AS ITS OWN ROW — merge into efbb9068'
+  end                                                            as effect
+from players_identity pi
+left join players p on p.identity_id = pi.id
+left join sessions s on s.id = p.session_id
+where pi.display_name = 'Owen the great and wonderful'
+group by pi.id
+order by seats_in_ended desc;
+
+
+-- =====================================================================
 -- 2. Do the chips balance? — run before inserting
 -- =====================================================================
 -- These nets were checked before this file was written and they cancel, so
@@ -92,17 +142,23 @@ from night;
 -- =====================================================================
 -- 3. Insert the night — run once, when 1 and 2 both look right
 -- =====================================================================
--- The blind schedule is left empty on purpose: there was no escalation record
--- to write, and session_results then divides net by big_blind, which is the
--- blind that was actually played all night. Seats are written inactive and
--- hostless — the night is over and nobody is sitting down.
+-- Seats are pinned by IDENTITY ID, not name, because block 1 came back with four
+-- identities on "Owen the great and wonderful". Nothing enforces uniqueness on
+-- display_name, so a name join here would have inserted one seat per match: six
+-- seats instead of three, 6000 bought in against 4980 in stacks, and a session
+-- 1020 chips short that query 0b would flag forever. Reproduced, not theorised.
+--
+-- Owen's seat goes to efbb9068 — the identity carrying 13 seats, against 1, 1 and
+-- 0 on the others. If block 1b shows the two single-seat ones hold seats in ENDED
+-- sessions, merge them into efbb9068 first; tonight's row is correct either way,
+-- but his lifetime totals aren't until that's done.
 
 begin;
 
-with night(name, buyin, net) as (values
-  ('Owen the great and wonderful', 1000, -340),
-  ('so did he embodies',           1000,   70),
-  ('Chong',                        1000,  270)
+with night(identity_id, buyin, net) as (values
+  ('efbb9068-c837-4063-b2bf-1282e380e883'::uuid, 1000, -340),  -- Owen the great and wonderful
+  ('8986ead2-b452-4e57-b6f9-d73f9f2cc96d'::uuid, 1000,   70),  -- so did he embodies
+  ('f7707ac9-6de6-4bb2-aec9-c52c4f4252fd'::uuid, 1000,  270)   -- Chong
 ),
 new_session as (
   insert into sessions (
@@ -130,16 +186,19 @@ insert into players (
 select
   ns.id,
   pi.id,
-  coalesce(pi.display_name, n.name),
+  pi.display_name,
   n.buyin + n.net,
   n.buyin,
   false, false, false,
-  (row_number() over (order by n.name))::int - 1
+  (row_number() over (order by pi.display_name))::int - 1
 from night n
-cross join new_session ns
-left join players_identity pi on lower(pi.display_name) = lower(n.name);
+-- Inner join on purpose: a mistyped uuid drops that seat instead of inserting a
+-- null-identity one, so the count comes up short and the books stop balancing.
+-- Loud beats silent — see block 1.
+join players_identity pi on pi.id = n.identity_id
+cross join new_session ns;
 
--- Nothing lands until this runs. If the insert errored, `rollback;` instead.
+-- Must say INSERT 0 3. Anything less means a uuid didn't match — `rollback;`.
 commit;
 
 
