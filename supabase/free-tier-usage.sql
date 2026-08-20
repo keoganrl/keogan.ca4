@@ -1,44 +1,66 @@
--- Chips — free-tier usage: how close is this project to Supabase's free plan
--- limits, and how many more nights fit.
+-- Chips — free-tier usage: how close is this project to Supabase's free plan,
+-- and how much room is there to let more people play?
 --
 -- Paste these into the Supabase SQL editor ONE BLOCK AT A TIME — the editor
 -- only shows the result of the last statement in a run.
 --
--- THE ANSWER UP FRONT: disk is not the constraint. Realtime is.
+-- THE ANSWER UP FRONT: disk is not the constraint. Realtime traffic is, and
+-- for the way this app is actually used there is a lot of room in it.
 --
--- A poker night is a handful of kilobytes of rows and tens of thousands of
--- websocket messages. The free plan gives 500 MB of database and 2 million
--- realtime messages a month, which means the database has room for thousands
--- of nights and the realtime quota has room for a few dozen. Block 4 is the
--- one to read.
+-- The workload this is written against is a daily lunchtime game: five to
+-- eight players, about an hour, most weekdays. Roughly twenty sessions a
+-- month. That comes to something like 300-650k realtime messages and a few
+-- hundred MB of egress a month — call it a fifth to a third of the realtime
+-- allowance and around a tenth of egress. Real poker nights with real chips
+-- don't touch this app at all and cost nothing.
+--
+-- Disk, at that rate, is measured in years: a session is on the order of a
+-- hundred kilobytes of rows, twenty a month is a few MB, and the plan gives
+-- 500 MB. Block 2 will say so in your own numbers.
+--
+-- WHICH LIMITS THESE BLOCKS MEASURE AGAINST
+--
+-- The free plan's summary card lists: unlimited API requests, 50,000 monthly
+-- active users, 500 MB database, shared CPU / 500 MB RAM, 5 GB egress, 5 GB
+-- cached egress, 1 GB file storage. Two of those matter here (database size,
+-- egress) and the rest do not:
+--
+--   * Monthly active users never applies. /chips has no accounts — every
+--     phone hits the Data API with the anon key and mints a players_identity
+--     row, which is an ordinary table row, not an auth user. Invite whoever.
+--   * Unlimited API requests means the request COUNT is free; the bytes those
+--     requests return still land in the 5 GB egress bucket.
+--   * Cached egress is a separate CDN bucket for static assets. Nothing on the
+--     database or realtime path draws from it.
+--   * File storage is unused — the app stores no files.
+--
+-- The realtime limits are NOT on that summary card. They live further down the
+-- pricing page in the full plan-comparison table, under Realtime, and on the
+-- free plan have historically been 200 peak concurrent connections and
+-- 2,000,000 messages a month. Check that row before trusting blocks 4-6 —
+-- they price against 2M, in an editable `limits` CTE at the top of each block.
+-- If the message cap has been dropped, the message columns become advisory and
+-- egress is the only ceiling realtime traffic can hit, which is the more
+-- comfortable of the two readings anyway.
+--
+-- Peak connections is the one limit a lunchtime game could plausibly reach by
+-- spreading rather than by playing longer: one phone is one connection, so 200
+-- is roughly 25-40 simultaneous tables of this size. Concurrent tables, not
+-- total players — the whole company could have the link as long as they aren't
+-- all sat down at once.
 --
 -- WHAT SQL CAN AND CANNOT SEE
 --
---   Measurable here (exact):   database size, row counts, growth per night.
---   NOT measurable here:       realtime messages, egress, API requests. None
---                              of it is stored in the database — it's metered
---                              by the platform. The ground truth is the
---                              dashboard: Project Settings → Usage, and
---                              Reports → Realtime. Blocks 4-6 ESTIMATE those
---                              from the game records so you can see the shape
---                              and the per-night cost; check them against the
---                              dashboard once and adjust the constants at the
---                              top of each block if they're off.
---
--- THE FREE PLAN LIMITS these blocks are measured against (verify on
--- supabase.com/pricing — they get revised, and the numbers are inlined in a
--- `limits` CTE at the top of each block so they're one edit to update):
---
---   Database size          500 MB      exceeded → project goes read-only
---   Egress (unified)       5 GB/month  DB + realtime + storage + auth combined
---   Realtime messages      2 M/month
---   Realtime connections   200 peak concurrent
---   Inactivity pause       7 days      (this is what api/keep-alive.js prevents)
---
--- Monthly active users doesn't apply: /chips has no accounts. Every phone hits
--- the Data API with the anon key and mints a players_identity row, which is an
--- ordinary table row, not an auth user. That limit can be ignored no matter how
--- many people play.
+--   Measurable here (exact):   database size, row counts, growth per session.
+--   NOT measurable here:       realtime messages, egress, connections. None of
+--                              it is stored in the database — it's metered by
+--                              the platform. The ground truth is the dashboard:
+--                              Project Settings → Usage, and Reports →
+--                              Realtime. Blocks 4-6 ESTIMATE those from the
+--                              game records so you can see the per-session
+--                              cost and where it comes from; check them against
+--                              the dashboard once and adjust the constants if
+--                              they're off.
 --
 -- WHY REALTIME IS THE BINDING LIMIT, AND WHY IT'S QUADRATIC
 --
@@ -54,23 +76,28 @@
 --
 --     heartbeat messages/minute = N clients × 6 writes/min × N recipients = 6N²
 --
--- At six seats that's 216 messages a minute — about 52,000 over a four-hour
--- night — before anybody bets a chip. Actual play adds roughly 3N per ledger
--- event, which at the same table is under a tenth of the heartbeat traffic.
+-- At six seats that's 216 messages a minute: ~13,000 of them spent in a
+-- one-hour lunch game before anybody bets a chip. Play adds roughly 3N per
+-- ledger event on top, which at that table size puts a session somewhere
+-- around 18-26k messages depending on how busy the ledger is. Heartbeat is
+-- the larger half on any table quieter than ~700 ledger rows an hour; block
+-- 4's pct_heartbeat column gives the real split for your sessions.
 --
--- The consequence for who gets to use this: the quota is spent by
--- seats × hours, quadratically in seats, and NOT by how many people know about
--- the app. One regular group of six burns a small fraction of the month. A
--- ten-handed table costs about 2.8× a six-handed one for the same hours (10²/6²),
--- so the thing to watch if it spreads is big tables running long, not headcount.
+-- What that means for who gets to use it: cost is seats × minutes, quadratic
+-- in seats, and completely indifferent to how many people know the link. An
+-- eight-handed hour costs 2.6× a five-handed one (8²/5²). Growth that adds
+-- more games at the same size scales linearly and there is room for a few
+-- times over; growth that makes the tables bigger is the expensive kind.
 --
--- If block 5 says the month is getting tight, the first fix is the heartbeat,
--- not the invite list — it's ~90% of the traffic and none of it needs to be
--- realtime. Either move last_heartbeat_at to its own table outside the
--- publication (the only reader is the stale-host check, which can poll it), or
--- raise the 10s interval — the saving is linear in the interval, so 30s cuts
--- heartbeat traffic to a third.
-
+-- If block 5 ever looks tight, fix the heartbeat before restricting the invite
+-- list — it's the majority of the traffic on a normal table, it's the part
+-- that grows quadratically, and none of it needs to be realtime.
+-- Either move last_heartbeat_at to its own table outside the publication (the
+-- only reader is the stale-host check, which can poll it), or raise the 10s
+-- interval; the saving is linear in the interval, so 30s cuts heartbeat traffic
+-- to a third. Ordinary API reads need no such attention: load() already fetches
+-- events incrementally (`gt('seq', sinceSeq)`), so a phone waking up pulls the
+-- few rows it missed rather than the whole ledger.
 
 -- =====================================================================
 -- 0. Headline: how full is the database?
@@ -111,13 +138,14 @@ order by pg_total_relation_size(c.oid) desc;
 
 
 -- =====================================================================
--- 2. What a night costs on disk, and how many more fit
+-- 2. What a session costs on disk, and how many more fit
 -- =====================================================================
 -- Divides the six chips tables by the number of sessions in them, then
 -- projects the remaining space. `months_of_headroom` uses the last 90 days'
 -- rate, so it reads null until there are sessions in that window.
 --
--- Expect a number in the thousands. Disk is not what you need to ration.
+-- Expect a number in the thousands — at twenty sessions a month that is
+-- years of headroom. Disk is not what you need to ration.
 
 with limits as (select (500 * 1024 * 1024)::bigint as db_bytes),
 chips_size as (
@@ -149,20 +177,22 @@ from limits l, chips_size s, counts c;
 
 
 -- =====================================================================
--- 3. The shape of recent nights
+-- 3. The shape of recent sessions
 -- =====================================================================
 -- Seats, wall-clock length and ledger volume per session — the three inputs
 -- the realtime estimate in block 4 multiplies together. Worth eyeballing
 -- first: if `seats` or `minutes` looks wrong, so will everything downstream.
+-- For a lunchtime game expect `minutes` around 60.
 --
 -- `minutes` spans the first and last ledger row, so a session left open with
 -- nobody playing reads as short (correct — an idle table with no phones on it
 -- costs nothing) but a session somebody left open ON A PHONE does not: the
--- heartbeat keeps writing. Those show up as long nights with few events, and
--- they are real quota spend, not a measurement artefact.
+-- heartbeat keeps writing. Those show up as long sessions with few events, and
+-- they are real quota spend, not a measurement artefact. A lunch game whose tab
+-- somebody left running all afternoon costs several times what it played.
 
 select
-  s.created_at::date                                                 as night,
+  s.created_at::date                                                 as played_on,
   s.join_code,
   s.status,
   (select count(*) from players p where p.session_id = s.id)         as seats,
@@ -175,7 +205,7 @@ limit 25;
 
 
 -- =====================================================================
--- 4. Realtime messages per night  ← the limit that actually binds
+-- 4. Realtime messages per session  ← the limit that actually binds
 -- =====================================================================
 -- ESTIMATE, not a meter. The model, per the header:
 --
@@ -186,18 +216,19 @@ limit 25;
 -- rows — the player, the session, and the ledger line (a bet updates
 -- players.stack, updates sessions.pot/current_actor_id, inserts the event).
 --
--- Both terms assume every seat is connected for the whole night, which
--- overstates a table people drift in and out of. Treat the number as an
--- upper bound on a night of that shape.
+-- Both terms assume every seat is connected for the whole session, which
+-- overstates a table people drift in and out of — normal at lunch, where
+-- somebody always arrives late or leaves early. Treat the number as an upper
+-- bound on a session of that shape.
 
 with assumptions as (
   select 10::numeric   as heartbeat_seconds,   -- startHeartbeat interval
          3::numeric    as writes_per_event     -- published rows per ledger action
 ),
-nights as (
+shaped as (
   select
     s.id,
-    s.created_at::date                                               as night,
+    s.created_at::date                                               as played_on,
     (select count(*) from players p where p.session_id = s.id)::numeric  as seats,
     (select count(*) from events e where e.session_id = s.id)::numeric   as ledger_events,
     coalesce((select extract(epoch from (max(e.created_at) - min(e.created_at))) / 60
@@ -205,7 +236,7 @@ nights as (
   from sessions s
 )
 select
-  n.night,
+  n.played_on,
   n.seats::int,
   round(n.minutes)::int                                              as minutes,
   n.ledger_events::int,
@@ -218,16 +249,18 @@ select
         / nullif(n.minutes * (60 / a.heartbeat_seconds) * n.seats * n.seats
                  + n.ledger_events * a.writes_per_event * n.seats, 0))
                                                                      as pct_heartbeat
-from nights n, assumptions a
-order by n.night desc
+from shaped n, assumptions a
+order by n.played_on desc
 limit 25;
 
 
 -- =====================================================================
 -- 5. Month by month, against the 2 M message and 5 GB egress quotas
 -- =====================================================================
--- Same model as block 4, rolled up per calendar month. The current month is
--- partial, so its percentages are a month-to-date reading, not a forecast.
+-- Same model as block 4, rolled up per calendar month — the reading to watch,
+-- since a daily game's cost is a monthly rate rather than a per-session one.
+-- The current month is partial, so its percentages are month-to-date, not a
+-- forecast: divide by the fraction of the month elapsed to project.
 --
 -- `bytes_per_msg` is the shakiest constant in this file: a postgres_changes
 -- payload carries the whole row plus its column metadata, so it's roughly a
@@ -245,7 +278,7 @@ assumptions as (
          3::numeric    as writes_per_event,
          1000::numeric as bytes_per_msg
 ),
-nights as (
+shaped as (
   select
     date_trunc('month', s.created_at)::date                          as month,
     (select count(*) from players p where p.session_id = s.id)::numeric  as seats,
@@ -257,15 +290,15 @@ nights as (
 per_month as (
   select
     n.month,
-    count(*)                                                         as nights,
+    count(*)                                                         as sessions,
     sum(n.minutes * (60 / a.heartbeat_seconds) * n.seats * n.seats
         + n.ledger_events * a.writes_per_event * n.seats)            as msgs
-  from nights n, assumptions a
+  from shaped n, assumptions a
   group by n.month
 )
 select
   m.month,
-  m.nights,
+  m.sessions,
   round(m.msgs)::bigint                                              as est_realtime_msgs,
   round(100 * m.msgs / l.msgs_per_month, 1)                          as pct_of_2m_msgs,
   pg_size_pretty(round(m.msgs * a.bytes_per_msg)::bigint)            as est_realtime_egress,
@@ -276,41 +309,61 @@ order by m.month desc;
 
 
 -- =====================================================================
--- 6. How many nights a month fit, by table size
+-- 6. How many sessions a month fit, by table size
 -- =====================================================================
--- The quadratic, made concrete. Nothing here reads your data — it's the model
--- from block 4 priced out for a night of `hours` at each table size, so it
--- answers the "can I let it spread?" question directly.
+-- The quadratic, priced out. This is the "can I let it spread?" block: it
+-- costs one session of `hours` at each table size, then divides the monthly
+-- allowances by it.
 --
--- Change `hours` in the assumptions CTE to match how long your nights actually
--- run (block 3's `minutes` column is the honest input).
+-- Unlike blocks 4-5 this doesn't rate your history — it prices a hypothetical
+-- table. The one thing it does read from your data is how busy a session's
+-- ledger is: `ledger_events_per_hour` is measured from sessions long enough to
+-- be representative, falling back to 300 on a database with nothing in it yet.
+--
+-- `hours` defaults to 1 for the lunchtime game. Raise it if you're pricing a
+-- longer sitting.
 
 with limits as (
   select 2000000::numeric                  as msgs_per_month,
          (5::numeric * 1024 * 1024 * 1024) as egress_bytes_per_month
 ),
+observed as (
+  -- Ledger rows per hour, averaged over sessions with more than 15 minutes of
+  -- play in them. Short and abandoned sessions are excluded: a session with two
+  -- events a minute apart implies an absurd hourly rate and would drag the mean.
+  select coalesce(round(avg(t.events / t.minutes * 60)), 300) as ledger_events_per_hour
+  from (
+    select
+      (select count(*) from events e where e.session_id = s.id)::numeric as events,
+      (select extract(epoch from (max(e.created_at) - min(e.created_at))) / 60
+         from events e where e.session_id = s.id)::numeric               as minutes
+    from sessions s
+  ) t
+  where t.minutes > 15
+),
 assumptions as (
-  select 4::numeric    as hours,
+  select 1::numeric    as hours,
          10::numeric   as heartbeat_seconds,
          3::numeric    as writes_per_event,
-         1000::numeric as bytes_per_msg,
-         60::numeric   as ledger_events_per_hour   -- hands × actions, per block 3
+         1000::numeric as bytes_per_msg
+),
+priced as (
+  select
+    seats,
+    a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
+      + a.hours * o.ledger_events_per_hour * a.writes_per_event * seats as msgs,
+    a.bytes_per_msg                                                     as bytes_per_msg
+  from generate_series(2, 10) as seats, assumptions a, observed o
 )
 select
-  seats,
-  round(a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
-        + a.hours * a.ledger_events_per_hour * a.writes_per_event * seats)::bigint
-                                                                     as msgs_per_night,
-  pg_size_pretty(round((a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
-        + a.hours * a.ledger_events_per_hour * a.writes_per_event * seats)
-        * a.bytes_per_msg)::bigint)                                  as egress_per_night,
-  floor(l.msgs_per_month
-        / (a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
-           + a.hours * a.ledger_events_per_hour * a.writes_per_event * seats))
-                                                                     as nights_per_month_on_msgs,
-  floor(l.egress_bytes_per_month
-        / ((a.hours * 60 * (60 / a.heartbeat_seconds) * seats * seats
-            + a.hours * a.ledger_events_per_hour * a.writes_per_event * seats)
-           * a.bytes_per_msg))                                       as nights_per_month_on_egress
-from generate_series(2, 10) as seats, limits l, assumptions a
-order by seats;
+  p.seats,
+  round(p.msgs)::bigint                                                 as msgs_per_session,
+  pg_size_pretty(round(p.msgs * p.bytes_per_msg)::bigint)               as egress_per_session,
+  floor(l.msgs_per_month / p.msgs)                                      as sessions_per_month_on_msgs,
+  floor(l.egress_bytes_per_month / (p.msgs * p.bytes_per_msg))          as sessions_per_month_on_egress,
+  -- Against a daily lunch game: ~20 sessions a month.
+  round(100 * 20 * p.msgs / l.msgs_per_month, 1)                        as pct_of_msgs_at_20_a_month,
+  round(100 * 20 * p.msgs * p.bytes_per_msg / l.egress_bytes_per_month, 1)
+                                                                        as pct_of_egress_at_20_a_month
+from priced p, limits l
+order by p.seats;

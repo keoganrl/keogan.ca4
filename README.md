@@ -138,23 +138,33 @@ it.
 ### Free-tier headroom
 
 `supabase/free-tier-usage.sql` measures the project against Supabase's free
-plan. Disk is not the constraint — a night is ~100 KB of rows, so 500 MB holds
-thousands of them. **Realtime messages are**, and they scale with the square of
-the table size.
+plan. Disk is not the constraint — a session is ~100 KB of rows, so a daily
+game uses a few MB a month against 500 MB. **Realtime traffic is**, and it
+scales with the square of the table size.
 
 Every phone subscribes to `postgres_changes` on `sessions`, `players` and
 `events`, and messages are billed per delivery, so one row change at an N-seat
 table is N messages. The dominant writer isn't gameplay: each client UPDATEs
 its own `players` row every 10s as a presence heartbeat, and `players` is in
 the realtime publication, so heartbeats alone cost `6N²` messages a minute —
-about 75% of all traffic, and ~52k of a six-handed four-hour night's ~56k
-messages. Against the 2M/month quota that's roughly 35 six-handed nights a
-month, or 13 ten-handed ones.
+~13,000 of a six-handed lunch hour before anybody bets a chip.
 
-So the thing to ration is seats × hours, not the invite list. If the month gets
-tight, fix the heartbeat before restricting who can play: move
-`last_heartbeat_at` to a table outside the publication (its only reader is the
-stale-host check), or raise the interval — the saving is linear in it.
+For the daily lunchtime game (5-8 players, an hour, ~20 sessions a month) that
+lands around 20-35% of the 2M/month realtime message allowance and 7-15% of the
+5 GB egress. Comfortable, with room for a few times that.
+
+Note the free plan's summary card doesn't list realtime limits at all — they're
+in the full comparison table under Realtime (historically 200 peak concurrent
+connections, 2M messages/month). Peak connections is the one a spreading game
+could reach: one phone is one connection, so 200 is ~25-40 simultaneous tables.
+Concurrent tables, not total players.
+
+So what's rationed is seats × minutes, not the invite list. If a month gets
+tight, fix the heartbeat first: move `last_heartbeat_at` to a table outside the
+publication (its only reader is the stale-host check at
+`lib/stores/table.svelte.ts:73`), or raise the interval — the saving is linear
+in it. Ordinary API reads need no attention; `load()` already fetches events
+incrementally.
 
 Blocks 0-2 are exact; 4-6 are estimates, since realtime and egress are metered
 by the platform and aren't visible from SQL. The dashboard (Project Settings →
