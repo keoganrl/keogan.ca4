@@ -25,6 +25,19 @@ two), check that chips balance
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
 
+### A night played with real chips
+
+`supabase/manual-session.sql` puts a night played on felt onto the leaderboard.
+The board never reads the ledger — `lifetime_stats` and `session_results` are
+aggregates of `stack - total_buyin` over `players` rows in ended sessions — so a
+session row plus one player row each, with stacks that produce the right nets, is
+the whole job. The script checks the names against `players_identity` and refuses
+a table whose nets don't cancel before it inserts anything.
+
+What can't be backfilled: all-in counts (`events.all_in` is written by the app at
+the moment a stack empties) and everything in `player-stats.sql`, which is
+reconstructed from the ledger. Those columns stand still for a hand-entered night.
+
 ### The button when somebody leaves
 
 The button does **not** move when a player stands up mid-hand. It stays on their empty
