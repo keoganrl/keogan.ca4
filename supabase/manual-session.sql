@@ -37,6 +37,13 @@
 --                           at random. See mergeIdentities in lib/services/game.ts.
 --   name matched, but not  → the identity's stored display_name wins on the
 --   the capitalisation       leaderboard; that's the one people will see.
+--
+-- Don't skip this block: an unmatched name fails silently. The seat still
+-- inserts, the books still balance and query 0b stays quiet, but a null
+-- identity_id drops the row out of both lifetime_stats and session_results —
+-- so that player's night vanishes from the board while still counting as a seat
+-- for placements (session_extremes spans every seat on purpose) and so still
+-- denying first or last to everyone else.
 
 with night(name, buyin, net) as (values
   -- ('Keogan',   200,  -150),
