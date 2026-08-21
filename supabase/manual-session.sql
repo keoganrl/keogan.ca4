@@ -20,97 +20,77 @@
 
 
 -- =====================================================================
--- 1. Who played, and what did they end up? — EDIT THIS, then run it
+-- 1. Who played? — EDIT the name list, then run it
 -- =====================================================================
--- One row per player: (name, what they bought in for, their net for the night).
--- `net` is what they walked away with minus what they put in — negative for a
--- loser. Buy-in is the cash total including rebuys, in the same chip units the
--- app uses at these stakes.
+-- Changes nothing. For every name it lists EVERY identity that matches, so you
+-- can pick the right id for block 3.
 --
--- This block changes nothing. It resolves each name against `players_identity`
--- and reports what it found. Read every row before continuing:
+-- Do not skip this and do not resolve seats by name in block 3. Nothing enforces
+-- uniqueness on display_name — a person picks up a fresh identity on every new
+-- device or cleared storage — so duplicates are the norm, not the exception, and
+-- a name join silently inserts one seat per match.
 --
---   identity_id null      → nobody by that name. A typo, or a first-time player.
---                           Fix the spelling, or run block 4 to create them.
---   two rows for one name  → duplicate identities. Expect this: nothing enforces
---                           uniqueness on display_name, and a person picks up a
---                           new identity every time they open the app on another
---                           device or clear their storage. Decide which one is
---                           theirs NOW — block 3 wants the id, and it is the
---                           reason block 3 takes ids rather than names.
---                           Whether the extras also need merging is a separate
---                           question; block 1b answers it.
---   name matched, but not  → the identity's stored display_name wins on the
---   the capitalisation       leaderboard; that's the one people will see.
+-- The verdict column says what each row is:
 --
--- Don't skip this block: an unmatched name fails silently. The seat still
--- inserts, the books still balance and query 0b stays quiet, but a null
--- identity_id drops the row out of both lifetime_stats and session_results —
--- so that player's night vanishes from the board while still counting as a seat
--- for placements (session_extremes spans every seat on purpose) and so still
--- denying first or last to everyone else.
+--   unique — use this        one identity, no ambiguity. Take the id.
+--   PICK ME?                 several identities; this one has the most history.
+--                            Usually right, but confirm against last_played.
+--   rival                    another identity with real ended history. Two rows
+--                            like this means that person is ALREADY split across
+--                            two leaderboard entries — merge them (below) before
+--                            deciding which id the new seat goes to.
+--   husk                     no seats in any ended session, so it contributes
+--                            nothing to the board. Ignore it, or delete it.
+--   NO IDENTITY              nobody by that name. A typo, or a first-timer —
+--                            block 4 creates them.
+--
+-- Only ended sessions count: lifetime_stats joins status = 'ended', so an
+-- identity whose seats all sit in an abandoned game is invisible to the board.
+-- That is the whole difference between a husk and a rival, and a raw seat count
+-- cannot tell them apart.
+--
+-- To merge a rival into the keeper — the same two steps as mergeIdentities in
+-- lib/services/game.ts:
+--
+--   update players set identity_id = '<keeper>' where identity_id = '<rival>';
+--   delete from players_identity where id = '<rival>';
+--
+-- Safe against double-counting a night: sessions_played counts DISTINCT
+-- session_id, so a night played under both identities still counts once. Both
+-- seats' nets land, which is right — both really did buy in.
 
-with night(name, buyin, net) as (values
-  -- ('Keogan',   200,  -150),
-  -- ('Emily',    200,   340),
-  -- ('Adam',     400,  -190)
-  ('EDIT ME', 0, 0)
+with night(name) as (values
+  -- ← EDIT: one row per player at the table
+  ('Name One'), ('Name Two'), ('Name Three')
+),
+cand as (
+  select
+    n.name                                                         as looking_for,
+    pi.id                                                          as identity_id,
+    count(p.id) filter (where s.status = 'ended')                  as ended_seats,
+    count(distinct p.session_id) filter (where s.status = 'ended') as ended_sessions,
+    coalesce(sum(p.stack - p.total_buyin)
+             filter (where s.status = 'ended'), 0)                 as net_on_board,
+    max(s.created_at) filter (where s.status = 'ended')::date      as last_played
+  from night n
+  left join players_identity pi on lower(pi.display_name) = lower(n.name)
+  left join players p on p.identity_id = pi.id
+  left join sessions s on s.id = p.session_id
+  group by n.name, pi.id
 )
 select
-  n.name,
-  n.buyin,
-  n.net,
-  n.buyin + n.net                          as final_stack,
-  pi.id                                    as identity_id,
-  pi.display_name                          as will_appear_as,
-  (select count(*) from players p where p.identity_id = pi.id) as sessions_on_record
-from night n
-left join players_identity pi on lower(pi.display_name) = lower(n.name)
-order by n.name;
-
-
--- =====================================================================
--- 1b. Are the duplicates actually splitting anyone's history?
--- =====================================================================
--- Only for names that came back more than once above. Swap in the name.
---
--- A duplicate identity is only a problem if it holds seats in ENDED sessions:
--- lifetime_stats joins sessions with status = 'ended', so an identity whose only
--- seats are in a game that was abandoned mid-hand contributes nothing to the
--- board and can be left alone. One that does hold ended seats is showing up as
--- its own leaderboard row, splitting that person in two.
---
--- To fix the ones that matter, repoint their seats onto the keeper and drop the
--- husks — the same two steps mergeIdentities takes in lib/services/game.ts:
---
---   update players set identity_id = '<keeper>'
---    where identity_id in ('<ghost>', '<ghost>');
---   delete from players_identity where id in ('<ghost>', '<ghost>');
---
--- Merging is safe against double-counting a night: sessions_played counts
--- DISTINCT session_id, so a night someone accidentally played under two
--- identities still counts once. Their nets from both seats do both land, which
--- is right — both seats really did buy in.
-
-select
-  pi.id                                                        as identity_id,
-  count(p.id)                                                  as seats_total,
-  count(p.id) filter (where s.status = 'ended')                as seats_in_ended,
-  count(distinct p.session_id) filter (where s.status = 'ended') as ended_sessions,
-  coalesce(sum(p.stack - p.total_buyin)
-           filter (where s.status = 'ended'), 0)               as net_on_board,
-  max(s.created_at) filter (where s.status = 'ended')::date     as last_played,
-  -- The row with the most ended seats is normally the keeper; the rest are the
-  -- candidates. This only classifies them — it doesn't know which you'll keep.
-  case when count(p.id) filter (where s.status = 'ended') = 0
-       then 'invisible to the leaderboard — leave it'
-       else 'SHOWS AS ITS OWN ROW — merge unless this is the keeper' end as effect
-from players_identity pi
-left join players p on p.identity_id = pi.id
-left join sessions s on s.id = p.session_id
-where pi.display_name = 'Name that came back twice'
-group by pi.id
-order by seats_in_ended desc;
+  looking_for, identity_id, ended_seats, ended_sessions, net_on_board, last_played,
+  case
+    when identity_id is null then '*** NO IDENTITY — must be created ***'
+    when count(*) over (partition by looking_for) = 1 then 'unique — use this'
+    when row_number() over (partition by looking_for
+                            order by ended_seats desc, last_played desc nulls last) = 1
+      then 'PICK ME? most history of ' || count(*) over (partition by looking_for) || ' identities'
+    when ended_seats = 0 then 'husk — no ended seats'
+    else 'rival — also has history, check before discarding'
+  end as verdict
+from cand
+order by looking_for, ended_seats desc, last_played desc nulls last;
 
 
 -- =====================================================================
