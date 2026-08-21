@@ -31,50 +31,51 @@
 -- than what was on the table. At 10/20 that is a quarter of a big blind, which
 -- is why it was worth doing at all rather than leaving the session unbalanced.
 --
--- Owen is pinned by id: "Owen the great and wonderful" resolves to four
--- identities and a name join would insert four seats. The other six names are
--- resolved by scalar subquery, which raises rather than fanning out if any of
--- them has picked up a duplicate too.
+-- Every seat is pinned by identity id, resolved through block 1 of
+-- manual-session.sql. An earlier draft pinned only Owen — the name known to be
+-- ambiguous — and resolved the rest by name; it aborted on Emily, who also had
+-- a second identity. Duplicate display names are the norm here, so all nine are
+-- pinned and none are looked up by name.
+--
+-- Owen's other three identities and Emily's second are husks: zero seats in any
+-- ended session, so they never touched the leaderboard. Nothing was ever split
+-- and nothing needs merging. To tidy them away (optional, and self-guarding —
+-- the players.identity_id foreign key refuses to drop an identity that still
+-- holds a seat, so this cannot delete anyone's history):
+--
+--   delete from players_identity where id in (
+--     '0da7e3b8-1fad-4948-a19e-3f7650c4d2a5',   -- Owen husk
+--     '4d5dbe5d-ed33-493e-9a2a-1d5190d5b750',   -- Owen husk
+--     'f808ab32-ef3f-4f68-93f7-d973db1db821',   -- Owen husk
+--     'a199c17a-eb51-42a4-a004-3f056cf1e0c1');  -- Emily husk
 --
 -- Timestamps are -06 (MDT). Nothing in the repo pins a timezone; created_at is
 -- what orders the cumulative-net chart, so fix the offset if that is wrong.
+-- Note that a -06 evening renders as the NEXT day's date in a UTC session --
+-- that is display only, and the chart orders on the timestamp itself.
 --
--- Run the whole file at once — unlike the other scripts here it is one
--- transaction with its own guards, and it either commits nine balanced seats or
--- rolls back leaving nothing. Expect "NOTICE: OK — 9 seats, zero drift".
+-- Run the whole file at once — it is one transaction with its own guards, and
+-- either commits nine balanced seats or rolls back leaving nothing. Expect
+-- "NOTICE: OK — 9 seats, no duplicates, zero drift".
 --
--- Verified against a local Postgres 16 loaded from chips-schema.sql, seeded with
--- a duplicated Owen: the happy path commits 9 seats at zero drift; a missing
--- identity aborts naming it; a duplicate name aborts on the scalar subquery; a
--- tampered stack aborts on the drift check. No partial session survives any of
--- them.
+-- Verified against a local Postgres 16 loaded from chips-schema.sql and seeded
+-- with all thirteen real identity ids: the happy path commits nine seats at zero
+-- drift, awarding times_first to Jun and times_last to NK; a wrong uuid aborts
+-- naming the seat count; the same id listed twice aborts on the duplicate check;
+-- neither leaves a partial session behind.
 
 begin;
 
-with night(pin, name, buyin, stack) as (values
-  ('efbb9068-c837-4063-b2bf-1282e380e883'::uuid, 'Owen the great and wonderful', 1000, 1755),
-  ('8986ead2-b452-4e57-b6f9-d73f9f2cc96d'::uuid, 'so did he embodies',           1000,  694),
-  ('f7707ac9-6de6-4bb2-aec9-c52c4f4252fd'::uuid, 'Chong',                        1000,  544),
-  (null,                                         'Jun',                          1000, 1775),
-  (null,                                         'Emily',                        1000, 1734),
-  (null,                                         'Adam',                         1000, 1324),
-  (null,                                         'Keogan',                       1000,  590),
-  (null,                                         'Lily',                         1000,  584),
-  (null,                                         'NK',                           1000,    0)
-),
-resolved as (
-  select
-    n.name, n.buyin, n.stack,
-    coalesce(
-      n.pin,
-      -- Scalar subquery on purpose: if this name has picked up more than one
-      -- identity it raises "more than one row returned by a subquery used as an
-      -- expression" and the whole transaction dies. That is the four-Owen bug
-      -- failing loudly instead of silently inserting a seat per match.
-      (select pi.id from players_identity pi
-        where lower(pi.display_name) = lower(n.name))
-    ) as identity_id
-  from night n
+with night(identity_id, buyin, stack) as (values
+  ('4998c517-c0fe-411b-afbb-7712d8933ded'::uuid, 1000, 1775),  -- Jun
+  ('efbb9068-c837-4063-b2bf-1282e380e883'::uuid, 1000, 1755),  -- Owen the great and wonderful
+  ('159b2e7b-61b8-4314-a6d2-4df66d050d56'::uuid, 1000, 1734),  -- Emily
+  ('62e20319-e5a6-4621-8c88-ebaf52595456'::uuid, 1000, 1324),  -- Adam
+  ('8986ead2-b452-4e57-b6f9-d73f9f2cc96d'::uuid, 1000,  694),  -- so did he embodies
+  ('29443ca8-d9c4-4497-942b-6f3e2a98ca4b'::uuid, 1000,  590),  -- Keogan
+  ('053b03ab-c089-4347-ab08-0492b39e68a6'::uuid, 1000,  584),  -- Lily
+  ('f7707ac9-6de6-4bb2-aec9-c52c4f4252fd'::uuid, 1000,  544),  -- Chong
+  ('d6c7d730-458b-4fec-b973-44e66b1e0480'::uuid, 1000,    0)   -- NK
 ),
 new_session as (
   insert into sessions (
@@ -91,41 +92,33 @@ insert into players (
   is_host, is_active, folded, seat_order
 )
 select
-  ns.id, pi.id, pi.display_name, r.stack, r.buyin,
+  ns.id, pi.id, pi.display_name, n.stack, n.buyin,
   false, false, false,
-  (row_number() over (order by pi.display_name))::int - 1
-from resolved r
--- Inner join: an unresolved name drops its seat rather than inserting a
--- null-identity one, and the guard below then refuses to commit.
-join players_identity pi on pi.id = r.identity_id
+  (row_number() over (order by n.stack desc))::int - 1
+from night n
+join players_identity pi on pi.id = n.identity_id
 cross join new_session ns;
 
 do $$
-declare
-  sid uuid;
-  seats int;
-  drift int;
-  missing text;
+declare sid uuid; seats int; drift int; dupes int;
 begin
   select id into sid from sessions where join_code = 'LIVECHIPS'
    order by created_at desc limit 1;
   select count(*), sum(stack) - sum(total_buyin) into seats, drift
     from players where session_id = sid;
+  select count(*) into dupes from (
+    select identity_id from players where session_id = sid
+     group by identity_id having count(*) > 1) d;
   if seats <> 9 then
-    select string_agg(want.name, ', ') into missing
-      from (values ('Owen the great and wonderful'),('so did he embodies'),
-                   ('Chong'),('Jun'),('Emily'),('Adam'),('Keogan'),
-                   ('Lily'),('NK')) as want(name)
-     where not exists (
-       select 1 from players p
-        where p.session_id = sid and lower(p.display_name) = lower(want.name));
-    raise exception 'expected 9 seats, inserted %. Unresolved: %',
-      seats, coalesce(missing, '(none — a name resolved to someone unexpected)');
+    raise exception 'expected 9 seats, inserted % — an identity id did not match', seats;
+  end if;
+  if dupes > 0 then
+    raise exception '% identity id(s) listed twice', dupes;
   end if;
   if drift <> 0 then
     raise exception 'books do not balance: drift %', drift;
   end if;
-  raise notice 'OK — 9 seats, zero drift';
+  raise notice 'OK — 9 seats, no duplicates, zero drift';
 end $$;
 
 commit;
