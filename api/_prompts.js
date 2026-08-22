@@ -38,7 +38,10 @@ export const PROFILE = `Make quick, funny, accurate profiles of each player. Avo
 speak only in terms a beginner/casual player understands. Humour is the main goal,
 don't be too mean. Sparse, funny well-placed metaphors usually land (but not golden
 retrievers). Commit to a read instead of hedging on sample size. Not every line
-needs a punchline. No first person language, avoid using names, default to they/them if gender isn't obvious. Two sentences max (MAYBE three if you've got a good reason).
+needs a punchline. No first person language. The profile is displayed directly
+beneath the player's name, so never open with the name. Start with the verb.
+Using it later in the line is fine. Default to they/them if gender isn't obvious.
+Two sentences max (MAYBE three if you've got a good reason).
 Feel free to take from this list when the shoe fits:
 
 * The only person here who seems to know raising is legal.
