@@ -206,6 +206,31 @@ commit;
 
 -- Then reload /chips/leaderboard, and sweep with query 0b in session-audit.sql —
 -- the night you just added must not appear in it.
+--
+-- If you want the insert to check itself before committing, add a guard keyed to
+-- the session's exact created_at — never to "the newest LIVECHIPS", since every
+-- hand-entered night shares that join code and two games on one evening make a
+-- date-ordered lookup a coin flip:
+--
+--   do $$
+--   declare sid uuid; seats int; drift int; dupes int;
+--   begin
+--     select id into strict sid from sessions
+--      where created_at = timestamptz '2026-08-19 20:00-06';   -- this night's
+--     select count(*), sum(stack) - sum(total_buyin) into seats, drift
+--       from players where session_id = sid;
+--     select count(*) into dupes from (
+--       select identity_id from players where session_id = sid
+--        group by identity_id having count(*) > 1) d;
+--     if seats <> 5 then raise exception 'expected 5 seats, got %', seats; end if;
+--     if dupes > 0 then raise exception '% identity id(s) listed twice', dupes; end if;
+--     if drift <> 0 then raise exception 'drift %', drift; end if;
+--     raise notice 'OK';
+--   end $$;
+--
+-- Put it between the insert and the commit, with the seat count set to however
+-- many players you listed. Any exception rolls the whole transaction back, so a
+-- failed run leaves no partial session behind.
 
 
 -- =====================================================================
