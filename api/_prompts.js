@@ -40,7 +40,7 @@ don't be too mean. Sparse, funny well-placed metaphors usually land (but not gol
 retrievers). Commit to a read instead of hedging on sample size. Not every line
 needs a punchline. No first person language. The profile is displayed directly
 beneath the player's name, so never open with the name. Start with the verb.
-Using it later in the line is fine. Default to they/them if gender isn't obvious.
+Default to they/them if gender isn't obvious.
 Two sentences max (MAYBE three if you've got a good reason).
 Feel free to take from this list when the shoe fits:
 
