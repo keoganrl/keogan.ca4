@@ -25,6 +25,9 @@
   let stats = $state<LifetimeStat[]>([]);
   let results = $state<SessionResult[]>([]);
   let profiles = $state<PlayerProfile[]>([]);
+  // Hand counts for everyone, for the profiles tab's ordering and its detail line.
+  // Cheap now that player_stats is a snapshot rather than a query.
+  let handCounts = $state<{ identity_id: string; hands: number }[]>([]);
   let loading = $state(true);
   let errorMsg = $state('');
   let sortBy = $state<Tab>('total_net');
@@ -36,10 +39,11 @@
     // Surface failures instead of silently rendering an empty board — a missing
     // view or a permissions error looks identical to "no games yet" otherwise.
     try {
-      const [statsRes, resultsRes, profilesRes] = await Promise.all([
+      const [statsRes, resultsRes, profilesRes, handsRes] = await Promise.all([
         supabase.from('lifetime_stats').select('*'),
         supabase.from('session_results').select('*'),
-        supabase.from('player_profiles').select('identity_id, profile, coaching, generated_at')
+        supabase.from('player_profiles').select('identity_id, profile, coaching, generated_at'),
+        supabase.from('player_stats').select('identity_id, hands')
       ]);
       if (statsRes.error) throw statsRes.error;
       stats = (statsRes.data ?? []) as LifetimeStat[];
@@ -59,6 +63,12 @@
         profiles = [];
       } else {
         profiles = (profilesRes.data ?? []) as PlayerProfile[];
+      }
+      if (handsRes.error) {
+        console.warn('player_stats unavailable — hand counts hidden:', handsRes.error);
+        handCounts = [];
+      } else {
+        handCounts = (handsRes.data ?? []) as { identity_id: string; hands: number }[];
       }
     } catch (e) {
       console.error('Leaderboard failed to load:', e);
@@ -161,14 +171,24 @@
     if (expanded) loadMyStats();
   }
 
-  // You first, so your own card is the one you land on; everyone else follows in a
-  // stable order that carries no ranking — this tab is a roster, not a table.
+  let handsOf = $derived(new Map(handCounts.map((h) => [h.identity_id, h.hands])));
+
+  // Most hands first. Hands rather than sessions because that is what the profiles
+  // are actually written from — someone who turned up twice and played 150 hands has
+  // a fuller profile than someone who turned up ten times and played 30. Ties fall
+  // back to name so the order is stable between loads.
   let roster = $derived(
     [...stats].sort((a, b) => {
-      if (isMe(a.identity_id) !== isMe(b.identity_id)) return isMe(a.identity_id) ? -1 : 1;
-      return a.display_name.localeCompare(b.display_name);
+      const diff = (handsOf.get(b.identity_id) ?? 0) - (handsOf.get(a.identity_id) ?? 0);
+      return diff !== 0 ? diff : a.display_name.localeCompare(b.display_name);
     })
   );
+
+  function handsLabel(id: string) {
+    const n = handsOf.get(id);
+    if (!n) return 'no hands recorded';
+    return `${n} hand${n === 1 ? '' : 's'}`;
+  }
 
   let sections = $derived(myStats ? statSections(myStats) : []);
   let profileOf = $derived(new Map(profiles.map((p) => [p.identity_id, p])));
@@ -267,9 +287,7 @@
             <button class="row-btn" aria-expanded={expanded} onclick={toggleExpanded}>
               <span class="who">
                 <span class="who-name">{player.display_name}</span>
-                <span class="who-detail">
-                  you · {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
-                </span>
+                <span class="who-detail">you · {handsLabel(player.identity_id)}</span>
                 {#if profileOf.get(player.identity_id)?.profile}
                   <span class="blurb">{profileOf.get(player.identity_id)!.profile}</span>
                 {/if}
@@ -282,9 +300,7 @@
             <div class="row-static">
               <span class="who">
                 <span class="who-name">{player.display_name}</span>
-                <span class="who-detail">
-                  {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
-                </span>
+                <span class="who-detail">{handsLabel(player.identity_id)}</span>
                 {#if profileOf.get(player.identity_id)?.profile}
                   <span class="blurb">{profileOf.get(player.identity_id)!.profile}</span>
                 {/if}
