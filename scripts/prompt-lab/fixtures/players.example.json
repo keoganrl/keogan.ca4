@@ -1,0 +1,20 @@
+{
+  "pulledAt": "synthetic — not real data",
+  "players": [
+    {
+      "name": "Player A",
+      "lifetime": { "sessions_played": 12, "total_net": 340, "biggest_win": 210, "times_first": 3, "times_last": 1, "total_buyin": 1200, "all_ins": 7 },
+      "style": { "hands": 312, "reliability": "ok", "vpip_pct": 24.5, "pfr_pct": 18.0, "vpip_pfr_gap": 6.5, "af": 2.4, "cbet_flop_pct": 65.0, "cbet_opps": 48, "fold_to_cbet_pct": 41.2, "faced_cbet_opps": 34, "steal_pct": 31.0, "steal_opps": 42, "fold_to_steal_pct": 62.0, "faced_steal_opps": 29, "wtsd_pct": 27.3, "saw_flop_hands": 121, "vpip_early_pct": 15.1, "early_hands": 93, "vpip_late_pct": 35.4, "late_hands": 105, "vpip_blinds_pct": 41.0, "blind_hands": 78, "chips_won": 5400, "biggest_pot": 920 }
+    },
+    {
+      "name": "Player B",
+      "lifetime": { "sessions_played": 11, "total_net": -120, "biggest_win": 90, "times_first": 1, "times_last": 4, "total_buyin": 1100, "all_ins": 12 },
+      "style": { "hands": 288, "reliability": "ok", "vpip_pct": 52.0, "pfr_pct": 12.0, "vpip_pfr_gap": 40.0, "af": 0.7, "cbet_flop_pct": 38.0, "cbet_opps": 26, "fold_to_cbet_pct": 22.0, "faced_cbet_opps": 55, "steal_pct": 9.0, "steal_opps": 33, "fold_to_steal_pct": 30.0, "faced_steal_opps": 40, "wtsd_pct": 42.0, "saw_flop_hands": 150, "vpip_early_pct": 44.0, "early_hands": 82, "vpip_late_pct": 58.0, "late_hands": 96, "vpip_blinds_pct": 61.0, "blind_hands": 74, "chips_won": 3900, "biggest_pot": 640 }
+    },
+    {
+      "name": "Player C",
+      "lifetime": { "sessions_played": 4, "total_net": 60, "biggest_win": 150, "times_first": 1, "times_last": 0, "total_buyin": 400, "all_ins": 1 },
+      "style": { "hands": 41, "reliability": "anecdote", "vpip_pct": 19.5, "pfr_pct": 14.6, "vpip_pfr_gap": 4.9, "af": 3.1, "cbet_flop_pct": 80.0, "cbet_opps": 5, "fold_to_cbet_pct": null, "faced_cbet_opps": 3, "steal_pct": null, "steal_opps": 0, "fold_to_steal_pct": 50.0, "faced_steal_opps": 4, "wtsd_pct": 22.0, "saw_flop_hands": 18, "vpip_early_pct": 8.0, "early_hands": 12, "vpip_late_pct": 28.0, "late_hands": 14, "vpip_blinds_pct": 25.0, "blind_hands": 15, "chips_won": 700, "biggest_pot": 260 }
+    }
+  ]
+}

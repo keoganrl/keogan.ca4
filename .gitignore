@@ -28,3 +28,8 @@ pnpm-debug.log*
 
 # astro
 .astro/
+
+# prompt lab: real-name fixtures and generated output stay local
+scripts/prompt-lab/fixtures/players.real.json
+scripts/prompt-lab/out/
+.env.local

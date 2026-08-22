@@ -25,6 +25,7 @@
     "uqr": "^0.1.3"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "vitest": "^3.2.7"
   }
 }
