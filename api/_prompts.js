@@ -37,8 +37,8 @@ export const PROFILE = `Make quick, funny, accurate profiles of each player. Avo
 speak only in terms a beginner/casual player understands. Humour is the main goal,
 don't be too mean. Sparse, funny well-placed metaphors usually land (but not golden
 retrievers). Commit to a read instead of hedging on sample size. Not every line
-needs a punchline. No first person language. Feel free to take from this list when
-the shoe fits:
+needs a punchline. No first person language. One to three sentences. Feel free to
+take from this list when the shoe fits:
 
 * The only person here who seems to know raising is legal.
 * [...] but can't resist paying you off at the end.
