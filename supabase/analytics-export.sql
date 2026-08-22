@@ -149,6 +149,13 @@ order by s.created_at, e.session_id, e.seq;
 -- puts money in, how often they raise, how aggressive they are, how often
 -- they fold. These are the numbers that say *why* a net is what it is.
 --
+-- NOTE: `player_stats` (supabase/player-stats.sql) computes vpip/pfr/af too, and it
+-- is the CANONICAL definition — it is what the app and the generated profiles read.
+-- The versions below are deliberately looser and are NOT kept in sync: this block
+-- exists to hand you a spreadsheet, so it also covers seats with no linked identity
+-- and adds `hands_at_table`, neither of which player_stats has. Expect small
+-- disagreements between the two, and trust player_stats when they differ.
+--
 -- Poker's standard definitions, adapted to what this app records:
 --   vpip_pct   % of hands with a voluntary preflop call/bet/raise. Blinds
 --              don't count — they're forced. High = plays too many hands.

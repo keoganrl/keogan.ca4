@@ -218,7 +218,7 @@ const hasChips = (p: Player) => p.stack > 0;
 // Would the player still be broke after this hand's bets are refunded to them?
 const bustedAfterRefund = (p: Player) => p.stack + p.hand_total_bet === 0;
 
-export async function rotateButton(
+async function rotateButton(
 	session: Session,
 	eligiblePlayers: Player[],
 	allPlayers: Player[] = eligiblePlayers
@@ -226,19 +226,6 @@ export async function rotateButton(
 	if (!eligiblePlayers.length) return;
 	const nextId = nextButtonPlayerId(session, eligiblePlayers, allPlayers);
 	await supabase.from('sessions').update({ button_player_id: nextId }).eq('id', session.id);
-}
-
-// Sets current_actor_id to the first preflop actor. Call once when a session becomes active
-// and current_actor_id is still null. Idempotent — safe to call from multiple clients.
-export async function initTurnOrder(session: Session, activePlayers: Player[]): Promise<void> {
-	if (!activePlayers.length) return;
-	const order = getActionOrder(session, activePlayers, true);
-	if (!order.length) return;
-	await supabase
-		.from('sessions')
-		.update({ current_actor_id: order[0].id })
-		.eq('id', session.id)
-		.is('current_actor_id', null);
 }
 
 // Advances current_actor_id to the next eligible player (active, not folded, not all-in) in seat order.
@@ -463,15 +450,6 @@ export async function advanceStreet(
 	await logEvent(session.id, 'street', { street: nextStreet });
 
 	return nextStreet.charAt(0).toUpperCase() + nextStreet.slice(1);
-}
-
-// Resets current_bet and all players' current_round_bet for the next street.
-// Kept for backward compatibility; prefer advanceStreet for automated flow.
-export async function newStreet(session: Session): Promise<void> {
-	await Promise.all([
-		supabase.from('sessions').update({ current_bet: 0 }).eq('id', session.id),
-		supabase.from('players').update({ current_round_bet: 0 }).eq('session_id', session.id)
-	]);
 }
 
 export async function endHand(

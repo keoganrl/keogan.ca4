@@ -133,6 +133,51 @@ Two things follow, and the file explains both at length:
   blunt `reliability` column, because a steal percentage off three opportunities is
   an anecdote. Filter on the counts before quoting anything.
 
+### Profiles, coaching, and session recaps
+
+The profiles tab lists everyone with a generated one-or-two-line profile beneath
+their name, ordered by hands played. Tap your own row and it expands to coaching
+("what to work on", visible only on your own device) above your full stat
+breakdown. When a session ends, the game-over screen streams a short recap of it.
+
+All three are written by Claude Opus 5 from `api/_prompts.js`, which is the single
+source: the prompt lab reads the same file, so a variant is always compared against
+what is actually live.
+
+The interesting part is what *doesn't* happen. Most sessions cost nothing:
+`api/profile.js` compares each player's figures against the snapshot their existing
+text was written from and returns without calling the model unless someone has
+moved past a threshold. A profile that rewrote itself every session would carry no
+weight, so the ones that do change mean something. When a call is warranted, the
+whole table goes in one request with only the drifted players named for rewriting,
+because the best lines are comparisons and those need everyone in view.
+
+Identity flows on an opaque key, not a display name. This app ships a merge tool
+precisely because one person can appear as several identities, and those duplicates
+share a name — keyed by name, one person's profile can land on another's row.
+
+The recap is the only endpoint a browser can reach, so it cannot hold a secret. It
+will only write about a session that exists, has ended, has at least 2 players and
+5 dealt hands, and has no recap yet; that last condition caps spend at one
+generation per session, ever. Runs about 2 seconds to first token.
+
+Setup lives outside this repo: `ANTHROPIC_API_KEY` and `PROFILE_SECRET` in Vercel,
+a Supabase webhook on `sessions` UPDATE pointing at `/api/profile`, and the
+`player-profiles.sql` / `session-recaps.sql` migrations. See CLAUDE.md.
+
+### Tuning the prompts
+
+`scripts/prompt-lab/` holds an offline harness. The quick loop needs no setup:
+
+    npm run lab:table
+
+prints the live stats as a markdown table to paste into an ordinary Claude chat.
+That is how the current profile prompt was found, and it beats a harness for
+finding the voice. `npm run lab` is for the later job of comparing candidates
+properly: it runs each variant twice against identical input, so a real
+improvement can be told apart from a lucky generation, and it can run the same
+prompt across models.
+
 ### Exporting the data for player analytics
 
 `supabase/analytics-export.sql` pulls the whole history out in analysis-ready

@@ -108,11 +108,6 @@ export async function mergeIdentities(keepId: string, ghostIds: string[]): Promi
 	await supabase.from('players_identity').delete().in('id', ghosts);
 }
 
-export async function getSession(sessionId: string): Promise<Session | null> {
-	const { data } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
-	return (data as Session) ?? null;
-}
-
 // The joiner does not choose a stack: the host fixed sessions.starting_stack at setup,
 // and every joiner buys in for exactly that amount.
 export async function joinSession(

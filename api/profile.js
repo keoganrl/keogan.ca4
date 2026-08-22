@@ -14,31 +14,12 @@
 // who seems to know raising is legal"), and those only exist if the model can see
 // the whole table.
 import Anthropic from '@anthropic-ai/sdk';
+import { db, json } from './_supabase.js';
 import { selectForRewrite, snapshotOf } from './_drift.js';
 import { SHARED, PROFILE, COACHING } from './_prompts.js';
 
 const MODEL = 'claude-opus-5';
 
-const db = (path, init = {}) =>
-  fetch(`${process.env.PUBLIC_SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: process.env.PUBLIC_SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${process.env.PUBLIC_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      ...init.headers,
-    },
-  });
-
-async function json(path, init) {
-  const r = await db(path, init);
-  if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
-  // PostgREST answers a write with 201 and an EMPTY body unless asked for a
-  // representation, and .json() on empty input throws "Unexpected end of JSON
-  // input" — which reads like a model failure when the write in fact succeeded.
-  const body = await r.text();
-  return body ? JSON.parse(body) : null;
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

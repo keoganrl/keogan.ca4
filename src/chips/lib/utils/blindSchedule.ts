@@ -38,14 +38,6 @@ function suggestStartingIndex(buyIn: number, targetBBMultiplier = 75): number {
 	return best;
 }
 
-export function suggestCashBlinds(
-	buyIn: number,
-	sessionMinutes: CashSessionLength = 120
-): [number, number] {
-	const idx = suggestStartingIndex(buyIn, CASH_SESSION_TARGET_BB[sessionMinutes]);
-	return NICE_BLINDS[idx];
-}
-
 // Every rung doubles the one before (25/50 → 50/100 → 100/200): elimination
 // rounds climb exactly one rung, so "someone busted" always means "blinds
 // doubled". NICE_BLINDS only picks the start.

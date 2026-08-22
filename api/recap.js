@@ -9,6 +9,7 @@
 // do exactly once per real game.
 import Anthropic from '@anthropic-ai/sdk';
 import { SHARED, RECAP } from './_prompts.js';
+import { db, json, countOf } from './_supabase.js';
 
 const MODEL = 'claude-opus-5';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,29 +20,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_PLAYERS = 2;
 const MIN_HANDS = 5;
 
-const db = (path, init = {}) =>
-  fetch(`${process.env.PUBLIC_SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: process.env.PUBLIC_SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${process.env.PUBLIC_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      ...init.headers,
-    },
-  });
 
-async function json(path, init) {
-  const r = await db(path, init);
-  if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
-  return r.status === 204 ? null : r.json();
-}
-
-async function countOf(path) {
-  const r = await db(`${path}&select=id&limit=1`, { headers: { Prefer: 'count=exact' } });
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
-  // content-range comes back as "0-0/12"; the total is what we want.
-  return Number(r.headers.get('content-range')?.split('/')[1] ?? 0);
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

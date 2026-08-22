@@ -40,9 +40,12 @@ const state = {
 global.fetch = vi.fn(async (url, init = {}) => {
   const path = String(url).split('/rest/v1/')[1];
   calls.db.push({ path, method: init.method ?? 'GET', body: init.body });
+  // text(), not json(): the shared helper reads bodies as text so it can tolerate
+  // the empty one PostgREST returns from a write.
   const ok = (data, headers = {}) => ({
     ok: true,
     status: 200,
+    text: async () => (data === null ? '' : JSON.stringify(data)),
     json: async () => data,
     headers: { get: (k) => headers[k.toLowerCase()] ?? null }
   });
@@ -57,7 +60,7 @@ global.fetch = vi.fn(async (url, init = {}) => {
     return ok([{ display_name: 'Ada', stack: 300, total_buyin: 100, identity_id: 'a' }]);
   if (path.startsWith('player_profiles')) return ok([{ identity_id: 'a', profile: 'calls a lot' }]);
   if (path === 'session_recaps' && init.method === 'POST')
-    return state.claimOk ? ok([]) : { ok: false, status: 409, text: async () => 'conflict' };
+    return state.claimOk ? ok(null) : { ok: false, status: 409, text: async () => 'conflict' };
   if (path.startsWith('session_recaps')) return ok([]);
   return { ok: false, status: 404, text: async () => 'unknown' };
 });
