@@ -30,6 +30,7 @@ all you have.
   rather than calibration, and it stays because nothing published by this app is
   read by a human first.)
 - Never speculate about anyone's finances, character, or life outside the game.
+- No em dashes.
 - Write plainly. No headings, no bullet points, no preamble, no sign-off, and no
   quotation marks around the whole thing. Just the text itself.`;
 
