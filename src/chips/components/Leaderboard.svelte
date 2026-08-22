@@ -170,13 +170,15 @@
   );
 
   const columns: { key: Tab; label: string }[] = [
+    // Profiles leads the row but is not the default — sortBy starts on 'total_net',
+    // so the page still opens on the board and this is the first thing beside it.
+    { key: 'profiles', label: 'profiles' },
     { key: 'total_net', label: 'net' },
     { key: 'biggest_win', label: 'best win' },
     { key: 'times_first', label: 'times first' },
     { key: 'times_last', label: 'times last' },
     { key: 'all_ins', label: 'all-ins' },
-    { key: 'chaos', label: 'chaos' },
-    { key: 'profiles', label: 'profiles' }
+    { key: 'chaos', label: 'chaos' }
   ];
 
   function toggleHighlight(id: string) {
@@ -286,7 +288,7 @@
                   <h3 class="panel-title">{section.title}</h3>
                   <dl class="statlist">
                     {#each section.rows as row (row.label)}
-                      <div class="statline" class:faint={row.confidence !== 'ok'}>
+                      <div class="statline">
                         <dt>
                           <span class="statline-label">{row.label}</span>
                           <span class="statline-hint">{row.hint}</span>
@@ -684,13 +686,6 @@
 
   .statline:last-child {
     border-bottom: 0;
-  }
-
-  /* A thinly-sampled figure is dimmed rather than hidden — you can still read it,
-     it just stops competing with the numbers that have earned their weight.
-     Dimming is never the only signal: the basis line beside it says how thin. */
-  .statline.faint .statline-value {
-    color: var(--faint);
   }
 
   .statline dt {

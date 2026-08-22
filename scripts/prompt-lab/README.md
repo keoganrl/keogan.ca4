@@ -46,7 +46,19 @@ not a prompt difference. It costs pennies and stops you shipping a prompt that
 got lucky once. This matters more than usual on Fable 5, which rejects
 `temperature` outright — there is no knob to steady the output with.
 
-## Writing a variant
+## How a prompt is assembled
 
-A prompt file is plain markdown. `{{STATS}}` is replaced with that player's
-JSON. Everything else is sent as the system prompt verbatim.
+Two layers, like a personalisation setting plus a task instruction:
+
+    prompts/_shared.md        the house prompt — sent with every kind
+    prompts/<kind>-<name>.md  the task prompt — one per variant
+
+They are concatenated in that order and sent as one system prompt. Put anything
+true of all three features in `_shared.md` (who the audience is, the never-invent
+rule, the small-sample rule); put the actual job in the variant. Where the two
+overlap the variant wins, because it comes second.
+
+`_shared.md` is not a variant and never becomes a column — files starting with
+`_` are skipped.
+
+`{{STATS}}` is replaced with that player's JSON, in whichever layer it appears.

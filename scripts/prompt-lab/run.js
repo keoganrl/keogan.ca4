@@ -36,7 +36,16 @@ if (path.endsWith('players.example.json')) {
 const fixture = JSON.parse(readFileSync(path, 'utf8'));
 const players = limit ? fixture.players.slice(0, limit) : fixture.players;
 
+// One house prompt shared by every kind — voice, the group, the standing rules —
+// so a change to how the app talks is made once rather than in each variant. Task
+// instructions come after it, and win where they overlap.
+const sharedPath = join(here, 'prompts', '_shared.md');
+const shared = existsSync(sharedPath) ? readFileSync(sharedPath, 'utf8').trim() : '';
+
+// Leading-underscore files are shared fragments, not variants, and the kind- prefix
+// already excludes them; kept explicit so a future _notes.md cannot become a column.
 const variants = readdirSync(join(here, 'prompts'))
+  .filter((f) => !f.startsWith('_'))
   .filter((f) => f.startsWith(`${kind}-`) && f.endsWith('.md'))
   .map((f) => ({ name: f.replace(/\.md$/, ''), text: readFileSync(join(here, 'prompts', f), 'utf8') }));
 
@@ -48,7 +57,8 @@ if (variants.length === 0) {
 const client = new Anthropic();
 
 async function generate(variant, player) {
-  const system = variant.text.replace('{{STATS}}', JSON.stringify(player, null, 2));
+  const body = shared ? `${shared}\n\n---\n\n${variant.text}` : variant.text;
+  const system = body.replace('{{STATS}}', JSON.stringify(player, null, 2));
   try {
     const res = await client.beta.messages.create({
       model,
