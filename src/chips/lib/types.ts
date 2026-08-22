@@ -156,3 +156,13 @@ export interface PlayerStat {
 	chips_won: number;
 	biggest_pot: number;
 }
+
+// One row of player_profiles: the generated blurb everyone sees, and the coaching
+// note shown only to the player it is about. Written by api/profile.js when a
+// session ends and the player's numbers have moved (see api/_drift.js).
+export interface PlayerProfile {
+	identity_id: string;
+	profile: string | null;
+	coaching: string | null;
+	generated_at: string;
+}

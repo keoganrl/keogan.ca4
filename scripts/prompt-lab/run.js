@@ -7,6 +7,7 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
+import { SHARED, PROFILE, COACHING } from '../../api/_prompts.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -41,11 +42,12 @@ if (path.endsWith('players.example.json')) {
 const fixture = JSON.parse(readFileSync(path, 'utf8'));
 const players = limit ? fixture.players.slice(0, limit) : fixture.players;
 
-// One house prompt shared by every kind — voice, the group, the standing rules —
-// so a change to how the app talks is made once rather than in each variant. Task
-// instructions come after it, and win where they overlap.
-const sharedPath = join(here, 'prompts', '_shared.md');
-const shared = existsSync(sharedPath) ? readFileSync(sharedPath, 'utf8').trim() : '';
+// The house prompt and the live task prompts come from api/_prompts.js — the same
+// file the deployed function uses. That is why "shipped" is always a column here:
+// a variant is only interesting against what is actually running, and a copy of the
+// live prompt kept alongside it would drift the first time one was edited.
+const shared = SHARED;
+const SHIPPED = { profile: PROFILE, coaching: COACHING };
 
 // Leading-underscore files are shared fragments, not variants, and the kind- prefix
 // already excludes them; kept explicit so a future _notes.md cannot become a column.
@@ -54,8 +56,12 @@ const variants = readdirSync(join(here, 'prompts'))
   .filter((f) => f.startsWith(`${kind}-`) && f.endsWith('.md'))
   .map((f) => ({ name: f.replace(/\.md$/, ''), text: readFileSync(join(here, 'prompts', f), 'utf8') }));
 
+if (SHIPPED[kind]) {
+  variants.unshift({ name: `${kind}-shipped`, text: `${SHIPPED[kind]}\n\n{{STATS}}` });
+}
+
 if (variants.length === 0) {
-  console.error(`No prompts/${kind}-*.md files.`);
+  console.error(`No shipped prompt or prompts/${kind}-*.md files for kind "${kind}".`);
   process.exit(1);
 }
 

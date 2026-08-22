@@ -11,7 +11,12 @@
   import { chaosScores, MIN_CHAOS_SESSIONS } from '../lib/utils/chaos';
   import { statSections } from '../lib/utils/playerStats';
   import NetChart from './NetChart.svelte';
-  import type { LifetimeStat, PlayerStat, SessionResult } from '../lib/types';
+  import type {
+    LifetimeStat,
+    PlayerProfile,
+    PlayerStat,
+    SessionResult
+  } from '../lib/types';
 
   // The five stat columns are all sorts of the same lifetime board; 'chaos' and
   // 'profiles' each have their own rows, so they are tabs rather than more sorts.
@@ -19,6 +24,7 @@
 
   let stats = $state<LifetimeStat[]>([]);
   let results = $state<SessionResult[]>([]);
+  let profiles = $state<PlayerProfile[]>([]);
   let loading = $state(true);
   let errorMsg = $state('');
   let sortBy = $state<Tab>('total_net');
@@ -30,9 +36,10 @@
     // Surface failures instead of silently rendering an empty board — a missing
     // view or a permissions error looks identical to "no games yet" otherwise.
     try {
-      const [statsRes, resultsRes] = await Promise.all([
+      const [statsRes, resultsRes, profilesRes] = await Promise.all([
         supabase.from('lifetime_stats').select('*'),
-        supabase.from('session_results').select('*')
+        supabase.from('session_results').select('*'),
+        supabase.from('player_profiles').select('identity_id, profile, coaching, generated_at')
       ]);
       if (statsRes.error) throw statsRes.error;
       stats = (statsRes.data ?? []) as LifetimeStat[];
@@ -44,6 +51,14 @@
         results = [];
       } else {
         results = (resultsRes.data ?? []) as SessionResult[];
+      }
+      // Same reasoning as the chart: a database without the profiles table should
+      // still render the board rather than showing everyone an error.
+      if (profilesRes.error) {
+        console.warn('player_profiles unavailable — blurbs hidden:', profilesRes.error);
+        profiles = [];
+      } else {
+        profiles = (profilesRes.data ?? []) as PlayerProfile[];
       }
     } catch (e) {
       console.error('Leaderboard failed to load:', e);
@@ -156,6 +171,7 @@
   );
 
   let sections = $derived(myStats ? statSections(myStats) : []);
+  let profileOf = $derived(new Map(profiles.map((p) => [p.identity_id, p])));
 
   let sorted = $derived(
     sortBy === 'chaos' || sortBy === 'profiles'
@@ -254,6 +270,9 @@
                 <span class="who-detail">
                   you · {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
                 </span>
+                {#if profileOf.get(player.identity_id)?.profile}
+                  <span class="blurb">{profileOf.get(player.identity_id)!.profile}</span>
+                {/if}
               </span>
               <!-- Rotates to point down when open; aria-expanded above is what
                    actually announces the state, so this is decorative. -->
@@ -266,12 +285,23 @@
                 <span class="who-detail">
                   {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
                 </span>
+                {#if profileOf.get(player.identity_id)?.profile}
+                  <span class="blurb">{profileOf.get(player.identity_id)!.profile}</span>
+                {/if}
               </span>
             </div>
           {/if}
 
           {#if isMe(player.identity_id) && expanded}
             <div class="panel">
+              {#if profileOf.get(player.identity_id)?.coaching}
+                <!-- Only ever rendered inside your own row, which is the only row that
+                     opens. Coaching is written to be read by the person it is about. -->
+                <div class="coaching">
+                  <h3 class="panel-title">What to work on</h3>
+                  <p>{profileOf.get(player.identity_id)!.coaching}</p>
+                </div>
+              {/if}
               {#if myStatsState === 'loading'}
                 <p class="cnote">Loading…</p>
               {:else if myStatsState === 'error'}
@@ -653,6 +683,26 @@
     padding: 0.6rem 0 0.4rem;
   }
 
+  /* The blurb is the point of this tab, so it gets body-text weight rather than the
+     muted treatment the metadata line above it uses. */
+  .blurb {
+    display: block;
+    margin-top: 0.4rem;
+    max-width: 34rem;
+    color: var(--ink-soft);
+    white-space: normal;
+  }
+
+  .coaching {
+    margin-bottom: 1.6rem;
+  }
+
+  .coaching p {
+    margin: 0;
+    max-width: 34rem;
+    color: var(--ink-soft);
+  }
+
   .panel-basis {
     margin: 0 0 1.1rem;
   }
@@ -667,7 +717,8 @@
     margin: 1.4rem 0 0.5rem;
   }
 
-  .panel-title:first-of-type {
+  .panel > .panel-title:first-child,
+  .coaching .panel-title {
     margin-top: 0;
   }
 
