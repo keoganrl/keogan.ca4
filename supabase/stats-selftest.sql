@@ -36,7 +36,7 @@ insert into players_identity (id, display_name) values
   ('ffffffff-0000-0000-0000-00000000000f', 'selftest F'),
   ('99999999-0000-0000-0000-000000000009', 'selftest G');
 
--- s1: flat 1/2 game (no schedule). s2: escalated night that started at 25/50 and
+-- s1: flat 1/2 game (no schedule). s2: escalated session that started at 25/50 and
 -- ended at 100/200 — net_bb must divide by the 50, not the 200.
 insert into sessions (id, join_code, status, small_blind, big_blind, starting_stack) values
   ('11111111-0000-0000-0000-000000000001', 'selftest-one', 'ended', 1, 2, 1000);
@@ -211,7 +211,7 @@ act as (
   from player_stats
   where display_name like 'selftest _'
 ),
--- session_results: net_bb must use the night's STARTING big blind.
+-- session_results: net_bb must use the session's STARTING big blind.
 -- s1 has no schedule (starting = final = 2): A's net 210 -> 105.00.
 -- s2 escalated 50 -> 200: E's net 500 -> 10.00 by the starting blind.
 sr_exp(display_name, net, net_bb) as (values

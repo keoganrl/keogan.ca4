@@ -748,10 +748,10 @@ export async function endSession(sessionId: string): Promise<void> {
 	// sessions.pot — NOT hand_total_bet — is what's actually owed. hand_total_bet is
 	// only cleared by the next deal (endHand), so after a hand plays to showdown it
 	// still holds everyone's commitment even though awardPayouts already paid that
-	// exact sum out as the pot. Ending the session there (the normal way a night
+	// exact sum out as the pot. Ending the session there (the normal way a session
 	// finishes: last hand, then "end game") refunded the final hand a second time, on
 	// top of the pot the winners had just been credited. Seen live 2026-08-14: a
-	// 9000-chip night cashed out at 12290, over by exactly the last hand's 3290.
+	// 9000-chip session cashed out at 12290, over by exactly the last hand's 3290.
 	//
 	// So: refund at most the pot. pot == 0 means the hand was awarded and nothing is
 	// owed; pot > 0 means it was abandoned mid-hand and the chips on the felt go back.

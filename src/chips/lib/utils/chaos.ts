@@ -10,8 +10,8 @@ export interface ChaosScore {
 	/** Standard deviation of this player's per-session results, in big blinds. */
 	swing: number;
 	/** Biggest single-session win and loss, in big blinds — what the swing is made of. */
-	bestNight: number;
-	worstNight: number;
+	bestSession: number;
+	worstSession: number;
 	/** False below MIN_CHAOS_SESSIONS, where a deviation is noise rather than a read. */
 	qualified: boolean;
 }
@@ -62,8 +62,8 @@ export function chaosScores(rows: SessionResult[]): ChaosScore[] {
 			displayName: name,
 			sessionsPlayed: n,
 			swing,
-			bestNight: Math.max(...values),
-			worstNight: Math.min(...values),
+			bestSession: Math.max(...values),
+			worstSession: Math.min(...values),
 			qualified: n >= MIN_CHAOS_SESSIONS
 		};
 	});

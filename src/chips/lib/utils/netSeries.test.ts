@@ -51,7 +51,7 @@ describe('buildNetSeries', () => {
 		expect(data.series[0].points).toEqual([0, 50, 55]);
 	});
 
-	it('carries a total flat through nights a player sat out', () => {
+	it('carries a total flat through sessions a player sat out', () => {
 		const rows = [
 			row('ada', 'a', 100, { created_at: '2026-01-01T00:00:00Z' }),
 			row('bo', 'a', -100, { created_at: '2026-01-01T00:00:00Z' }),

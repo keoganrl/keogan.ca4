@@ -5,7 +5,7 @@
 -- once throws away everything above it.
 --
 -- Every block runs as-is, against the MOST RECENT session. To point one at a
--- different night, replace its first line with that session's id:
+-- different session, replace its first line with that session's id:
 --
 --     with s as (select 'a1b2c3d4-....'::uuid as id)
 --
@@ -27,14 +27,14 @@
 
 
 -- =====================================================================
--- 0. Which session is actually tonight's?
+-- 0. Which session is actually the current one?
 -- =====================================================================
 -- Run this FIRST, even if you're confident in the id. Join codes come from a
--- fixed 15-word pool, so they get REUSED across nights — and findSessionByCode
+-- fixed 15-word pool, so they get REUSED across sessions — and findSessionByCode
 -- resolves a code to "the most recent session that isn't ended". If an old
 -- session on the same code was left un-ended, some phones can join *that* one
 -- while the host plays in a new one. Two sessions, split records, both look
--- half-wrong. Two rows for one night here is your answer.
+-- half-wrong. Two rows sharing one join code here is your answer.
 
 select
   s.id,
@@ -62,14 +62,14 @@ order by s.created_at desc;
 -- The same conservation check as query 3, across every session at once. This
 -- is ground truth: it reads the stacks themselves rather than replaying the
 -- ledger, so it catches drift whatever the cause. An empty result means every
--- night's books are square. Anything listed, take to query 5 / query 6.
+-- session's books are square. Anything listed, take to query 5 / query 6.
 --
 -- Sessions still in progress legitimately show chips in the pot; that's why
 -- pot is added in rather than ignored.
 
 select
   s.id,
-  s.created_at::date              as night,
+  s.created_at::date              as session_date,
   s.status,
   count(p.id)                     as players,
   sum(p.total_buyin)              as bought_in,
@@ -101,8 +101,8 @@ join s on s.id = ses.id;
 -- full stop — there is no other source for it.
 --
 -- Things to eyeball: a total_buyin that isn't starting_stack + (rebuys x
--- rebuy size); is_active = false on someone who played all night (they left or
--- were kicked and their row stopped being dealt in); hand_total_bet > 0 on a
+-- rebuy size); is_active = false on someone who played the entire session
+-- (they left or were kicked and their row stopped being dealt in); hand_total_bet > 0 on a
 -- session whose status is 'ended' (chips stranded on the felt — endSession is
 -- supposed to refund those).
 
@@ -312,8 +312,8 @@ select
 -- =====================================================================
 -- Fixed 2026-08-14, but any session that ended BEFORE that fix carries it.
 -- endSession used to hand back every player's `hand_total_bet`, which is only
--- cleared by the *next* deal — so ending the night right after the last
--- showdown (the normal way a night finishes) refunded that hand's commitment
+-- cleared by the *next* deal — so ending the session right after the last
+-- showdown (the normal way a session finishes) refunded that hand's commitment
 -- on top of the pot the winners had already been awarded.
 --
 -- Signature: query 3's drift is positive and equals the total committed in the
@@ -335,10 +335,10 @@ select
 -- =====================================================================
 -- 9. Why the lifetime leaderboard might disagree with the session
 -- =====================================================================
--- lifetime_stats only counts sessions with status = 'ended' — a night left
+-- lifetime_stats only counts sessions with status = 'ended' — a session left
 -- 'active' contributes nothing to anyone's totals — and it groups by
 -- identity_id. A player who joined from a fresh browser/incognito minted a new
--- players_identity row, so their night lands on a second, near-empty entry
+-- players_identity row, so their session lands on a second, near-empty entry
 -- instead of their history. Rows below with a null identity_id, or an identity
 -- whose only session is this one, are the ones to merge (mergeIdentities in
 -- src/chips/lib/services/game.ts does that from the app).

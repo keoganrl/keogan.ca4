@@ -2,7 +2,7 @@
 --
 -- endSession handed every player their `hand_total_bet` back before closing the
 -- books. That column is only cleared by the next deal, so ending a session right
--- after a hand finished — the normal way a night ends — refunded that hand's
+-- after a hand finished — the normal way a session ends — refunded that hand's
 -- commitment on top of the pot the winners had already been awarded. Fixed in
 -- src/chips/lib/services/table.ts (refunds are now capped at sessions.pot); this
 -- script corrects the sessions played before the fix.
@@ -58,7 +58,7 @@ update sessions set pot = 0 where id = '79dfbe0a-cc4d-4261-a022-db304120c0f2';
 commit;
 
 -- Confirm: expect zero rows.
-select s.created_at::date as night, sum(p.stack) + s.pot - sum(p.total_buyin) as drift
+select s.created_at::date as session_date, sum(p.stack) + s.pot - sum(p.total_buyin) as drift
 from sessions s
 join players p on p.session_id = s.id
 group by s.id

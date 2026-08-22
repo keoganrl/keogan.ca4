@@ -33,7 +33,7 @@
 --
 -- Three consequences worth knowing:
 --   * At 3-handed there is no cutoff — the ring is SB, BB, button — and at 2-handed no
---     early position either. Short-handed nights therefore contribute nothing to the CO
+--     early position either. Short-handed sessions therefore contribute nothing to the CO
 --     columns rather than contributing something wrong.
 --   * `n_players` counts the players who appear in that hand's ledger, which is the only
 --     record of who was in it. The one way that drifts from who actually sat down is a
