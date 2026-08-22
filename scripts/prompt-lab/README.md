@@ -5,38 +5,32 @@ data, without deploying anything or touching the live site.
 
 ## Setup
 
-`@anthropic-ai/sdk` is already a devDependency — `npm install` is enough.
+    cp .env.local.example .env.local
 
-Put credentials in `.env.local` at the repo root (gitignored):
+Fill in the three values it asks for. `.env.local` is gitignored.
 
-    ANTHROPIC_API_KEY=sk-ant-...
-    PUBLIC_SUPABASE_URL=https://....supabase.co
-    PUBLIC_SUPABASE_ANON_KEY=...
+## Pull your real data, once
 
-## Pull a fixture, once
+    npm run lab:pull
 
-    node --env-file=.env.local scripts/prompt-lab/pull.js
-
-Writes `fixtures/players.json` with **anonymised** names (Player A, Player B…).
-Pass `--real-names` to keep them. The anonymised file is safe to commit; a real
-one is not, and `.gitignore` blocks it.
+Reads your live Supabase and writes `fixtures/players.json` with **anonymised**
+names (Player A, Player B…). Add `-- --real-names` to keep them; that file is
+gitignored, the anonymised one is safe to commit.
 
 Pull once and reuse it. If every run re-queries Supabase the data drifts under
 you, and you can no longer tell whether a better output came from a better
-prompt or a different night.
+prompt or a different night. Re-run it whenever you want fresher numbers.
 
 ## Run
 
-    node --env-file=.env.local scripts/prompt-lab/run.js
+    npm run lab                        # profiles, both variants, 2 reps
+    npm run lab -- --kind coaching     # the coaching prompts instead
+    npm run lab -- --model claude-opus-5
+    npm run lab -- --players 3         # keep it cheap while finding the shape
+    npm run lab -- --reps 3            # when two variants look close
 
-    --kind profile|coaching     which prompt folder to run (default: profile)
-    --model claude-fable-5      any model id (default: claude-fable-5)
-    --reps 2                    generations per variant (default: 2)
-    --players 4                 how many fixture players to run (default: all)
-
-Every `prompts/<kind>-*.md` file is a variant; all of them run against the same
-players. Results land in `out/<timestamp>.html` — open it in a browser and read
-the variants side by side.
+Everything after `--` is passed through. Results land in `out/<timestamp>.html` —
+open it in a browser and read the variants side by side.
 
 ## Why two reps
 

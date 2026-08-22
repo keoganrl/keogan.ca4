@@ -12,7 +12,7 @@ const url = process.env.PUBLIC_SUPABASE_URL;
 const key = process.env.PUBLIC_SUPABASE_ANON_KEY;
 if (!url || !key) {
   console.error('Missing PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY.');
-  console.error('Run with: node --env-file=.env.local scripts/prompt-lab/pull.js');
+  console.error('Copy .env.local.example to .env.local and fill it in, then: npm run lab:pull');
   process.exit(1);
 }
 

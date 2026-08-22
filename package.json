@@ -7,7 +7,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lab:pull": "node --env-file-if-exists=.env.local scripts/prompt-lab/pull.js",
+    "lab": "node --env-file-if-exists=.env.local scripts/prompt-lab/run.js"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.18",

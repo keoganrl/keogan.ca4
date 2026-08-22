@@ -15,6 +15,11 @@ function arg(name, fallback) {
   return i === -1 ? fallback : process.argv[i + 1];
 }
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('No ANTHROPIC_API_KEY. Copy .env.local.example to .env.local and fill it in.');
+  process.exit(1);
+}
+
 const kind = arg('kind', 'profile');
 const model = arg('model', 'claude-fable-5');
 const reps = Number(arg('reps', 2));
