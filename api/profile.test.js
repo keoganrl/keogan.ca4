@@ -80,8 +80,8 @@ beforeEach(() => {
         type: 'text',
         text: JSON.stringify({
           players: [
-            { display_name: 'Ada', profile: 'p-ada', coaching: 'c-ada' },
-            { display_name: 'Bo', profile: 'p-bo', coaching: 'c-bo' }
+            { player_key: 'p1', profile: 'p-ada', coaching: 'c-ada' },
+            { player_key: 'p2', profile: 'p-bo', coaching: 'c-bo' }
           ]
         })
       }
@@ -163,8 +163,8 @@ describe('the model call', () => {
     expect(calls.model).toHaveLength(1);
     const sent = calls.model[0].messages[0].content;
     // Cy never played and Ada never moved; only Bo is the assignment.
-    expect(sent).toContain('these players only: Bo');
-    expect(sent).not.toContain('these players only: Ada');
+    expect(sent).toContain('these players only: p2 (Bo)');
+    expect(sent).not.toContain('(Ada)');
     // …but every player is present as comparison material.
     for (const name of ['Ada', 'Bo', 'Cy']) expect(sent).toContain(name);
   });
@@ -209,8 +209,8 @@ describe('storing the result', () => {
   it('discards entries for players it was not asked to rewrite', async () => {
     modelReply.content[0].text = JSON.stringify({
       players: [
-        { display_name: 'Ada', profile: 'p-ada', coaching: 'c-ada' },
-        { display_name: 'Cy', profile: 'uninvited', coaching: 'uninvited' }
+        { player_key: 'p1', profile: 'p-ada', coaching: 'c-ada' },
+        { player_key: 'p3', profile: 'uninvited', coaching: 'uninvited' }
       ]
     });
     const r = res();
@@ -220,13 +220,36 @@ describe('storing the result', () => {
     expect(r.body.rewritten).toBe(1);
   });
 
-  it('discards a name that matches no player', async () => {
+  it('discards a key that matches no player', async () => {
     modelReply.content[0].text = JSON.stringify({
-      players: [{ display_name: 'Nobody', profile: 'x', coaching: 'y' }]
+      players: [{ player_key: 'p99', profile: 'x', coaching: 'y' }]
     });
     const r = res();
     await handler(ended(), r);
     expect(r.body.rewritten).toBe(0);
+  });
+
+  // Two identities sharing a display name is the ordinary case here — it is exactly
+  // what the merge tool exists to clean up. Keyed by name, one person's profile lands
+  // on the other's row; keyed by player_key, each goes where it belongs.
+  it('files profiles correctly when two players share a display name', async () => {
+    state.stats = [stat('a', 'Keogan'), stat('b', 'Keogan', { vpip_pct: 70 })];
+    state.participants = [{ identity_id: 'a' }, { identity_id: 'b' }];
+    state.profiles = [];
+    modelReply.content[0].text = JSON.stringify({
+      players: [
+        { player_key: 'p1', profile: 'first-keogan', coaching: 'c1' },
+        { player_key: 'p2', profile: 'second-keogan', coaching: 'c2' }
+      ]
+    });
+    await handler(ended(), res());
+    const rows = JSON.parse(
+      calls.db.find((c) => c.method === 'POST' && c.path.startsWith('player_profiles')).body
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ identity_id: 'a', profile: 'first-keogan' }),
+      expect.objectContaining({ identity_id: 'b', profile: 'second-keogan' })
+    ]);
   });
 
   it('surfaces a database failure instead of reporting success', async () => {

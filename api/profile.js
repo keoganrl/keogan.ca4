@@ -75,14 +75,24 @@ export default async function handler(req, res) {
     }
 
     const byId = new Map(profiles.map((p) => [p.identity_id, p]));
-    const table = stats.map((s) => ({
-      ...s,
-      current_profile: byId.get(s.identity_id)?.profile ?? null,
+
+    // Each player gets an opaque key, and the model returns THAT rather than a name.
+    // Names cannot do this job: this app has a merge tool precisely because one human
+    // shows up as several identities, and those duplicates share a display name — a
+    // name-keyed lookup would quietly file one person's profile under another's row.
+    // A reworded or re-capitalised name would also silently match nothing.
+    const keyed = stats.map((s, i) => ({ key: `p${i + 1}`, stat: s }));
+    const identityByKey = new Map(keyed.map(({ key, stat }) => [key, stat.identity_id]));
+
+    const table = keyed.map(({ key, stat }) => ({
+      player_key: key,
+      ...stat,
+      current_profile: byId.get(stat.identity_id)?.profile ?? null,
     }));
 
-    const names = stats
-      .filter((s) => rewrite.includes(s.identity_id))
-      .map((s) => s.display_name);
+    const assignment = keyed
+      .filter(({ stat }) => rewrite.includes(stat.identity_id))
+      .map(({ key, stat }) => `${key} (${stat.display_name})`);
 
     const client = new Anthropic();
     const response = await client.beta.messages.create({
@@ -108,9 +118,9 @@ export default async function handler(req, res) {
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['display_name', 'profile', 'coaching'],
+                  required: ['player_key', 'profile', 'coaching'],
                   properties: {
-                    display_name: { type: 'string' },
+                    player_key: { type: 'string' },
                     profile: { type: 'string' },
                     coaching: { type: 'string' },
                   },
@@ -127,9 +137,11 @@ export default async function handler(req, res) {
             `Here is the whole table. Every player's numbers, and the profile they ` +
             `currently have where one exists:\n\n${JSON.stringify(table, null, 2)}\n\n` +
             `Write a new profile AND a new coaching note for these players only: ` +
-            `${names.join(', ')}.\n\n` +
+            `${assignment.join(', ')}.\n\n` +
             `Everyone else is here so you can compare — comparisons are the best part ` +
-            `— but do not return entries for them.`,
+            `— but do not return entries for them.\n\n` +
+            `Return each entry under its player_key. Use display names in the writing ` +
+            `itself, but the key is what identifies whose profile it is.`,
         },
       ],
     });
@@ -145,12 +157,9 @@ export default async function handler(req, res) {
     const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     const written = JSON.parse(text).players ?? [];
 
-    // Match on display_name because that is what the model was given and what it
-    // echoes back; identity_id never leaves the server.
-    const idByName = new Map(stats.map((s) => [s.display_name, s.identity_id]));
     const rows = written
       .map((w) => {
-        const identityId = idByName.get(w.display_name);
+        const identityId = identityByKey.get(w.player_key);
         if (!identityId || !rewrite.includes(identityId)) return null;
         const stat = stats.find((s) => s.identity_id === identityId);
         return {
