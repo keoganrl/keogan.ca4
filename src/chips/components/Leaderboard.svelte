@@ -2,19 +2,20 @@
   import { onMount } from 'svelte';
   import { supabase } from '../lib/supabase';
   import { mergeIdentities } from '../lib/services/game';
-  import { initIdentity, displayName } from '../lib/stores/identity';
+  import { initIdentity, displayName, identityId } from '../lib/stores/identity';
   import {
     sortLifetimeStats,
     type LeaderboardSortKey
   } from '../lib/utils/leaderboard';
   import { buildNetSeries } from '../lib/utils/netSeries';
   import { chaosScores, MIN_CHAOS_SESSIONS } from '../lib/utils/chaos';
+  import { statSections } from '../lib/utils/playerStats';
   import NetChart from './NetChart.svelte';
-  import type { LifetimeStat, SessionResult } from '../lib/types';
+  import type { LifetimeStat, PlayerStat, SessionResult } from '../lib/types';
 
-  // The five stat columns are all sorts of the same lifetime board; 'chaos' is its own
-  // view with its own rows, so it is a tab rather than another sort of that list.
-  type Tab = LeaderboardSortKey | 'chaos';
+  // The five stat columns are all sorts of the same lifetime board; 'chaos' and
+  // 'profiles' each have their own rows, so they are tabs rather than more sorts.
+  type Tab = LeaderboardSortKey | 'chaos' | 'profiles';
 
   let stats = $state<LifetimeStat[]>([]);
   let results = $state<SessionResult[]>([]);
@@ -108,8 +109,58 @@
     }
   }
 
+  // Profiles tab. The roster is everyone; the expanding card is yours alone.
+  // $identityId is this device's UUID and matches lifetime_stats.identity_id
+  // directly, so "is this row me?" needs no lookup. Note this hides UI, it does
+  // not protect data — the anon key can read the whole view, same as the rest of
+  // the app. That is the intended trust model here, not an oversight.
+  let expanded = $state(false);
+  let myStats = $state<PlayerStat | null>(null);
+  let myStatsState = $state<'idle' | 'loading' | 'ready' | 'missing' | 'error'>('idle');
+
+  const isMe = (id: string) => id === $identityId && $identityId !== '';
+
+  // Fetched only when you open your own card, and only your own row: no reason to
+  // pull the whole view for a panel that shows one player.
+  async function loadMyStats() {
+    if (myStatsState === 'loading' || myStatsState === 'ready') return;
+    myStatsState = 'loading';
+    const { data, error } = await supabase
+      .from('player_stats')
+      .select('*')
+      .eq('identity_id', $identityId)
+      .maybeSingle();
+    if (error) {
+      console.warn('player_stats unavailable:', error);
+      myStatsState = 'error';
+      return;
+    }
+    myStats = (data as PlayerStat | null) ?? null;
+    // No row is the ordinary case for someone whose games predate the ledger, so
+    // it gets its own state rather than being reported as a failure.
+    myStatsState = myStats ? 'ready' : 'missing';
+  }
+
+  function toggleExpanded() {
+    expanded = !expanded;
+    if (expanded) loadMyStats();
+  }
+
+  // You first, so your own card is the one you land on; everyone else follows in a
+  // stable order that carries no ranking — this tab is a roster, not a table.
+  let roster = $derived(
+    [...stats].sort((a, b) => {
+      if (isMe(a.identity_id) !== isMe(b.identity_id)) return isMe(a.identity_id) ? -1 : 1;
+      return a.display_name.localeCompare(b.display_name);
+    })
+  );
+
+  let sections = $derived(myStats ? statSections(myStats) : []);
+
   let sorted = $derived(
-    sortBy === 'chaos' ? [] : sortLifetimeStats(stats, sortBy as LeaderboardSortKey)
+    sortBy === 'chaos' || sortBy === 'profiles'
+      ? []
+      : sortLifetimeStats(stats, sortBy as LeaderboardSortKey)
   );
   let netData = $derived(buildNetSeries(results));
   let chaos = $derived(chaosScores(results));
@@ -124,7 +175,8 @@
     { key: 'times_first', label: 'times first' },
     { key: 'times_last', label: 'times last' },
     { key: 'all_ins', label: 'all-ins' },
-    { key: 'chaos', label: 'chaos' }
+    { key: 'chaos', label: 'chaos' },
+    { key: 'profiles', label: 'profiles' }
   ];
 
   function toggleHighlight(id: string) {
@@ -188,6 +240,76 @@
         {/each}
       </ul>
     {/if}
+  {:else if sortBy === 'profiles'}
+    <p class="cnote explainer">Tap your own name to see your numbers</p>
+    <ul class="board">
+      {#each roster as player (player.identity_id)}
+        <li class="board-row profile-row" class:mine={isMe(player.identity_id)}>
+          {#if isMe(player.identity_id)}
+            <button class="row-btn" aria-expanded={expanded} onclick={toggleExpanded}>
+              <span class="who">
+                <span class="who-name">{player.display_name}</span>
+                <span class="who-detail">
+                  you · {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
+                </span>
+              </span>
+              <!-- Rotates to point down when open; aria-expanded above is what
+                   actually announces the state, so this is decorative. -->
+              <span class="chev" class:open={expanded} aria-hidden="true">›</span>
+            </button>
+          {:else}
+            <div class="row-static">
+              <span class="who">
+                <span class="who-name">{player.display_name}</span>
+                <span class="who-detail">
+                  {player.sessions_played} session{player.sessions_played === 1 ? '' : 's'}
+                </span>
+              </span>
+            </div>
+          {/if}
+
+          {#if isMe(player.identity_id) && expanded}
+            <div class="panel">
+              {#if myStatsState === 'loading'}
+                <p class="cnote">Loading…</p>
+              {:else if myStatsState === 'error'}
+                <p class="cnote">Couldn’t load your stats.</p>
+              {:else if myStatsState === 'missing'}
+                <p class="cnote">No hands recorded yet — play a game and check back.</p>
+              {:else if sections.length === 0}
+                <p class="cnote">Not enough hands yet to say anything useful.</p>
+              {:else}
+                <p class="cnote panel-basis">
+                  From {myStats?.hands} recorded hand{myStats?.hands === 1 ? '' : 's'}
+                </p>
+                {#each sections as section (section.title)}
+                  <h3 class="panel-title">{section.title}</h3>
+                  <dl class="statlist">
+                    {#each section.rows as row (row.label)}
+                      <div class="statline" class:faint={row.confidence !== 'ok'}>
+                        <dt>
+                          <span class="statline-label">{row.label}</span>
+                          <span class="statline-hint">{row.hint}</span>
+                        </dt>
+                        <dd>
+                          <span class="statline-value">{row.value}</span>
+                          <!-- The denominator is the honest half of a percentage: 100%
+                               over three spots and 100% over three hundred are not the
+                               same claim, and only this line tells them apart. -->
+                          <span class="statline-basis">
+                            {row.confidence === 'anecdote' ? 'only ' : ''}{row.basis}
+                          </span>
+                        </dd>
+                      </div>
+                    {/each}
+                  </dl>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </li>
+      {/each}
+    </ul>
   {:else}
     {#if sortBy === 'total_net' && netData.series.length > 0}
       <NetChart data={netData} {highlighted} />
@@ -481,5 +603,120 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  /* Profiles tab. A row here stacks — the header line, then the panel it opens —
+     so it overrides .board-row's default side-by-side layout. */
+  .profile-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* Everyone else's row is inert: no button, no pointer, nothing that suggests it
+     opens. Matching .row-btn's box keeps the two kinds of row on one rhythm. */
+  .row-static {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .profile-row .row-btn {
+    align-items: center;
+  }
+
+  .profile-row .who-detail {
+    color: var(--faint);
+  }
+
+  .chev {
+    color: var(--faint);
+    font-size: 1.6rem;
+    line-height: 1;
+    transition: transform 0.15s ease;
+  }
+
+  .chev.open {
+    transform: rotate(90deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chev {
+      transition: none;
+    }
+  }
+
+  .panel {
+    padding: 0.6rem 0 0.4rem;
+  }
+
+  .panel-basis {
+    margin: 0 0 1.1rem;
+  }
+
+  .panel-title {
+    font-family: var(--serif-display);
+    font-size: 0.8rem;
+    font-weight: normal;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 1.4rem 0 0.5rem;
+  }
+
+  .panel-title:first-of-type {
+    margin-top: 0;
+  }
+
+  .statlist {
+    margin: 0;
+  }
+
+  .statline {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .statline:last-child {
+    border-bottom: 0;
+  }
+
+  /* A thinly-sampled figure is dimmed rather than hidden — you can still read it,
+     it just stops competing with the numbers that have earned their weight.
+     Dimming is never the only signal: the basis line beside it says how thin. */
+  .statline.faint .statline-value {
+    color: var(--faint);
+  }
+
+  .statline dt {
+    min-width: 0;
+  }
+
+  .statline dd {
+    margin: 0;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .statline-label,
+  .statline-value {
+    display: block;
+  }
+
+  .statline-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .statline-hint,
+  .statline-basis {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--faint);
+    margin-top: 0.15rem;
   }
 </style>

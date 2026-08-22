@@ -117,3 +117,42 @@ export interface SessionResult {
 	net: number;
 	net_bb: number;
 }
+
+// One row of the player_stats view (supabase/player-stats.sql): playing-style
+// figures reconstructed from the event ledger. Every percentage carries its own
+// denominator so the UI can tell "folds to c-bets 0% of the time" (over 40 spots)
+// apart from the same number over two.
+export interface PlayerStat {
+	identity_id: string;
+	display_name: string;
+	hands: number;
+	reliability: 'ok' | 'thin' | 'anecdote';
+
+	vpip_pct: number | null;
+	pfr_pct: number | null;
+	vpip_pfr_gap: number | null;
+	af: number | null;
+
+	cbet_flop_pct: number | null;
+	cbet_opps: number;
+	fold_to_cbet_pct: number | null;
+	faced_cbet_opps: number;
+
+	steal_pct: number | null;
+	steal_opps: number;
+	fold_to_steal_pct: number | null;
+	faced_steal_opps: number;
+
+	wtsd_pct: number | null;
+	saw_flop_hands: number;
+
+	vpip_early_pct: number | null;
+	early_hands: number;
+	vpip_late_pct: number | null;
+	late_hands: number;
+	vpip_blinds_pct: number | null;
+	blind_hands: number;
+
+	chips_won: number;
+	biggest_pot: number;
+}
