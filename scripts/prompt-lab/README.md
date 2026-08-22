@@ -58,6 +58,16 @@ Both are applied when a container starts, so a change to either needs a fresh
 session. With them in place the whole loop is `npm run lab:pull` once, then
 `npm run lab` per iteration, with the resulting HTML sent back to the user.
 
+Prefix both with `NODE_USE_ENV_PROXY=1` inside such a session:
+
+    NODE_USE_ENV_PROXY=1 npm run lab:pull
+
+Node's fetch ignores `HTTPS_PROXY` by default, so without it the request bypasses
+the proxy, meets a stricter direct-egress gateway, and fails with a 403 naming an
+allowlist — which reads like a network-settings problem when it is not one. The
+variable has to be in the environment at startup; putting it in `.env.local` is too
+late. It is unnecessary and harmless on a normal machine.
+
 ## How a prompt is assembled
 
 Two layers, like a personalisation setting plus a task instruction:
