@@ -40,6 +40,24 @@ not a prompt difference. It costs pennies and stops you shipping a prompt that
 got lucky once. This matters more than usual on Fable 5, which rejects
 `temperature` outright — there is no knob to steady the output with.
 
+## Running this from a Claude Code session
+
+The lab can be driven entirely by Claude rather than by hand, so nobody has to
+run commands locally. Two things have to be true of the session's environment
+(both set in the environment's settings at claude.ai/code, not in this repo):
+
+- `ANTHROPIC_API_KEY`, `PUBLIC_SUPABASE_URL`, and `PUBLIC_SUPABASE_ANON_KEY` are
+  set as environment variables. They reach the container directly and never pass
+  through the conversation — which is the point: an API key pasted into a message
+  is stored in the transcript, and the right fix for one that was is to revoke it.
+- The network policy allows `<project>.supabase.co`. The default policy blocks it,
+  and `api.anthropic.com` is allowed by default, so generation works before
+  pulling does. A blocked pull looks like curl returning 000, not an auth error.
+
+Both are applied when a container starts, so a change to either needs a fresh
+session. With them in place the whole loop is `npm run lab:pull` once, then
+`npm run lab` per iteration, with the resulting HTML sent back to the user.
+
 ## How a prompt is assembled
 
 Two layers, like a personalisation setting plus a task instruction:
