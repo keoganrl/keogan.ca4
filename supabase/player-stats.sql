@@ -1,14 +1,17 @@
 -- Chips — extended player stats: the poker-jargon numbers, reconstructed from the ledger.
 --
--- Creates one view, `player_stats`, with a row per player and the standard hand-history
--- statistics on it: VPIP, PFR, aggression, c-bet, fold to c-bet, steal attempts, fold to
+-- Gives you `player_stats`, a row per player carrying the standard hand-history
+-- statistics: VPIP, PFR, aggression, c-bet, fold to c-bet, steal attempts, fold to
 -- steal, WTSD, and a positional VPIP split.
 --
--- Run this AFTER chips-schema.sql. Like the views in that file it is CREATE OR REPLACE,
--- so re-running it is both the install and the migration. It reads only existing tables
--- and writes nothing.
+-- It comes in two pieces. `player_stats_source` is the query that derives them, and
+-- `player_stats` is a MATERIALIZED snapshot of it — reading the query directly times
+-- out, for reasons documented at the bottom of this file. Read `player_stats`; call
+-- `refresh_player_stats()` whenever a session ends.
 --
---   create ... ; grant select on player_stats to anon, authenticated, service_role;
+-- Run this AFTER chips-schema.sql. Re-running it is both the install and the
+-- migration: the view is CREATE OR REPLACE and the snapshot is IF NOT EXISTS, so a
+-- second run leaves existing data alone. It reads only existing tables.
 --
 -- ---------------------------------------------------------------------------
 -- HOW POSITION IS RECOVERED, AND WHY IT IS TRUSTWORTHY
@@ -67,7 +70,7 @@
 -- of 3 is an anecdote, not a read — filter on the opportunity counts before quoting
 -- anything, and see `reliability` for a blunt version of that rule.
 
-create or replace view player_stats as
+create or replace view player_stats_source as
 
 -- Hand-numbered events for ended sessions only, matching lifetime_stats' scope.
 with ev as (
@@ -403,4 +406,72 @@ select
 from by_identity
 order by hands desc;
 
+grant select on player_stats_source to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- WHY player_stats IS A SNAPSHOT AND NOT THE VIEW ABOVE
+-- ---------------------------------------------------------------------------
+-- Read directly, the view above cannot be planned. Every stage of it is fast in
+-- isolation — the whole chain runs in ~130ms when each CTE is materialised as a
+-- table — but the planner estimates the `ev` stage at ~13 rows when it returns
+-- thousands, so every stage downstream is estimated at one row and it picks
+-- nested loops the whole way up. Measured on a 12k-event ledger: over 120
+-- SECONDS as written, 60ms with enable_nestloop off. Supabase's Data API gives a
+-- statement 3 seconds, so every query against it failed with 57014 — including
+-- `limit 1` and single-identity filters, neither of which lets the planner skip
+-- any of the work.
+--
+-- Adding statistics does not help: ANALYZE on every base table changed nothing.
+-- The estimate is a structural property of the CTE chain, not of stale stats.
+--
+-- So the numbers are computed once and stored. That suits how they change: a
+-- player's figures only move when a session ends, which is exactly when the
+-- refresh runs, so a snapshot is never meaningfully behind. Reads drop from a
+-- timeout to a sub-millisecond scan of a dozen rows, and the cost stops growing
+-- with the length of your history.
+--
+-- Keeping the NAME player_stats on the snapshot means every reader — the app,
+-- the prompt lab, anything you query by hand — is unchanged and simply fast.
+-- Earlier installs shipped player_stats as a plain view. IF NOT EXISTS would happily
+-- skip past one and leave the un-plannable version serving the app, so the old view
+-- is dropped explicitly first — and only when it really is a view, so re-running this
+-- against the snapshot does not throw and does not discard it.
+do $$
+begin
+  if exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where c.relname = 'player_stats' and n.nspname = 'public' and c.relkind = 'v'
+  ) then
+    execute 'drop view player_stats';
+  end if;
+end
+$$;
+
+-- The first build needs the same planner override the refresh function carries;
+-- without it this statement is the two-minute one and the migration appears hung.
+set enable_nestloop = off;
+create materialized view if not exists player_stats as select * from player_stats_source;
+reset enable_nestloop;
+
+-- REFRESH CONCURRENTLY requires a unique index, and is worth having: a plain
+-- refresh takes an exclusive lock, so anyone with the leaderboard open at the
+-- moment a session ends would block on it.
+create unique index if not exists player_stats_identity_idx on player_stats (identity_id);
+
 grant select on player_stats to anon, authenticated, service_role;
+
+-- The planner override lives on the function rather than in the caller's session,
+-- so a refresh cannot be run without it and take two minutes.
+create or replace function refresh_player_stats() returns void
+language plpgsql
+security definer
+set search_path = public
+set enable_nestloop = 'off'
+as $$
+begin
+  refresh materialized view concurrently player_stats;
+end;
+$$;
+
+grant execute on function refresh_player_stats() to anon, authenticated, service_role;

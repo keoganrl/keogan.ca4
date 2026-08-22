@@ -104,10 +104,19 @@ column. Until those are run the tab renders with zeroes rather than failing.
 
 ### Extended player stats
 
-`supabase/player-stats.sql` creates a `player_stats` view with the poker-jargon
-numbers the leaderboard has no room for: VPIP, PFR and the gap between them,
-aggression factor, flop c-bet and fold-to-c-bet, steal attempts and fold-to-steal,
-WTSD, and a VPIP split by position. Run it once, after `chips-schema.sql`.
+`supabase/player-stats.sql` gives you `player_stats` with the poker-jargon numbers
+the leaderboard has no room for: VPIP, PFR and the gap between them, aggression
+factor, flop c-bet and fold-to-c-bet, steal attempts and fold-to-steal, WTSD, and a
+VPIP split by position. Run it once, after `chips-schema.sql`.
+
+It arrives as two objects. `player_stats_source` is the query that derives the
+numbers; `player_stats` is a **materialized** snapshot of it, refreshed by
+`refresh_player_stats()` when a session ends. That is not premature optimisation —
+read directly, the source query cannot be planned: the planner estimates its first
+stage at ~13 rows when it returns thousands, picks nested loops all the way up, and
+takes over two minutes on a ledger that each stage handles in milliseconds. Against
+Supabase's 3-second statement limit every query failed, `limit 1` included. The full
+diagnosis is in the file. Read `player_stats`; never point the app at the source.
 
 The interesting part is that **position is reconstructed, not recorded**. The app
 only ever stores the *current* button, so there is no per-hand history of who sat

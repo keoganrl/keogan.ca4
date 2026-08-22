@@ -7,6 +7,7 @@ import type { Player } from '../types';
 // `state`; writes are recorded for assertions.
 const state: { players: Player[]; pot: number } = { players: [], pot: 0 };
 const writes: { table: string; id: string; values: Record<string, unknown> }[] = [];
+const rpcCalls: string[] = [];
 
 vi.mock('../supabase', () => {
 	const from = (table: string) => {
@@ -36,7 +37,11 @@ vi.mock('../supabase', () => {
 			).then(resolve);
 		return b;
 	};
-	return { supabase: { from } };
+	const rpc = (name: string) => {
+		rpcCalls.push(name);
+		return Promise.resolve({ data: null, error: null });
+	};
+	return { supabase: { from, rpc } };
 });
 
 const { endSession } = await import('./table');
@@ -70,6 +75,7 @@ const stackWrites = () =>
 
 beforeEach(() => {
 	writes.length = 0;
+	rpcCalls.length = 0;
 	state.players = [];
 	state.pot = 0;
 });
@@ -139,5 +145,16 @@ describe('endSession', () => {
 			status: 'ended',
 			pot: 0
 		});
+	});
+
+	// player_stats is a snapshot scoped to ended sessions, so this is the moment a
+	// night's hands enter it. Miss the refresh and the profiles tab silently shows
+	// numbers that never move.
+	it('refreshes the stats snapshot once the session is closed', async () => {
+		state.players = [player('a')];
+
+		await endSession('S');
+
+		expect(rpcCalls).toContain('refresh_player_stats');
 	});
 });
