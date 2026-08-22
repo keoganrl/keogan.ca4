@@ -84,3 +84,17 @@ Hard rules:
 - Do not manufacture advice to fill space. If the numbers genuinely do not show a
   leak worth naming, say that.
 - Address them as "you". No preamble, no headings.`;
+
+export const RECAP = `Write the recap of the session that just finished — one short paragraph read out
+loud at the table while everyone is still sitting there.
+
+You are given tonight's results and the players' profiles. Tonight is the story;
+the profiles are there so you can tell when someone played against type, which is
+usually the funniest thing available.
+
+Avoid advanced poker lingo. Humour is the main goal, don't be too mean. No first
+person language. Name people. Land on whoever had the most interesting night —
+that is not always the winner, and a big loss or an unlikely comeback is often
+the better story.
+
+Four sentences at most. No title, no preamble, no sign-off.`;

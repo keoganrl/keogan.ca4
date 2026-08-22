@@ -17,7 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { selectForRewrite, snapshotOf } from './_drift.js';
 import { SHARED, PROFILE, COACHING } from './_prompts.js';
 
-const MODEL = 'claude-fable-5';
+const MODEL = 'claude-opus-5';
 
 const db = (path, init = {}) =>
   fetch(`${process.env.PUBLIC_SUPABASE_URL}/rest/v1/${path}`, {
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
       model: MODEL,
       max_tokens: 8000,
       // Roast-adjacent copy about named people is exactly the shape that can trip a
-      // classifier, and Fable declines by returning stop_reason rather than throwing.
+      // classifier, and a decline arrives as a stop_reason rather than an exception.
       // The fallback re-runs the same request on another model inside this call, so
       // a decline costs a moment rather than the night's profiles.
       betas: ['server-side-fallback-2026-07-01'],

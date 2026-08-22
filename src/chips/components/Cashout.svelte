@@ -9,6 +9,49 @@
   let players = $state<Player[]>([]);
   let loading = $state(true);
 
+  // The recap streams in while everyone is still looking at the screen. Failure is
+  // silent by design: this is a bonus paragraph over the results, and an error
+  // message where a joke should be is worse than no paragraph at all.
+  let recap = $state('');
+  let recapDone = $state(false);
+
+  async function streamRecap(id: string) {
+    try {
+      const r = await fetch('/api/recap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id })
+      });
+
+      // A recap written earlier — or one another screen is mid-way through — comes
+      // back as JSON rather than a stream.
+      if (r.headers.get('content-type')?.includes('application/json')) {
+        const body = await r.json();
+        if (body.recap) {
+          recap = body.recap;
+        }
+        recapDone = true;
+        return;
+      }
+      if (!r.ok || !r.body) {
+        recapDone = true;
+        return;
+      }
+
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        recap += decoder.decode(value, { stream: true });
+      }
+    } catch (e) {
+      console.warn('recap unavailable:', e);
+    } finally {
+      recapDone = true;
+    }
+  }
+
   onMount(async () => {
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session') ?? '';
@@ -25,6 +68,9 @@
 
     if (data) players = data as Player[];
     loading = false;
+
+    // Not awaited: the results are the page and must not wait on a paragraph.
+    streamRecap(sessionId);
   });
 </script>
 
@@ -36,6 +82,14 @@
   {#if loading}
     <p class="cnote">Loading…</p>
   {:else}
+    {#if recap || !recapDone}
+      <!-- aria-live so a screen reader announces the text once it settles rather
+           than reading each streamed fragment as it lands. -->
+      <p class="recap" class:writing={!recapDone} aria-live="polite" aria-busy={!recapDone}>
+        {recap}
+      </p>
+    {/if}
+
     <ul class="results">
       {#each players as player, i (player.id)}
         <li class="result-row" class:first={i === 0}>
@@ -59,6 +113,37 @@
 </div>
 
 <style>
+  .recap {
+    max-width: 34rem;
+    margin: 0 0 2rem;
+    color: var(--ink-soft);
+  }
+
+  /* A caret while text is still arriving, so a pause reads as "still writing"
+     rather than "finished, and that was it". */
+  .recap.writing::after {
+    content: '';
+    display: inline-block;
+    width: 0.5ch;
+    height: 1em;
+    margin-left: 0.15em;
+    vertical-align: text-bottom;
+    background: var(--rule);
+    animation: recap-caret 1s steps(2, start) infinite;
+  }
+
+  @keyframes recap-caret {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .recap.writing::after {
+      animation: none;
+    }
+  }
+
   .results {
     list-style: none;
     padding: 0;
