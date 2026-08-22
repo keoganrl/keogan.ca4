@@ -33,7 +33,11 @@ const db = (path, init = {}) =>
 async function json(path, init) {
   const r = await db(path, init);
   if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
-  return r.status === 204 ? null : r.json();
+  // PostgREST answers a write with 201 and an EMPTY body unless asked for a
+  // representation, and .json() on empty input throws "Unexpected end of JSON
+  // input" — which reads like a model failure when the write in fact succeeded.
+  const body = await r.text();
+  return body ? JSON.parse(body) : null;
 }
 
 export default async function handler(req, res) {
@@ -95,9 +99,14 @@ export default async function handler(req, res) {
       .map(({ key, stat }) => `${key} (${stat.display_name})`);
 
     const client = new Anthropic();
-    const response = await client.beta.messages.create({
+    const stream = await client.beta.messages.stream({
       model: MODEL,
-      max_tokens: 8000,
+      // Room for a full table's worth of entries. Thinking tokens are drawn from
+      // this same budget, and running out does not fail loudly: with a JSON schema
+      // in force the decoder closes the structure with whatever minimal value fits,
+      // so a truncated run comes back as valid JSON containing a coaching note one
+      // character long. Streaming, because the SDK requires it at this size.
+      max_tokens: 32000,
       // Roast-adjacent copy about named people is exactly the shape that can trip a
       // classifier, and a decline arrives as a stop_reason rather than an exception.
       // The fallback re-runs the same request on another model inside this call, so
@@ -106,6 +115,11 @@ export default async function handler(req, res) {
       fallbacks: 'default',
       system: `${SHARED}\n\n---\n\n${PROFILE}\n\n---\n\n${COACHING}`,
       output_config: {
+        // Writing, not reasoning. High effort spends the budget on thinking this
+        // task does not need — and that spend is what truncated the first live run.
+        // Must live in the SAME output_config as the format: two keys of that name
+        // in one object literal means the second silently wins.
+        effort: 'low',
         format: {
           type: 'json_schema',
           schema: {
@@ -146,6 +160,14 @@ export default async function handler(req, res) {
       ],
     });
 
+    const response = await stream.finalMessage();
+
+    // A truncated run still parses, so this is the only thing standing between a
+    // cut-off generation and someone's profile reading "x" forever.
+    if (response.stop_reason === 'max_tokens') {
+      return res.status(502).json({ ok: false, error: 'response truncated; nothing stored' });
+    }
+
     if (response.stop_reason === 'refusal') {
       return res.status(502).json({
         ok: false,
@@ -161,6 +183,10 @@ export default async function handler(req, res) {
       .map((w) => {
         const identityId = identityByKey.get(w.player_key);
         if (!identityId || !rewrite.includes(identityId)) return null;
+        // Belt and braces alongside the stop_reason check above: a one-character
+        // profile is never something worth keeping, whatever produced it.
+        if (!w.profile?.trim() || !w.coaching?.trim()) return null;
+        if (w.profile.trim().length < 20 || w.coaching.trim().length < 20) return null;
         const stat = stats.find((s) => s.identity_id === identityId);
         return {
           identity_id: identityId,
@@ -185,6 +211,10 @@ export default async function handler(req, res) {
       ok: true,
       rewritten: rows.length,
       asked_for: rewrite.length,
+      // A shortfall is not an error — the model may legitimately return fewer — but
+      // it is the first thing worth seeing in the logs when a profile did not move.
+      short_by: rewrite.length - rows.length,
+      stop_reason: response.stop_reason,
       served_by: response.model,
     });
   } catch (e) {
