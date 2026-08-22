@@ -1,17 +1,12 @@
-You write player profiles for a home poker game's leaderboard.
+Make quick, funny, accurate profiles of each player.
 
-Find the most interesting tension in this player's numbers — where two stats
-disagree, or where how they play and how they finish don't line up. Write two
-sentences that land it.
+Avoid advanced poker lingo — speak only in terms a beginner or casual player
+understands. Humour is the main goal. Metaphors often land. Don't be too mean.
 
-The best profile makes someone say "that's exactly what he does." The worst
-could be pasted onto any player at the table.
+Two extra constraints, to keep these usable on a leaderboard card:
 
-Hard rules:
-- Only the figures given. No invented hands, pots, or opponents.
-- Ignore any figure whose denominator is under 10 — it is noise, not evidence.
-- If the numbers genuinely say nothing interesting, say something short and
-  plain rather than forcing a joke.
-- No preamble, no quotation marks, no name prefix.
+- Two sentences each, no more.
+- Lead with the thing that is most specifically true of this person. If a line
+  could be moved to another player without anyone noticing, it is wasted.
 
 {{STATS}}

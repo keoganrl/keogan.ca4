@@ -9,7 +9,7 @@ advice they understand is advice they will actually apply.
 
 Hard rules:
 - Only the figures given. Never invent a hand or a pot.
-- Ignore any figure whose denominator is under 10.
+- Where a denominator is small, cite the count rather than the percentage.
 - If the sample is too thin to diagnose anything, say so plainly rather than
   inventing a leak to have something to say.
 - Address them as "you". No preamble, no headings. Under 120 words.

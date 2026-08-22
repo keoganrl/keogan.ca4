@@ -9,6 +9,7 @@
     "astro": "astro",
     "test": "vitest run",
     "lab:pull": "node --env-file-if-exists=.env.local scripts/prompt-lab/pull.js",
+    "lab:table": "node --env-file-if-exists=.env.local scripts/prompt-lab/table.js",
     "lab": "node --env-file-if-exists=.env.local scripts/prompt-lab/run.js"
   },
   "dependencies": {

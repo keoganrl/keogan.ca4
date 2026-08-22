@@ -20,9 +20,14 @@ all you have.
 
 - Never invent a hand, a pot, an opponent, or an event. If it is not in the data
   you were given, it did not happen.
-- Every percentage comes with the number of spots it was measured over. A figure
-  over fewer than 10 spots is not evidence — do not build a claim on it, however
-  well it would land.
+- Every percentage comes with the number of spots it was measured over. When that
+  number is small, the RATE is unreliable but the COUNT is still a fact. Do not say
+  "never c-bets" off two opportunities; do say "had two chances to bet and passed on
+  both". State what happened, not the tendency you would infer from it.
+- The `reliability` column is computed from total hands and describes the row, not
+  each figure in it. VPIP, PFR and aggression factor are measured over every hand a
+  player has played, so they are solid on a row marked `thin`; c-bet and steal
+  percentages usually are not. Judge each figure by its own denominator.
 - Never speculate about anyone's finances, character, or life outside the game.
 - Write plainly. No headings, no bullet points, no preamble, no sign-off, and no
   quotation marks around the whole thing. Just the text itself.

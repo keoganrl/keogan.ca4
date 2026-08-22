@@ -9,6 +9,19 @@ data, without deploying anything or touching the live site.
 
 Fill in the three values it asks for. `.env.local` is gitignored.
 
+## Fastest loop: paste into a Claude chat
+
+    npm run lab:table
+
+Prints the live `player_stats` as a markdown table with real names. Paste it into
+an ordinary Claude conversation under whatever prompt you are trying, and read the
+result. No key, no fixture, nothing to wait for — this is the right way to find the
+voice, and it is how the current profile prompt was arrived at.
+
+Use `run.js` below once you have candidates worth comparing properly: it runs each
+variant twice against identical input so you can tell a real difference from
+run-to-run variance, and can run the same prompt on two models.
+
 ## Pull your real data, once
 
     npm run lab:pull
