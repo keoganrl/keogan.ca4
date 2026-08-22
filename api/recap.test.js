@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // a public URL into a way to spend the owner's money.
 const calls = { db: [], model: [] };
 let streamChunks = ['A ', 'good ', 'night.'];
+let modelBehaviour = () => {};
 let finalMessage = { stop_reason: 'end_turn' };
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -13,6 +14,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
       messages: {
         stream: async (args) => {
           calls.model.push(args);
+          modelBehaviour();
           return {
             async *[Symbol.asyncIterator]() {
               for (const text of streamChunks) {
@@ -88,6 +90,8 @@ beforeEach(() => {
   state.claimOk = true;
   streamChunks = ['A ', 'good ', 'night.'];
   finalMessage = { stop_reason: 'end_turn' };
+  modelBehaviour = () => {};
+  delete process.env.FAST_MODE;
 });
 
 describe('what it refuses', () => {
@@ -183,13 +187,41 @@ describe('the happy path', () => {
     expect(JSON.parse(patch.body).recap).toBe('A good night.');
   });
 
-  it('asks for fast mode and low effort', async () => {
-    await handler(req(), res());
-    const sent = calls.model[0];
-    expect(sent.speed).toBe('fast');
-    expect(sent.betas).toContain('fast-mode-2026-02-01');
+  it('asks for low effort on Opus, and no fast mode unless enabled', async () => {
+    const sent = (await handler(req(), res()), calls.model[0]);
     expect(sent.output_config.effort).toBe('low');
     expect(sent.model).toBe('claude-opus-5');
+    expect(sent.speed).toBeUndefined();
+    expect(sent.betas).not.toContain('fast-mode-2026-02-01');
+  });
+
+  it('asks for fast mode when the environment enables it', async () => {
+    process.env.FAST_MODE = '1';
+    await handler(req(), res());
+    expect(calls.model[0].speed).toBe('fast');
+    expect(calls.model[0].betas).toContain('fast-mode-2026-02-01');
+  });
+
+  // Fast mode is a research preview. An org without it does not get slower output,
+  // it gets a hard 429 naming a limit of zero — which lost the recap entirely the
+  // first time this ran live.
+  it('falls back to standard speed when fast mode is rate limited', async () => {
+    process.env.FAST_MODE = '1';
+    let first = true;
+    modelBehaviour = () => {
+      if (first) {
+        first = false;
+        const e = new Error('429 rate_limit_error: 0 fast mode input tokens');
+        e.status = 429;
+        throw e;
+      }
+    };
+    const r = res();
+    await handler(req(), r);
+    expect(calls.model).toHaveLength(2);
+    expect(calls.model[0].speed).toBe('fast');
+    expect(calls.model[1].speed).toBeUndefined();
+    expect(r.written).toBe('A good night.');
   });
 
   it('gives the model tonight\'s results and the players\' profiles', async () => {

@@ -697,13 +697,22 @@
 
   .panel {
     padding: 0.6rem 0 0.4rem;
+    padding-left: var(--profile-indent);
   }
 
   /* The blurb is the point of this tab, so it gets body-text weight rather than the
-     muted treatment the metadata line above it uses. */
+     muted treatment the metadata line above it uses. It and the panel below are
+     indented a little past the name, which stays flush: the step is what tells you
+     at a glance that the text belongs to the person above it rather than floating
+     between two of them. */
+  .profile-row {
+    --profile-indent: 1rem;
+  }
+
   .blurb {
     display: block;
     margin-top: 0.4rem;
+    padding-left: var(--profile-indent);
     max-width: 34rem;
     color: var(--ink-soft);
     white-space: normal;

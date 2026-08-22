@@ -106,37 +106,51 @@ export default async function handler(req, res) {
       }))
       .sort((a, b) => b.net - a.net);
 
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-
     const client = new Anthropic();
     let text = '';
 
+    const request = (fast) => ({
+      model: MODEL,
+      max_tokens: 1000,
+      ...(fast ? { speed: 'fast' } : {}),
+      betas: [
+        ...(fast ? ['fast-mode-2026-02-01'] : []),
+        'server-side-fallback-2026-07-01',
+      ],
+      fallbacks: 'default',
+      // Low effort on purpose: this is a short creative paragraph, not a reasoning
+      // problem, and thinking time here is dead air on the screen.
+      output_config: { effort: 'low' },
+      system: `${SHARED}\n\n---\n\n${RECAP}`,
+      messages: [
+        {
+          role: 'user',
+          content: `Results for the session that just finished, best to worst:\n\n${JSON.stringify(tonight, null, 2)}`,
+        },
+      ],
+    });
+
     try {
-      const stream = await client.beta.messages.stream({
-        model: MODEL,
-        max_tokens: 1000,
-        // Fast mode roughly doubles output speed for about a cent extra on a
-        // paragraph. This is the one place in the app where generation latency is
-        // watched by a room of people, so it is worth paying for here and nowhere
-        // else. Opus-only, which is why the model above is not Fable.
-        speed: 'fast',
-        betas: ['fast-mode-2026-02-01', 'server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        // Low effort on purpose: this is a short creative paragraph, not a reasoning
-        // problem, and thinking time here is dead air on the screen.
-        output_config: { effort: 'low' },
-        system: `${SHARED}\n\n---\n\n${RECAP}`,
-        messages: [
-          {
-            role: 'user',
-            content: `Tonight's results, best to worst:\n\n${JSON.stringify(tonight, null, 2)}`,
-          },
-        ],
-      });
+      // Fast mode roughly doubles output speed for about a cent on a paragraph, and
+      // this is the one place in the app where a room of people is watching text
+      // appear. It is also a research preview that is OFF for most organisations,
+      // and an org without it does not get slower output, it gets a hard 429 naming
+      // a limit of zero. So it is opt-in through the environment, and a rate limit
+      // falls back to standard speed rather than losing the recap.
+      let stream;
+      try {
+        stream = await client.beta.messages.stream(request(process.env.FAST_MODE === '1'));
+      } catch (e) {
+        if (e?.status !== 429) throw e;
+        stream = await client.beta.messages.stream(request(false));
+      }
 
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          if (!text) {
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+          }
           text += event.delta.text;
           res.write(event.delta.text);
         }
