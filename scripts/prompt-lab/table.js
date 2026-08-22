@@ -3,12 +3,13 @@
 // chat with whatever prompt you are trying. This is the fastest way to iterate on
 // voice: no key, no fixture, no waiting on a harness. run.js is for the later job
 // of comparing variants and reps head to head.
-const url = process.env.PUBLIC_SUPABASE_URL;
-const key = process.env.PUBLIC_SUPABASE_ANON_KEY;
-if (!url || !key) {
-  console.error('Missing Supabase settings. Copy .env.local.example to .env.local and fill it in.');
-  process.exit(1);
-}
+// Defaults to the site's own published Supabase settings so this works with no
+// setup at all. That is not a leaked secret: the anon key is a PUBLISHABLE key by
+// design, it is compiled into the JavaScript keogan.ca serves to every visitor, and
+// the tables it reaches are the same wide-open ones the leaderboard already reads
+// in the browser. .env.local overrides both if you ever rotate them.
+const url = process.env.PUBLIC_SUPABASE_URL || 'https://lonrwoytqkmdmbwlunwm.supabase.co';
+const key = process.env.PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_NRnG8J6_buUtf5aCp_hTMg_1RCaC4pF';
 
 const COLUMNS = [
   ['display_name', 'display_name'],

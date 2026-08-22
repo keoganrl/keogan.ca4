@@ -18,6 +18,9 @@ an ordinary Claude conversation under whatever prompt you are trying, and read t
 result. No key, no fixture, nothing to wait for — this is the right way to find the
 voice, and it is how the current profile prompt was arrived at.
 
+Needs no setup: it falls back to the site's published Supabase settings, which are
+already in the JavaScript every visitor downloads. `.env.local` overrides them.
+
 Use `run.js` below once you have candidates worth comparing properly: it runs each
 variant twice against identical input so you can tell a real difference from
 run-to-run variance, and can run the same prompt on two models.
