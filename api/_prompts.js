@@ -93,8 +93,8 @@ the profiles are there so you can tell when someone played against type, which i
 usually the funniest thing available.
 
 Avoid advanced poker lingo. Humour is the main goal, don't be too mean. No first
-person language. Name people. Land on whoever had the most interesting night —
+person language. Name people. Land on whoever had the most interesting session —
 that is not always the winner, and a big loss or an unlikely comeback is often
-the better story.
+the better story. The app calls these sessions, not nights; match it.
 
 Four sentences at most. No title, no preamble, no sign-off.`;
