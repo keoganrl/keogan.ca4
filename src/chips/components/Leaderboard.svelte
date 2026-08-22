@@ -327,9 +327,6 @@
               {:else if sections.length === 0}
                 <p class="cnote">Not enough hands yet to say anything useful.</p>
               {:else}
-                <p class="cnote panel-basis">
-                  From {myStats?.hands} recorded hand{myStats?.hands === 1 ? '' : 's'}
-                </p>
                 {#each sections as section (section.title)}
                   <h3 class="panel-title">{section.title}</h3>
                   <dl class="statlist">
@@ -695,8 +692,10 @@
     }
   }
 
+  /* No padding of its own: every heading inside carries the same top margin, so the
+     gap beneath the blurb matches the gaps between the sections below it. */
   .panel {
-    padding: 0.6rem 0 0.4rem;
+    padding: 0 0 0.4rem;
     padding-left: var(--profile-indent);
   }
 
@@ -718,18 +717,15 @@
     white-space: normal;
   }
 
+  /* The next heading's own top margin provides the separation. */
   .coaching {
-    margin-bottom: 1.6rem;
+    margin-bottom: 0;
   }
 
   .coaching p {
     margin: 0;
     max-width: 34rem;
     color: var(--ink-soft);
-  }
-
-  .panel-basis {
-    margin: 0 0 1.1rem;
   }
 
   .panel-title {
@@ -740,11 +736,6 @@
     text-transform: uppercase;
     color: var(--faint);
     margin: 1.4rem 0 0.5rem;
-  }
-
-  .panel > .panel-title:first-child,
-  .coaching .panel-title {
-    margin-top: 0;
   }
 
   .statlist {
