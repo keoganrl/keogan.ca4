@@ -244,7 +244,7 @@
                 {#if !p.qualified}
                   needs {MIN_CHAOS_SESSIONS - p.sessionsPlayed} more session{MIN_CHAOS_SESSIONS - p.sessionsPlayed === 1 ? '' : 's'}
                 {:else}
-                  best +{Math.round(p.bestNight)}bb · worst {Math.round(p.worstNight)}bb
+                  best +{Math.round(p.bestSession)}bb · worst {Math.round(p.worstSession)}bb
                 {/if}
               </span>
             </span>

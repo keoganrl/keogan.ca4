@@ -138,7 +138,7 @@ create table events (
   --
   -- Added 2026-08: existing databases need
   --   alter table events add column all_in boolean not null default false;
-  -- Rows that predate the column read as false, so all-in counts only cover nights
+  -- Rows that predate the column read as false, so all-in counts only cover sessions
   -- played after the migration. Nothing else depends on it.
   all_in boolean not null default false,
   created_at timestamptz not null default now()
@@ -162,7 +162,7 @@ create index events_all_in_player_idx on events (player_id) where all_in;
 create or replace view lifetime_stats as
 -- Best and worst net at each table, computed once per session rather than as a
 -- correlated subquery per player. Deliberately spans EVERY seat, including ones with
--- no identity: a guest who wins the night really did win it, and should deny the
+-- no identity: a guest who wins the session really did win it, and should deny the
 -- credit to everyone else rather than handing second place a first.
 with session_extremes as (
   select
@@ -179,7 +179,7 @@ select
   coalesce(sum(p.stack - p.total_buyin), 0) as total_net,
   coalesce(max(p.stack - p.total_buyin), 0) as biggest_win,
   -- Placement is by NET (stack − buy-in), never raw stack: with rebuys in play the
-  -- biggest stack at the table can belong to the night's biggest loser — three rebuys
+  -- biggest stack at the table can belong to the session's biggest loser — three rebuys
   -- deep and up from their last one is still down overall. Same grading as the
   -- placement column in analytics-export.sql. A tie counts for everyone level at the
   -- bottom (and times_first treats a tie at the top the same way).
@@ -227,23 +227,23 @@ join sessions s on s.id = p.session_id and s.status = 'ended'
 join session_extremes se on se.session_id = p.session_id
 group by pi.id, pi.display_name;
 
--- session_results: one row per player per ended session — the per-night grain the
+-- session_results: one row per player per ended session — the per-session grain the
 -- lifetime board can't show. Backs the net chart (cumulative net over time) and the
 -- chaos score (volatility of a player's results).
 --
 -- Like lifetime_stats this is CREATE OR REPLACE so the statement doubles as its own
 -- migration; re-run it on an existing database to add the view.
 --
--- net_bb normalises a night's result to big blinds. Raw net is not comparable across
+-- net_bb normalises a session's result to big blinds. Raw net is not comparable across
 -- stakes — a 5/10 tournament dwarfs a 1/2 cash game — so anything that averages or
--- takes a standard deviation across nights must use net_bb, not net.
+-- takes a standard deviation across sessions must use net_bb, not net.
 --
--- The divisor is the night's STARTING big blind (blind_schedule's first rung), NOT
--- sessions.big_blind: escalation rewrites big_blind in place all night, so by the end
--- it holds whatever rung the night finished on — often 2-8x where it started, and
--- higher exactly on the wild nights with eliminations. Dividing by the final blind
--- shrank precisely the results the chaos score exists to surface, and made two nights
--- at the same starting stakes incomparable. Sessions that predate blind schedules
+-- The divisor is the session's STARTING big blind (blind_schedule's first rung), NOT
+-- sessions.big_blind: escalation rewrites big_blind in place throughout the session, so
+-- by the end it holds whatever rung the session finished on — often 2-8x where it
+-- started, and higher exactly on the wild sessions with eliminations. Dividing by the
+-- final blind shrank precisely the results the chaos score exists to surface, and made
+-- two sessions at the same starting stakes incomparable. Sessions that predate blind schedules
 -- have an empty schedule and fall back to big_blind, which for them never changed.
 create or replace view session_results as
 select

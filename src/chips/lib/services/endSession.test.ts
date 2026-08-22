@@ -82,7 +82,7 @@ beforeEach(() => {
 
 describe('endSession', () => {
 	// The 2026-08-14 bug: hand_total_bet is only cleared by the next deal, so ending
-	// the night right after the last showdown found everyone's final-hand commitment
+	// the session right after the last showdown found everyone's final-hand commitment
 	// still sitting there and handed it back — on top of the pot the winners had
 	// already been awarded. A 9000-chip session cashed out at 12290.
 	it('refunds nothing when the last hand was already awarded', async () => {
@@ -108,7 +108,7 @@ describe('endSession', () => {
 		expect(w?.values).toMatchObject({ hand_total_bet: 0, current_round_bet: 0 });
 	});
 
-	it('hands back the felt when the night ends mid-hand', async () => {
+	it('hands back the felt when the session ends mid-hand', async () => {
 		state.pot = 130;
 		state.players = [
 			player('sb', { stack: 900, hand_total_bet: 10 }),

@@ -3,7 +3,7 @@ updated version of personal website
 
 ## /chips
 
-A poker-night chip tracker (ported from the standalone poker-tracker project),
+A poker-session chip tracker (ported from the standalone poker-tracker project),
 living at `keogan.ca/chips`. Unlinked from the main site and excluded from the
 sitemap. The Svelte app lives in `src/chips/` (components + game logic) with
 Astro pages in `src/pages/chips/`; the invite routes (`/chips/WOLF` etc.) are
@@ -16,11 +16,11 @@ SQL editor. It creates the game tables, the `lifetime_stats` view, open anon
 RLS policies, the required Data API grants, and enables realtime on
 `sessions`, `players`, and `events`.
 
-### When a night's numbers look wrong
+### When a session's numbers look wrong
 
 `supabase/session-audit.sql` backtracks a session from its `session_id`:
-find the right session (join codes are reused, so a night can split across
-two), check that chips balance
+find the right session (join codes are reused, so a session can split across
+two rows), check that chips balance
 (`sum(stack) + pot == sum(total_buyin)`), then walk the `events` ledger to
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
@@ -80,7 +80,7 @@ predates it still renders the board, just without the chart and chaos tab.
 
 The all-ins tab is a plain lifetime tally: every bet, raise or call that left a player
 with nothing behind, summed over every game they have ever played. Not a rate, not a
-per-night average — the number on the row is the count itself.
+per-session average — the number on the row is the count itself.
 
 Blind posts that swallowed a short stack are flagged in the ledger but **not** counted:
 being too short to cover a blind isn't a decision, and counting it would just re-rank the
@@ -92,7 +92,7 @@ certain. Replaying the ledger to find the same thing would need the replayed sta
 on exactly zero, and `session-audit.sql` exists precisely because those totals sometimes
 drift — one chip out and an all-in silently reads as an ordinary bet.
 
-The consequence is that the counts only cover nights played after the migration:
+The consequence is that the counts only cover sessions played after the migration:
 
 ```sql
 alter table events add column all_in boolean not null default false;
@@ -127,7 +127,7 @@ posts a blind or gets a turn to act.
 
 Two things follow, and the file explains both at length:
 
-- At 3-handed there is no cutoff, so short-handed nights contribute nothing to the
+- At 3-handed there is no cutoff, so short-handed sessions contribute nothing to the
   CO columns rather than contributing something wrong.
 - Every percentage ships with its denominator (`cbet_opps`, `steal_opps`, …) and a
   blunt `reliability` column, because a steal percentage off three opportunities is
@@ -136,7 +136,7 @@ Two things follow, and the file explains both at length:
 ### Exporting the data for player analytics
 
 `supabase/analytics-export.sql` pulls the whole history out in analysis-ready
-shapes — a player-per-night fact table, the denormalized event ledger,
+shapes — a player-per-session fact table, the denormalized event ledger,
 playing-style stats (VPIP, PFR, aggression factor) that the leaderboard has no
 room for, running-total trend lines, and head-to-head records. Each block runs
 in the Supabase SQL editor and downloads as CSV; the header explains the psql

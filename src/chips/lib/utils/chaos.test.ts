@@ -62,11 +62,11 @@ describe('chaosScores', () => {
 
 	it('sorts unqualified players last regardless of how wildly they swung', () => {
 		const scores = chaosScores([
-			...rows('twoNights', [-500, 500]),
+			...rows('twoSessions', [-500, 500]),
 			...rows('regular', [1, -1, 2, -2])
 		]);
 		expect(scores[0].identityId).toBe('regular');
-		expect(scores[scores.length - 1].identityId).toBe('twoNights');
+		expect(scores[scores.length - 1].identityId).toBe('twoSessions');
 	});
 
 	it('measures swing in big blinds, so stakes do not decide the ranking', () => {
@@ -84,10 +84,10 @@ describe('chaosScores', () => {
 		expect(find(scores, 'trio').swing).toBeCloseTo(10);
 	});
 
-	it('reports the best and worst night behind the swing', () => {
+	it('reports the best and worst session behind the swing', () => {
 		const scores = chaosScores(rows('ada', [-45, 12, 88]));
-		expect(find(scores, 'ada').bestNight).toBe(88);
-		expect(find(scores, 'ada').worstNight).toBe(-45);
+		expect(find(scores, 'ada').bestSession).toBe(88);
+		expect(find(scores, 'ada').worstSession).toBe(-45);
 	});
 
 	it('coerces numeric strings from the driver instead of concatenating them', () => {

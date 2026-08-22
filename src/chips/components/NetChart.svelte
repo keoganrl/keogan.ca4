@@ -88,7 +88,7 @@
       {/each}
     </g>
 
-    <!-- x caption: first and last night, rather than a tick per session -->
+    <!-- x caption: first and last session, rather than a tick per session -->
     <text class="axis-label" x={PAD_L} y={H - 5}>{shortDate(data.sessionDates[0])}</text>
     {#if sessionCount > 1}
       <text class="axis-label" x={W - PAD_R} y={H - 5} text-anchor="end">

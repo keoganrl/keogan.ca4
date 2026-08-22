@@ -38,26 +38,26 @@
 --      them. Sessions where identity_id is NULL entirely can't be attributed
 --      to anyone and are dropped from every per-player rollup.
 --   2. Unended sessions. `lifetime_stats` counts only status = 'ended', and
---      so does query 1. A night nobody tapped "end" on contributes nothing.
+--      so does query 1. A session nobody tapped "end" on contributes nothing.
 --      Query 6 lists them.
 
 
 -- =====================================================================
 -- 1. Player-session facts  ← start here; the one export to keep
 -- =====================================================================
--- One row per player per night. This is the grain everything else pivots
+-- One row per player per session. This is the grain everything else pivots
 -- from: drop it in a spreadsheet and you can get per-player totals, trends
 -- over time, placement distributions, and stake-adjusted results without
 -- writing any more SQL.
 --
 -- `net` is stack - total_buyin, the same number the cashout screen and the
--- lifetime board show. It is NOT comparable across nights on its own — a
+-- lifetime board show. It is NOT comparable across sessions on its own — a
 -- 1/2 cash game and a 5/10 tournament produce wildly different magnitudes —
 -- so `net_bb` (net in big blinds) and `net_buyins` are the columns to
 -- actually compare and average.
 
 select
-  s.created_at::date                                as night,
+  s.created_at::date                                as session_date,
   s.id                                              as session_id,
   s.join_code,
   s.game_mode,
@@ -65,7 +65,7 @@ select
   s.starting_stack,
   coalesce(pi.display_name, p.display_name)         as player,
   p.identity_id,
-  p.display_name                                    as name_that_night,
+  p.display_name                                    as name_that_session,
   count(*) over (partition by p.session_id)         as table_size,
   rank() over (
     partition by p.session_id
@@ -77,7 +77,7 @@ select
   p.stack                                           as final_stack,
   p.stack - p.total_buyin                           as net,
   -- Starting big blind, not s.big_blind: escalation rewrites big_blind in place, so at
-  -- session end it holds the night's final rung. Same divisor as session_results.
+  -- session end it holds the session's final rung. Same divisor as session_results.
   round((p.stack - p.total_buyin)::numeric
         / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
                           s.big_blind), 0), 1)      as net_bb,
@@ -118,10 +118,10 @@ order by s.created_at desc, placement;
 --   deal / street      hand boundary and street divider; no amount
 --
 -- Big export: this is every row in `events`. Use the psql \copy route above
--- rather than the SQL editor once you have more than a handful of nights.
+-- rather than the SQL editor once you have more than a handful of sessions.
 
 select
-  s.created_at::date                                as night,
+  s.created_at::date                                as session_date,
   e.session_id,
   count(*) filter (where e.type = 'deal')
     over (partition by e.session_id order by e.seq rows unbounded preceding) as hand_no,
@@ -216,7 +216,7 @@ seats as (
   join sessions s on s.id = p.session_id and s.status = 'ended'
   left join players_identity pi on pi.id = p.identity_id
 ),
--- every hand dealt on a night they were seated for: the conservative denominator
+-- every hand dealt in a session they were seated for: the conservative denominator
 at_table as (
   select st.key, sum(sh.hands_dealt) as hands_at_table
   from (select distinct key, session_id from seats) st
@@ -261,7 +261,7 @@ order by b.hands desc;
 
 
 -- =====================================================================
--- 4. Per-night results table  ← for charting a trend line
+-- 4. Per-session results table  ← for charting a trend line
 -- =====================================================================
 -- Query 1 collapsed to one row per player with a running total, so you can
 -- plot everyone's bankroll over time without a spreadsheet formula. Ordered
@@ -270,7 +270,7 @@ order by b.hands desc;
 select
   coalesce(pi.display_name, p.display_name)               as player,
   p.identity_id,
-  s.created_at::date                                      as night,
+  s.created_at::date                                      as session_date,
   p.stack - p.total_buyin                                 as net,
   -- Starting big blind, not s.big_blind — see query 1.
   round((p.stack - p.total_buyin)::numeric
@@ -300,7 +300,7 @@ order by player, s.created_at;
 -- 5. Head to head
 -- =====================================================================
 -- Every pair who has sat at the same table, how often, and how each did over
--- those shared nights. Not "who beat whom in a hand" — the app doesn't record
+-- those shared sessions. Not "who beat whom in a hand" — the app doesn't record
 -- hand-level opponents — but it does answer "does A only win when B is
 -- there?", which is the argument people actually have.
 
@@ -321,7 +321,7 @@ with pairs as (
 select
   coalesce(pa.display_name, '?')  as player_a,
   coalesce(pb.display_name, '?')  as player_b,
-  count(*)                        as nights_together,
+  count(*)                        as sessions_together,
   sum(a_net)                      as a_net,
   sum(b_net)                      as b_net,
   count(*) filter (where a_net > b_net) as a_finished_ahead,
@@ -330,7 +330,7 @@ from pairs
 left join players_identity pa on pa.id = a_id
 left join players_identity pb on pb.id = b_id
 group by 1, 2
-order by nights_together desc, player_a;
+order by sessions_together desc, player_a;
 
 
 -- =====================================================================
@@ -340,10 +340,10 @@ order by nights_together desc, player_a;
 -- separate; run them one at a time.
 
 -- 6a. Sessions that never got ended — invisible to the leaderboard and to
--- queries 1, 3, 4, 5. If a real night is in here, end it (or fix its status)
+-- queries 1, 3, 4, 5. If a real session is in here, end it (or fix its status)
 -- before exporting.
 select
-  s.id, s.created_at::date as night, s.join_code, s.status,
+  s.id, s.created_at::date as session_date, s.join_code, s.status,
   count(p.id) as players, sum(p.total_buyin) as bought_in, s.last_active_at
 from sessions s
 left join players p on p.session_id = s.id
@@ -352,14 +352,14 @@ group by s.id
 order by s.created_at desc;
 
 -- 6b. Seats with no identity attached, and identities that only ever played
--- one night. Both are candidates for the leaderboard's merge tool — a real
+-- one session. Both are candidates for the leaderboard's merge tool — a real
 -- regular fragmented across several rows will drag every average here off.
 select
   coalesce(pi.display_name, p.display_name) as name,
   p.identity_id,
   count(*)                                  as sessions,
-  min(s.created_at::date)                   as first_night,
-  max(s.created_at::date)                   as last_night,
+  min(s.created_at::date)                   as first_session_date,
+  max(s.created_at::date)                   as last_session_date,
   case
     when p.identity_id is null then 'no identity — cannot be attributed'
     when count(*) = 1 then 'single session — possible duplicate'
@@ -372,11 +372,11 @@ group by p.identity_id, coalesce(pi.display_name, p.display_name)
 having p.identity_id is null or count(*) = 1
 order by name;
 
--- 6c. Nights whose chips don't balance (same check as session-audit.sql query
+-- 6c. Sessions whose chips don't balance (same check as session-audit.sql query
 -- 0b). Any session listed has a wrong `net` in it, so every rollup above
 -- inherits that error. Take it to session-audit.sql before exporting.
 select
-  s.id, s.created_at::date as night, s.status,
+  s.id, s.created_at::date as session_date, s.status,
   sum(p.total_buyin) as bought_in,
   sum(p.stack)       as final_stacks,
   s.pot,

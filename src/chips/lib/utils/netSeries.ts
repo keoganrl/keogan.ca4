@@ -49,9 +49,9 @@ export interface NetSeriesData {
  * Turns per-session rows into one cumulative line per player.
  *
  * Every line shares an x-axis of *global* session number, not each player's own count —
- * a player's third night and someone else's third night are usually different evenings,
- * so per-player indexing would silently compare unrelated points. On a night a player
- * sat out, their total carries forward flat: they neither won nor lost.
+ * a player's third session and someone else's third session are usually different
+ * evenings, so per-player indexing would silently compare unrelated points. On a
+ * session a player sat out, their total carries forward flat: they neither won nor lost.
  *
  * All lines start at zero at index 0 (before any session). A player who debuts late is
  * flat at zero until then, which is true — they had no results yet — and keeps every
@@ -87,7 +87,7 @@ export function buildNetSeries(rows: SessionResult[]): NetSeriesData {
 	}
 
 	// Colour is assigned by debut order and never by rank. Rank changes every session, so
-	// rank-coloured lines would repaint the whole chart after every night and nobody could
+	// rank-coloured lines would repaint the whole chart after every session and nobody could
 	// track their own line across two visits. Debut order is stable for good.
 	const debutOf = (id: string) => Math.min(...[...(byPlayer.get(id)?.nets.keys() ?? [0])]);
 	const orderedIds = [...byPlayer.keys()].sort((a, b) => {
