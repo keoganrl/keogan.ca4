@@ -26,7 +26,9 @@ declare
   hand_events int;
   other_refs  int;
 begin
-  select count(*), min(id) into seats_found, seat
+  -- array_agg()[1], not min(): there is no min() aggregate over uuid. Same reason
+  -- the blinds CTE in player-stats.sql is written that way.
+  select count(*), (array_agg(id))[1] into seats_found, seat
   from players
   where session_id = 'f453cf37-d758-41fd-a7ea-0bb2195d1362'
     and display_name = 'Kite';
