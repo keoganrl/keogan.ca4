@@ -1,6 +1,6 @@
 -- Chips — stats self-test: a synthetic ledger with hand-computed expected outputs.
 --
--- Verifies that `player_stats` (player-stats.sql) and `session_results`
+-- Verifies that `player_stats_source` (player-stats.sql) and `session_results`
 -- (chips-schema.sql) reconstruct the right numbers from the ledger. Four players
 -- play four hands written in the exact shapes the app's logEvent calls produce,
 -- covering the cases that have historically been easy to get wrong:
@@ -208,7 +208,13 @@ act as (
          wtsd_pct, saw_flop_hands,
          vpip_early_pct, early_hands, vpip_late_pct, late_hands,
          vpip_blinds_pct, blind_hands, chips_won, biggest_pot
-  from player_stats
+  -- player_stats_source, NOT player_stats: the latter is a materialised snapshot now,
+  -- and a snapshot cannot see rows this transaction has not committed — it would report
+  -- every expected row as a mismatch. The source view IS the logic under test, and the
+  -- planner problem that made it unreadable in production does not apply to seven
+  -- synthetic players. (Refreshing the snapshot here instead would work, but it would
+  -- rebuild the real one from a database temporarily full of test data.)
+  from player_stats_source
   where display_name like 'selftest _'
 ),
 -- session_results: net_bb must use the session's STARTING big blind.

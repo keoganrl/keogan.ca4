@@ -38,19 +38,26 @@ export interface ChaosScore {
  * it is a 22% difference.
  */
 export function chaosScores(rows: SessionResult[]): ChaosScore[] {
-	const byPlayer = new Map<string, { name: string; values: number[] }>();
+	// Keyed by session, not pushed into a list: one player can hold two seats in a
+	// session (they joined from a private tab and the two identities were later merged),
+	// and session_results has a row per seat. Counting those as two sessions would both
+	// inflate their session count and feed the deviation two half-results instead of the
+	// one real one — splitting a big night into two small ones reads as steadiness.
+	const byPlayer = new Map<string, { name: string; nets: Map<string, number> }>();
 	for (const r of rows) {
 		let entry = byPlayer.get(r.identity_id);
 		if (!entry) {
-			entry = { name: r.display_name, values: [] };
+			entry = { name: r.display_name, nets: new Map() };
 			byPlayer.set(r.identity_id, entry);
 		}
 		// net_bb arrives from Postgres numeric, which supabase-js hands back as a string on
 		// some driver versions; coerce rather than trust it, or every sum becomes concatenation.
-		entry.values.push(Number(r.net_bb) || 0);
+		const net = Number(r.net_bb) || 0;
+		entry.nets.set(r.session_id, (entry.nets.get(r.session_id) ?? 0) + net);
 	}
 
-	const scored = [...byPlayer.entries()].map(([identityId, { name, values }]) => {
+	const scored = [...byPlayer.entries()].map(([identityId, { name, nets }]) => {
+		const values = [...nets.values()];
 		const n = values.length;
 		const mean = values.reduce((a, b) => a + b, 0) / n;
 		const swing =

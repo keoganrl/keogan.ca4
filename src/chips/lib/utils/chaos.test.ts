@@ -18,6 +18,39 @@ const find = (list: ReturnType<typeof chaosScores>, id: string) =>
 	list.find((s) => s.identityId === id)!;
 
 describe('chaosScores', () => {
+	// One human, two chairs in the same session — they joined again from a private tab
+	// and the identities were merged afterwards. session_results has a row per seat.
+	it('counts a session played from two seats once', () => {
+		const twoSeats: SessionResult[] = [
+			{
+				identity_id: 'me',
+				display_name: 'me',
+				session_id: 'night-1',
+				created_at: '2026-01-01T00:00:00Z',
+				big_blind: 2,
+				net: 60,
+				net_bb: 30
+			},
+			{
+				identity_id: 'me',
+				display_name: 'me',
+				session_id: 'night-1',
+				created_at: '2026-01-01T00:00:00Z',
+				big_blind: 2,
+				net: 40,
+				net_bb: 20
+			},
+			...rows('me', [-10, 5]).map((r, i) => ({ ...r, session_id: `night-${i + 2}` }))
+		];
+
+		const me = find(chaosScores(twoSeats), 'me');
+		// Three nights, not four.
+		expect(me.sessionsPlayed).toBe(3);
+		// And the night was +50bb across the two chairs, not a +30 and a +20 — which as
+		// two separate results would read as a steadier player than they were.
+		expect(me.bestSession).toBe(50);
+	});
+
 	it('ranks the wilder player above the steadier one', () => {
 		const scores = chaosScores([
 			...rows('wild', [-100, 100, -80, 90]),

@@ -18,7 +18,7 @@ RLS policies, the required Data API grants, and enables realtime on
 
 #### Migrations, in order
 
-Fresh install: run 1-4. An existing database: run whichever it has not had. Every
+Fresh install: run 1-5. An existing database: run whichever it has not had. Every
 file is safe to re-run.
 
 1. `supabase/chips-schema.sql` — tables, `lifetime_stats`, `session_results`, RLS,
@@ -27,10 +27,14 @@ file is safe to re-run.
    function.
 3. `supabase/player-profiles.sql` and `supabase/session-recaps.sql` — storage for
    the generated text.
-4. `supabase/2026-08-23-audit-fixes.sql` — one seat per identity per session (a
-   real unique index rather than a hopeful check), drops three columns nothing ever
-   read, and stops offering `player_stats_source` to the Data API. It refuses to
-   run if duplicate seats already exist, and tells you how to list them.
+4. `supabase/2026-08-23-audit-fixes.sql` — drops three columns nothing ever read
+   and stops offering `player_stats_source` to the Data API.
+5. `supabase/one-seat-per-identity.sql` — the seat-merging functions, a fold of any
+   duplicate seats already in the data, and the unique index that stops new ones.
+   **Read the "look before you merge" query in its header first**: folding two chairs
+   together adds their stacks and buy-ins, which is right for two chairs somebody
+   really played and wrong for a phantom row carrying a buy-in nobody paid.
+   The leaderboard's merge button calls `merge_identities()` from this file.
 
 Optional, and only after setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel:
 `supabase/lock-down-generated-text.sql` makes the profile and recap tables

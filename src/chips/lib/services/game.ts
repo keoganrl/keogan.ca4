@@ -103,7 +103,23 @@ export async function startSession(
 export async function mergeIdentities(keepId: string, ghostIds: string[]): Promise<void> {
 	const ghosts = ghostIds.filter((id) => id !== keepId);
 	if (!keepId || !ghosts.length) return;
-	// Repoint before deleting: players.identity_id references players_identity.
+
+	// Done in the database, as one transaction. Two statements from here cannot do it
+	// correctly once players carries the one-seat-per-identity index: if the survivor
+	// and a ghost both have a seat in the same session — which is exactly what merging
+	// someone who played a night under two identities means — repointing violates the
+	// index, and the two chairs have to be folded into one first. See
+	// supabase/one-seat-per-identity.sql.
+	const { error } = await supabase.rpc('merge_identities', {
+		keep_id: keepId,
+		ghost_ids: ghosts
+	});
+	if (!error) return;
+
+	// The function is missing, which means the index is missing too (they ship in the
+	// same file), so the old two-statement version is still safe here. A database that
+	// has had neither is the only place this runs.
+	console.warn('merge_identities RPC unavailable, falling back:', error);
 	await supabase.from('players').update({ identity_id: keepId }).in('identity_id', ghosts);
 	await supabase.from('players_identity').delete().in('id', ghosts);
 }

@@ -170,8 +170,15 @@ are actually pinned down.
   `chipMoves.test.ts` holds the mock honest by making the cache disagree with the
   database on purpose.
 - **One seat per identity per session**, enforced by a unique index (added in
-  `supabase/2026-08-23-audit-fixes.sql`). `joinSession` treats losing the insert
-  race as a rejoin.
+  `supabase/one-seat-per-identity.sql`). `joinSession` treats losing the insert race
+  as a rejoin. The index is also why merging identities goes through the
+  `merge_identities()` SQL function rather than two statements from the client:
+  merging someone who played one night under two identities gives the survivor two
+  chairs in that session, and those have to be folded into one before the repoint,
+  or it violates the index and the client silently no-ops. `merge_seats()` does the
+  folding — stacks and buy-ins add, and every reference is repointed BEFORE the row
+  goes, because `events.player_id` is ON DELETE SET NULL and an ownerless event
+  drops out of its hand's ring in `player_stats`.
 - **Seat order is not unique**, so every ordering goes through `bySeat` in
   `src/chips/lib/utils/seat.ts`, which breaks ties by id. Two clients disagreeing
   about turn order is the failure this prevents.
