@@ -33,6 +33,7 @@ import {
 import type { Session, Player, GameEvent } from '../types';
 import { formatBlindTime } from '../utils/blindSchedule';
 import { computePots, resolveAward } from '../utils/pots';
+import { facingShortAllIn, minRaiseTotal } from '../utils/betting';
 
 export function createTableStore(sessionId: string, identityId: string) {
 	let session = $state<Session | null>(null);
@@ -394,6 +395,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 	const canRaise = $derived.by(() => {
 		if (!me || !session) return false;
 		if (me.stack <= session.current_bet - me.current_round_bet) return false;
+		// An all-in for less than a full raise doesn't reopen the betting: having already
+		// acted this street, my only answers are calling the extra or folding.
+		if (me.acted_on_street === session.street && facingShortAllIn(events, session)) return false;
 		return players.some((p) => p.is_active && !p.folded && p.id !== me!.id && p.stack > 0);
 	});
 
@@ -457,13 +461,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 		}
 	}
 
-	// Smallest legal round total for a raise (or opening bet): double the current
-	// bet, or the big blind when opening. Exposed so the UI can floor its slider at
-	// the same value it's validated against.
-	function minRaiseTotal(s: Session): number {
-		return s.current_bet > 0 ? s.current_bet * 2 : s.big_blind;
-	}
-
 	async function placeBet(amount: number, outOfTurn = false): Promise<string> {
 		if (!me || !session) return 'Not ready';
 		if (amount <= 0) return 'Enter a bet amount.';
@@ -478,6 +475,12 @@ export function createTableStore(sessionId: string, identityId: string) {
 			return session.current_bet > 0
 				? `Raise to at least ${minTotal}.`
 				: `Bet at least ${minTotal}.`;
+		}
+
+		// The betting was closed to me by an all-in too small to reopen it (canRaise hides
+		// the panel for this, but the panel can already be open when the all-in lands).
+		if (me.acted_on_street === session.street && facingShortAllIn(events, session)) {
+			return 'That all-in was too small to reopen the betting — call or fold.';
 		}
 
 		if (outOfTurn) await resolveInterveningBeforeMe();
@@ -505,6 +508,14 @@ export function createTableStore(sessionId: string, identityId: string) {
 		const newHandTotalBet = meRow.hand_total_bet + amount;
 		const newSessionBet = Math.max(sRow.current_bet, newRoundBet);
 
+		// An all-in that falls short of a full raise does NOT reopen the betting, so the
+		// players who already acted keep their acted state: they still owe the difference
+		// (isStreetOver compares round bets, so it will not call the street done while
+		// anyone is short of the new total), but they are answering the old action rather
+		// than getting a fresh one. Anyone yet to act this street has acted_on_street null
+		// already and is untouched either way.
+		const reopensBetting = !(newStack === 0 && newRoundBet < minRaiseTotal(sRow));
+
 		players = players.map((p) => {
 			if (p.id === me!.id)
 				return {
@@ -516,7 +527,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 				};
 			// A bet/raise reopens the street: everyone else must act again. Clearing acted_on_street
 			// to null makes acted_on_street === session.street false for them.
-			if (p.is_active && !p.folded) return { ...p, acted_on_street: null };
+			if (reopensBetting && p.is_active && !p.folded) return { ...p, acted_on_street: null };
 			return p;
 		});
 		session = { ...session, pot: newPot, current_bet: newSessionBet };
@@ -537,7 +548,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 				.from('sessions')
 				.update({ pot: newPot, current_bet: newSessionBet })
 				.eq('id', sessionId),
-			otherNonFolded.length > 0
+			reopensBetting && otherNonFolded.length > 0
 				? supabase
 						.from('players')
 						.update({ acted_on_street: null })
@@ -692,13 +703,17 @@ export function createTableStore(sessionId: string, identityId: string) {
 			}
 		}
 
-		await endHandService(dealSession, players, winner, potTotal);
+		// The rows endHand actually worked from: post-award, pre-blind, straight out of the
+		// database. The cached `players` is not safe to judge the game over by — a rebuy
+		// landing while the award echo is still in flight would look like a busted player,
+		// and the session would close under someone who had just bought back in.
+		const roster = (await endHandService(dealSession, players, winner, potTotal)) ?? players;
 
 		// Last player standing wins: nobody is left to deal to, so the game is over and
 		// everyone lands on the cashout page. The current_actor_id check keeps a stray
 		// lobby "Next hand" tap (game not started, one player seated) from ending it.
 		if (session.current_actor_id !== null) {
-			const withChips = players.filter((p) => p.is_active && p.stack > 0);
+			const withChips = roster.filter((p) => p.is_active && p.stack > 0);
 			if (withChips.length <= 1) await endSessionService(sessionId);
 		}
 	}
@@ -708,12 +723,14 @@ export function createTableStore(sessionId: string, identityId: string) {
 		firstPotWinnerId = null;
 		handPotTotal = 0;
 		resetAwards();
-		await voidHandService(session, players);
+		// Fresh rows as read before the refund, for the same reason performEndHand wants
+		// them; the refund is still to be added on, hence the stack + hand_total_bet below.
+		const roster = (await voidHandService(session, players)) ?? players;
 
 		// Same last-player-standing check as performEndHand, with refunds counted —
 		// voiding is how the host moves on after everyone else has left mid-hand.
 		if (session.current_actor_id !== null) {
-			const withChips = players.filter((p) => p.is_active && p.stack + p.hand_total_bet > 0);
+			const withChips = roster.filter((p) => p.is_active && p.stack + p.hand_total_bet > 0);
 			if (withChips.length <= 1) await endSessionService(sessionId);
 		}
 	}
@@ -994,7 +1011,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		resetHand: () => runExclusive(performResetHand, undefined),
 		setDealer: (playerId: string) => runExclusive(() => performSetDealer(playerId), undefined),
 		claimHost: performClaimHost,
-		endSession: performEndSession,
+		endSession: () => runExclusive(performEndSession, undefined),
 		leaveTable: performLeaveTable,
 		startGame: performStartGame,
 		setBlindLevel: performSetBlindLevel,

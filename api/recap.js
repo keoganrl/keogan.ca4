@@ -17,8 +17,27 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A session someone fabricated to burn tokens would have to have real seats and
 // real dealt hands. Cheap to check, and it turns "spend money on demand" into
 // "play a whole game of poker first".
+//
+// Worth being honest about how much that is worth: the chips tables are
+// anon-writable by design, so a determined stranger with the publishable key can
+// manufacture a session that passes these checks. What they cannot do is get past
+// DAILY_CAP below, which is the control that actually bounds the money.
 const MIN_PLAYERS = 2;
 const MIN_HANDS = 5;
+
+// Most recaps ever written in one day, across every session. The group plays one
+// session a night, so this is roughly twenty times normal use and will never be
+// reached by playing poker. It is a ceiling on a bad day, not a quota.
+const DAILY_CAP = 20;
+
+// A claim older than this is treated as dead and taken over. The claim row is what
+// stops two phones on the game-over screen paying for the same paragraph twice, and
+// recap.js deletes its own claim when a generation fails — but a function that is
+// killed outright (a timeout, a crash between the claim and the delete) never gets
+// to run that cleanup, and the null row it leaves behind would answer "already
+// generating" to every future visit, forever. Generation takes a few seconds, so
+// anything still unfinished after three minutes is not coming back.
+const CLAIM_TIMEOUT_MS = 3 * 60 * 1000;
 
 
 
@@ -46,8 +65,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ recap: existing.recap, cached: true });
     }
     if (existing) {
+      const claimedAt = Date.parse(existing.claimed_at ?? '');
       // Claimed but not finished: another screen is generating it right now.
-      return res.status(202).json({ error: 'already generating' });
+      if (Number.isFinite(claimedAt) && Date.now() - claimedAt < CLAIM_TIMEOUT_MS) {
+        return res.status(202).json({ error: 'already generating' });
+      }
+      // Old enough that whoever claimed it is never coming back. Clear the corpse and
+      // fall through to claim it ourselves.
+      await db(`session_recaps?session_id=eq.${sessionId}`, { method: 'DELETE' });
     }
 
     const [playerCount, handCount] = await Promise.all([
@@ -56,6 +81,16 @@ export default async function handler(req, res) {
     ]);
     if (playerCount < MIN_PLAYERS || handCount < MIN_HANDS) {
       return res.status(422).json({ error: 'not enough of a game to write about' });
+    }
+
+    // The spend ceiling, and the only check here that a fabricated session cannot walk
+    // around: it counts what has actually been generated today rather than anything
+    // about the caller. Note it counts claims, not just finished recaps, so failed
+    // attempts that did reach the model still count against the day.
+    const today = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const spentToday = await countOf(`session_recaps?claimed_at=gte.${today}`, 'session_id');
+    if (spentToday >= DAILY_CAP) {
+      return res.status(429).json({ error: 'daily recap limit reached' });
     }
 
     // Claim before generating. The primary key on session_id means a second request

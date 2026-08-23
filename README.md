@@ -16,6 +16,30 @@ SQL editor. It creates the game tables, the `lifetime_stats` view, open anon
 RLS policies, the required Data API grants, and enables realtime on
 `sessions`, `players`, and `events`.
 
+#### Migrations, in order
+
+Fresh install: run 1-4. An existing database: run whichever it has not had. Every
+file is safe to re-run.
+
+1. `supabase/chips-schema.sql` — tables, `lifetime_stats`, `session_results`, RLS,
+   grants, realtime.
+2. `supabase/player-stats.sql` — the extended stats snapshot and its refresh
+   function.
+3. `supabase/player-profiles.sql` and `supabase/session-recaps.sql` — storage for
+   the generated text.
+4. `supabase/2026-08-23-audit-fixes.sql` — one seat per identity per session (a
+   real unique index rather than a hopeful check), drops three columns nothing ever
+   read, and stops offering `player_stats_source` to the Data API. It refuses to
+   run if duplicate seats already exist, and tells you how to list them.
+
+Optional, and only after setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel:
+`supabase/lock-down-generated-text.sql` makes the profile and recap tables
+read-only to the browser. See CLAUDE.md.
+
+`supabase/stats-selftest.sql` checks the stats reconstruction against a synthetic
+ledger with hand-computed answers. It runs in a transaction and rolls back, so it
+is safe against the live database; zero rows means pass.
+
 ### When a session's numbers look wrong
 
 `supabase/session-audit.sql` backtracks a session from its `session_id`:
@@ -27,9 +51,15 @@ the Supabase SQL editor.
 
 ### The button when somebody leaves
 
-The button does **not** move when a player stands up mid-hand. It stays on their empty
-seat as a *dead button* until the next deal, exactly as it would at a real table, and
-`endHand` then rotates off that seat. Rotating at the moment somebody left was the old
+Standing up mid-hand folds you first: the fold is written and logged, and if the turn
+was yours it moves on. Without that the table could stall with `current_actor_id`
+pointing at a phone that had left the page — the client that self-corrects a
+mis-aimed turn is the actor's own — and the ledger would show a hand walked out on as
+a hand taken to showdown.
+
+The button, though, does **not** move when a player stands up mid-hand. It stays on
+their empty seat as a *dead button* until the next deal, exactly as it would at a real
+table, and `endHand` then rotates off that seat. Rotating at the moment somebody left was the old
 behaviour and it was wrong twice over: it shifted the blinds and the action order under a
 hand that was already being played, and then `endHand` rotated *again*, so the button
 jumped two seats and skipped whoever was next.
@@ -42,6 +72,24 @@ down. It needs the full roster — inactive rows included — which is why `getA
 `allPlayers` argument. Handing them only the active players is what made the button
 collapse back to seat 0, which is the bug people saw as "the order went funny after
 someone left".
+
+### Two rules worth knowing
+
+**Heads-up, the button posts the small blind** and acts first before the flop, last
+after it. This is the standard arrangement; the app used the reverse until 2026-08,
+so heads-up hands from before then reconstruct with the two blinds swapped in
+`player_stats`. Nothing else in the stats is affected.
+
+**An all-in that is too small to be a full raise does not reopen the betting.** If
+you have already acted and someone shoves for less than a real raise, you can call
+the difference or fold, but you cannot raise again — otherwise a player one chip
+short could be used to reopen an action that was closed. The app works this out from
+the ledger (`lib/utils/betting.ts`), hides the raise button, and refuses the bet if
+the panel was already open when the shove landed.
+
+Note the minimum raise here is a house simplification: **double the current bet**,
+rather than the standard current-bet-plus-last-increment. It is easier to explain at
+a kitchen table and errs towards bigger raises.
 
 ### Leaderboard: net chart and chaos score
 
@@ -160,6 +208,15 @@ The recap is the only endpoint a browser can reach, so it cannot hold a secret. 
 will only write about a session that exists, has ended, has at least 2 players and
 5 dealt hands, and has no recap yet; that last condition caps spend at one
 generation per session, ever. Runs about 2 seconds to first token.
+
+Those checks are worth being honest about, though: the chips tables are
+anon-writable by design and the publishable key is in the browser bundle, so
+someone determined could fabricate a session that satisfies all of them. Both
+endpoints therefore also carry a flat daily ceiling — 20 recaps and 60 profiles
+across everyone, roughly twenty times normal use — and the real backstop is a spend
+limit set on the Anthropic workspace, which lives outside this repo. CLAUDE.md has
+the full picture, including how to make the two generated-text tables read-only to
+the browser.
 
 Setup lives outside this repo: `ANTHROPIC_API_KEY` and `PROFILE_SECRET` in Vercel,
 a Supabase webhook on `sessions` UPDATE pointing at `/api/profile`, and the

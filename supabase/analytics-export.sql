@@ -351,7 +351,8 @@ order by sessions_together desc, player_a;
 -- before exporting.
 select
   s.id, s.created_at::date as session_date, s.join_code, s.status,
-  count(p.id) as players, sum(p.total_buyin) as bought_in, s.last_active_at
+  count(p.id) as players, sum(p.total_buyin) as bought_in,
+  max(p.last_heartbeat_at) as last_seen
 from sessions s
 left join players p on p.session_id = s.id
 where s.status <> 'ended'

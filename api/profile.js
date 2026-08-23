@@ -14,11 +14,20 @@
 // who seems to know raising is legal"), and those only exist if the model can see
 // the whole table.
 import Anthropic from '@anthropic-ai/sdk';
-import { db, json } from './_supabase.js';
+import { db, json, countOf } from './_supabase.js';
 import { selectForRewrite, snapshotOf } from './_drift.js';
 import { SHARED, PROFILE, COACHING } from './_prompts.js';
 
 const MODEL = 'claude-opus-5';
+
+// Most profiles this will rewrite in a day, across everyone. A busy night moves a
+// handful, and the largest run ever made was a first-time write of the whole table,
+// so this is several full tables' worth. Drift gating is what makes calls rare; this
+// is the backstop for the case where something makes drift stop being rare — a
+// change to the view's arithmetic, or someone manufacturing sessions to trigger it.
+// The endpoint is behind a shared secret, but the secret travels with a webhook
+// anyone able to write to the database can cause to fire.
+const DAILY_PROFILE_CAP = 60;
 
 
 export default async function handler(req, res) {
@@ -57,6 +66,18 @@ export default async function handler(req, res) {
 
     if (rewrite.length === 0) {
       return res.status(200).json({ ok: true, rewritten: 0, reason: 'nobody drifted' });
+    }
+
+    // Checked after the drift gate, so a quiet night still costs one cheap count and
+    // no model call. Counts profiles written in the last day, which is the closest
+    // stored record of what has been spent.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const writtenToday = await countOf(
+      `player_profiles?generated_at=gte.${since}`,
+      'identity_id'
+    );
+    if (writtenToday >= DAILY_PROFILE_CAP) {
+      return res.status(429).json({ ok: false, error: 'daily profile limit reached' });
     }
 
     const byId = new Map(profiles.map((p) => [p.identity_id, p]));

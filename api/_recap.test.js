@@ -34,7 +34,8 @@ const state = {
   recapRow: null,
   players: 4,
   hands: 20,
-  claimOk: true
+  claimOk: true,
+  recapsToday: 0
 };
 
 global.fetch = vi.fn(async (url, init = {}) => {
@@ -52,6 +53,8 @@ global.fetch = vi.fn(async (url, init = {}) => {
   const counting = init.headers?.Prefer === 'count=exact';
   if (path.startsWith('sessions?')) return ok(state.session ? [state.session] : []);
   if (path.startsWith('session_recaps?select')) return ok(state.recapRow ? [state.recapRow] : []);
+  if (path.startsWith('session_recaps?claimed_at') && counting)
+    return ok([], { 'content-range': `0-0/${state.recapsToday}` });
   if (path.startsWith('players?') && counting)
     return ok([], { 'content-range': `0-0/${state.players}` });
   if (path.startsWith('events?') && counting)
@@ -91,6 +94,7 @@ beforeEach(() => {
   state.players = 4;
   state.hands = 20;
   state.claimOk = true;
+  state.recapsToday = 0;
   streamChunks = ['A ', 'good ', 'night.'];
   finalMessage = { stop_reason: 'end_turn' };
   modelBehaviour = () => {};
@@ -141,11 +145,43 @@ describe('what it refuses', () => {
   });
 
   it('does not start a second generation while one is in flight', async () => {
-    state.recapRow = { session_id: ID, recap: null };
+    state.recapRow = { session_id: ID, recap: null, claimed_at: new Date().toISOString() };
     const r = res();
     await handler(req(), r);
     expect(r.code).toBe(202);
     expect(calls.model).toHaveLength(0);
+  });
+
+  // A function killed between claiming the row and writing the text (a timeout, a
+  // crash) never runs its own cleanup. Without a timeout on the claim, the null row it
+  // leaves behind answers "already generating" to every future visit and the session
+  // never gets a recap at all.
+  it('takes over a claim old enough to be abandoned', async () => {
+    const longAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    state.recapRow = { session_id: ID, recap: null, claimed_at: longAgo };
+    const r = res();
+    await handler(req(), r);
+    expect(calls.model).toHaveLength(1);
+    expect(
+      calls.db.some((c) => c.method === 'DELETE' && c.path.startsWith('session_recaps'))
+    ).toBe(true);
+  });
+
+  // The one guard a fabricated session cannot walk around. Everything above asks
+  // whether THIS session deserves a recap; this asks what the day has already cost.
+  it('stops generating once the day has hit its cap', async () => {
+    state.recapsToday = 20;
+    const r = res();
+    await handler(req(), r);
+    expect(r.code).toBe(429);
+    expect(calls.model).toHaveLength(0);
+  });
+
+  it('keeps generating while the day is under its cap', async () => {
+    state.recapsToday = 19;
+    const r = res();
+    await handler(req(), r);
+    expect(calls.model).toHaveLength(1);
   });
 
   it('loses the claim race gracefully rather than generating twice', async () => {

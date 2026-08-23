@@ -5,7 +5,13 @@ import type { Player } from '../types';
 // endSession (select/update, eq, single) with the builder itself thenable, so
 // `await` and Promise.all resolve it the way the real one does. Reads come from
 // `state`; writes are recorded for assertions.
-const state: { players: Player[]; pot: number } = { players: [], pot: 0 };
+// `alreadyEnded` makes the compare-and-swap that closes the session match no rows,
+// which is what a second client ending the same session sees.
+const state: { players: Player[]; pot: number; alreadyEnded: boolean } = {
+	players: [],
+	pot: 0,
+	alreadyEnded: false
+};
 const writes: { table: string; id: string; values: Record<string, unknown> }[] = [];
 const rpcCalls: string[] = [];
 
@@ -23,12 +29,16 @@ vi.mock('../supabase', () => {
 			if (col === 'id') b._id = val;
 			return b;
 		};
+		b.neq = () => b;
 		b.then = (resolve: (v: unknown) => unknown) =>
 			Promise.resolve(
 				chain(() => {
 					if (b._update) {
+						// The session close is a CAS — it returns the rows it matched, and endSession
+						// only refunds when it matched one.
+						if (table === 'sessions' && state.alreadyEnded) return { data: [], error: null };
 						writes.push({ table, id: b._id ?? '', values: b._update });
-						return { data: null, error: null };
+						return { data: [{ id: b._id ?? 'S' }], error: null };
 					}
 					return table === 'players'
 						? { data: state.players, error: null }
@@ -78,6 +88,7 @@ beforeEach(() => {
 	rpcCalls.length = 0;
 	state.players = [];
 	state.pot = 0;
+	state.alreadyEnded = false;
 });
 
 describe('endSession', () => {
@@ -145,6 +156,21 @@ describe('endSession', () => {
 			status: 'ended',
 			pot: 0
 		});
+	});
+
+	// Two clients can end the same session at once: the host taps End session while the
+	// last hand's auto-end fires behind them. Both read the same pot and both compute
+	// absolute stack writes from it, so without the compare-and-swap the felt can be
+	// handed back twice.
+	it('refunds nothing when another client has already closed the session', async () => {
+		state.alreadyEnded = true;
+		state.pot = 130;
+		state.players = [player('sb', { stack: 900, hand_total_bet: 10 })];
+
+		await endSession('S');
+
+		expect(writes).toEqual([]);
+		expect(rpcCalls).toEqual([]);
 	});
 
 	// player_stats is a snapshot scoped to ended sessions, so this is the moment a

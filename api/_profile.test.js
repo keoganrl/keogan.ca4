@@ -22,7 +22,8 @@ vi.mock('@anthropic-ai/sdk', () => ({
 const state = {
   stats: [],
   profiles: [],
-  participants: []
+  participants: [],
+  profilesToday: 0
 };
 
 global.fetch = vi.fn(async (url, init = {}) => {
@@ -30,17 +31,19 @@ global.fetch = vi.fn(async (url, init = {}) => {
   calls.db.push({ path, method: init.method ?? 'GET', body: init.body });
   // text(), not json(): the endpoint reads the body as text so it can tolerate the
   // empty one PostgREST returns from a write.
-  const ok = (data) => ({
+  const ok = (data, headers = {}) => ({
     ok: true,
     status: 200,
     text: async () => (data === null ? '' : JSON.stringify(data)),
     json: async () => data,
-    headers: { get: () => null }
+    headers: { get: (k) => headers[k.toLowerCase()] ?? null }
   });
   if (path.startsWith('rpc/refresh_player_stats'))
     return { ok: true, status: 204, text: async () => '', headers: { get: () => null } };
   if (path.startsWith('player_stats')) return ok(state.stats);
   if (path.startsWith('player_profiles?select')) return ok(state.profiles);
+  if (path.startsWith('player_profiles?generated_at'))
+    return ok([], { 'content-range': `0-0/${state.profilesToday}` });
   if (path.startsWith('player_profiles')) return ok(null);
   if (path.startsWith('players?select')) return ok(state.participants);
   return { ok: false, status: 404, text: async () => 'unknown path' };
@@ -81,6 +84,7 @@ beforeEach(() => {
   state.stats = [stat('a', 'Ada'), stat('b', 'Bo'), stat('c', 'Cy')];
   state.profiles = [];
   state.participants = [{ identity_id: 'a' }, { identity_id: 'b' }];
+  state.profilesToday = 0;
   modelReply = {
     model: 'claude-fable-5',
     stop_reason: 'end_turn',
@@ -158,6 +162,33 @@ describe('deciding whether to spend anything', () => {
     const order = calls.db.map((c) => c.path.split('?')[0]);
     expect(order[0]).toBe('rpc/refresh_player_stats');
     expect(order.indexOf('player_stats')).toBeGreaterThan(0);
+  });
+
+  // The backstop for the day drift stops being rare — a correction to the view's
+  // arithmetic, or somebody manufacturing sessions to make the webhook fire.
+  it('stops rewriting once the day has hit its cap', async () => {
+    state.profilesToday = 60;
+    const r = res();
+    await handler(ended(), r);
+    expect(calls.model).toHaveLength(0);
+    expect(r.code).toBe(429);
+  });
+
+  it('keeps rewriting while the day is under its cap', async () => {
+    state.profilesToday = 59;
+    await handler(ended(), res());
+    expect(calls.model).toHaveLength(1);
+  });
+
+  // The cap costs a query; a quiet night should not even pay that.
+  it('does not check the cap when nobody drifted', async () => {
+    state.profiles = state.stats.map((s) => ({
+      identity_id: s.identity_id,
+      profile: 'existing',
+      stats_snapshot: { vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, af: 1.2 }
+    }));
+    await handler(ended(), res());
+    expect(calls.db.some((c) => c.path.startsWith('player_profiles?generated_at'))).toBe(false);
   });
 });
 

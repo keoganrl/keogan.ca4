@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { bySeat } from '../utils/seat';
 import type { Session, Player, BlindLevel, GameEventType } from '../types';
 
 // Appends a row to the session's activity log (the ledger). Fire-and-forget from the
@@ -89,7 +90,7 @@ export function nextButtonPlayerId(
 	// Rotate by seat_order, not array position. Callers pass the store's `players` array, which
 	// is only seat-ordered at load time — after reorderSeats (or any realtime reshuffle) the array
 	// order and seat_order diverge, and an array-position rotation would skip to the wrong seat.
-	const sorted = [...eligiblePlayers].sort((a, b) => a.seat_order - b.seat_order);
+	const sorted = [...eligiblePlayers].sort(bySeat);
 	// A button that can't be placed at all rotates onto seat 0 — the only sane guess.
 	// A dead button (busted, left, kicked) resolves to the seat it actually sits on, so
 	// play advances one seat clockwise from there rather than jumping back to the front.
@@ -106,8 +107,11 @@ export function nextButtonPlayerId(
  * Postflop: action starts left of the button (SB).
  *   seat order: [BTN, SB, BB, UTG, ...] → action order: [SB, BB, UTG, ..., BTN]
  *
- * Heads-up follows the house rule (not the tournament convention): the dealer
- * posts the BB, the other player posts the SB and speaks first on every street.
+ * Heads-up: the button IS the small blind. They act first preflop and last on every
+ * later street, which is the standard rule everywhere and the reverse of the postflop
+ * order at a full table. (This app used the opposite arrangement until 2026-08 — the
+ * dealer posting the big blind — so hands played before then reconstruct with SB and BB
+ * swapped. Only the two blind seats are affected, and only in heads-up hands.)
  *
  * Pass `allPlayers` (the full roster, inactive rows included) whenever it's to hand: it's
  * what lets a dead button — someone left or busted while holding it — keep its seat instead
@@ -121,21 +125,55 @@ export function getActionOrder(
 ): Player[] {
 	if (activePlayers.length === 0) return [];
 
-	const sorted = [...activePlayers].sort((a, b) => a.seat_order - b.seat_order);
+	const sorted = [...activePlayers].sort(bySeat);
 	// If the button can't be placed at all, treat seat 0 as the button.
 	const effectiveBtnIdx = buttonIndexIn(sorted, session, allPlayers) ?? 0;
 	const n = sorted.length;
 
 	let startOffset: number;
 	if (n <= 2) {
-		// Heads-up house rule: the non-dealer (SB) acts first on every street.
-		startOffset = (effectiveBtnIdx + 1) % n;
+		// Heads-up: the button is the small blind, so preflop they are the one left of the
+		// big blind and speak first. Postflop that reverses and the big blind leads, which
+		// the general "one left of the button" offset already gives.
+		startOffset = isPreflop ? effectiveBtnIdx : (effectiveBtnIdx + 1) % n;
 	} else {
 		// 3+ players: preflop starts UTG (3 left of btn), postflop starts SB (1 left of btn).
 		startOffset = isPreflop ? (effectiveBtnIdx + 3) % n : (effectiveBtnIdx + 1) % n;
 	}
 
 	return Array.from({ length: n }, (_, i) => sorted[(startOffset + i) % n]);
+}
+
+/**
+ * Who posts the blinds, given the players actually dealt into the hand.
+ *
+ * Exported because the table's SB/BB badges have to answer the same question the deal
+ * does. They used to compute it themselves with their own copy of the offsets, which was
+ * fine right up until the offsets changed: the badges would have gone on saying the
+ * non-dealer posts the small blind while the chips said otherwise.
+ *
+ * Dead button aware: someone can hold the button and still be missing from `playersIn`
+ * (busted, or left mid-hand and waiting on the next deal). Their seat keeps the button,
+ * so the blinds land where they would have without the departure.
+ *
+ * Heads-up the button posts the small blind, so both blinds fall on the two seats in a
+ * different order than the general "one and two seats left of the button" rule gives.
+ */
+export function blindSeats(
+	playersIn: Player[],
+	session: Session,
+	allPlayers: Player[] = playersIn
+): { sb: Player | null; bb: Player | null } {
+	const sorted = [...playersIn].sort(bySeat);
+	const n = sorted.length;
+	if (n < 2) return { sb: null, bb: null };
+
+	const btnIdx = buttonIndexIn(sorted, session, allPlayers) ?? 0;
+	// The +n keeps the modulo positive: buttonIndexIn returns -1 for a dead button sitting
+	// ahead of every remaining seat.
+	const at = (offset: number) => sorted[(btnIdx + offset + n) % n];
+
+	return n === 2 ? { sb: at(0), bb: at(1) } : { sb: at(1), bb: at(2) };
 }
 
 /**
@@ -178,7 +216,7 @@ export function playersBeforeTarget(
 ): Player[] | null {
 	const eligible = activePlayers
 		.filter((p) => p.is_active && !p.folded && p.stack > 0)
-		.sort((a, b) => a.seat_order - b.seat_order);
+		.sort(bySeat);
 	const startIdx = eligible.findIndex((p) => p.id === session.current_actor_id);
 	if (startIdx === -1) return null; // no current actor among eligible players
 	if (!eligible.some((p) => p.id === targetId)) return null; // target can't act
@@ -234,11 +272,18 @@ async function rotateButton(
 export async function advanceTurn(session: Session, activePlayers: Player[]): Promise<void> {
 	const eligible = activePlayers.filter((p) => !p.folded && p.stack > 0);
 	if (!eligible.length) return;
-	const sorted = [...eligible].sort((a, b) => a.seat_order - b.seat_order);
+	const sorted = [...eligible].sort(bySeat);
+	// The next eligible player who sorts after the current actor, wrapping to the front.
+	// Compared with the same comparator the list was sorted by, rather than on seat_order
+	// alone: two rows CAN share a seat number (nothing in the database forbids it, and a
+	// join race is how it happens), and a raw `seat_order >` test steps over both of them
+	// every time. The player on the duplicate seat would then never be handed the action,
+	// and the street could not end without them.
+	//
+	// The current actor need not be eligible — they may have just folded or gone all-in —
+	// so they are looked up in the wider list and used only as a sort position.
 	const currentActor = activePlayers.find((p) => p.id === session.current_actor_id);
-	const currentSeatOrder = currentActor?.seat_order ?? -1;
-	const afterCurrent = sorted.filter((p) => p.seat_order > currentSeatOrder);
-	const next = afterCurrent.length > 0 ? afterCurrent[0] : sorted[0];
+	const next = (currentActor ? sorted.find((p) => bySeat(p, currentActor) > 0) : null) ?? sorted[0];
 	await supabase
 		.from('sessions')
 		.update({ current_actor_id: next.id })
@@ -262,17 +307,25 @@ export async function setCurrentActor(
 		.eq('street', street);
 }
 
+// Writes the fold and its ledger line, without touching whose turn it is. Split out
+// because folding someone is not always the same as passing the action on: a player who
+// stands up or gets kicked mid-hand folds without the turn moving, unless they happened
+// to be the one holding it.
+async function markFolded(playerId: string, session: Session): Promise<void> {
+	await supabase
+		.from('players')
+		.update({ folded: true, acted_on_street: session.street })
+		.eq('id', playerId);
+	await logEvent(session.id, 'fold', { playerId, street: session.street });
+}
+
 // Marks player as folded and advances the turn.
 export async function foldHand(
 	player: Player,
 	session: Session,
 	activePlayers: Player[]
 ): Promise<void> {
-	await supabase
-		.from('players')
-		.update({ folded: true, acted_on_street: session.street })
-		.eq('id', player.id);
-	await logEvent(session.id, 'fold', { playerId: player.id, street: session.street });
+	await markFolded(player.id, session);
 	const withFolded = activePlayers.map((p) => (p.id === player.id ? { ...p, folded: true } : p));
 	await advanceTurn(session, withFolded);
 }
@@ -452,12 +505,19 @@ export async function advanceStreet(
 	return nextStreet.charAt(0).toUpperCase() + nextStreet.slice(1);
 }
 
+/**
+ * Closes the hand out and deals the next one.
+ *
+ * Returns the freshly read player rows it worked from — post-award, pre-blind — so the
+ * caller can decide "is anybody left with chips?" against committed truth rather than
+ * against a realtime cache that may not have caught up. Null if the read failed.
+ */
 export async function endHand(
 	session: Session,
 	players: Player[],
 	winnerPlayerId: string | null,
 	handPotTotal: number
-): Promise<void> {
+): Promise<Player[] | null> {
 	if (winnerPlayerId && handPotTotal > 0) {
 		await supabase.from('hands').insert({
 			session_id: session.id,
@@ -480,7 +540,7 @@ export async function endHand(
 	const basePlayers = (freshRows as Player[] | null) ?? players;
 
 	const activePlayers = basePlayers.filter((p) => p.is_active);
-	if (!activePlayers.length) return;
+	if (!activePlayers.length) return freshRows ? basePlayers : null;
 
 	// Busted players (stack 0 after awards) are dealt out of the next hand: they start
 	// folded — so they're skipped by turn order and street logic — and the button skips them.
@@ -528,17 +588,20 @@ export async function endHand(
 		hand_total_bet: 0
 	}));
 	await postBlinds(nextSession, freshPlayers, true, basePlayers);
+	return freshRows ? basePlayers : null;
 }
 
 // Shared re-deal core: returns every chip each player put in this hand (hand_total_bet)
 // to their stack, resets the hand state, points the button at `buttonId`, and re-posts
 // blinds. Players left with zero chips after the refund start the new hand folded (dealt
 // out). No hand record is written — there was no winner.
+// Returns the freshly read rows it worked from (pre-refund), or null if the read failed
+// — see endHand for why the caller wants them.
 async function redealHand(
 	session: Session,
 	callerPlayers: Player[],
 	buttonId: string | null
-): Promise<void> {
+): Promise<Player[] | null> {
 	// Same stale-snapshot hazard as endHand: the refund below writes stacks as
 	// absolute values (stack + hand_total_bet), so compute it from freshly read
 	// rows rather than the caller's realtime cache.
@@ -553,7 +616,7 @@ async function redealHand(
 	// players are dealt into the next hand (postBlinds below).
 	const allPlayers = (freshRows as Player[] | null) ?? callerPlayers;
 	const activePlayers = allPlayers.filter((p) => p.is_active);
-	if (!activePlayers.length) return;
+	if (!activePlayers.length) return freshRows ? allPlayers : null;
 	await Promise.all([
 		...allPlayers.map((p) =>
 			supabase
@@ -585,20 +648,21 @@ async function redealHand(
 		hand_total_bet: 0
 	}));
 	await postBlinds(nextSession, freshPlayers, true, allPlayers);
+	return freshRows ? allPlayers : null;
 }
 
 // Ends the current hand without awarding the pot and moves on: refund, rotate the button,
 // deal the next hand. Used when the host advances with chips still unclaimed in the pot.
-export async function voidHand(session: Session, players: Player[]): Promise<void> {
+export async function voidHand(session: Session, players: Player[]): Promise<Player[] | null> {
 	const activePlayers = players.filter((p) => p.is_active);
-	if (!activePlayers.length) return;
+	if (!activePlayers.length) return null;
 
 	// `players` (every row, departures included) is what places a dead button — see endHand.
 	const withChips = activePlayers.filter((p) => !bustedAfterRefund(p));
 	const nextButtonId = withChips.length
 		? nextButtonPlayerId(session, withChips, players)
 		: nextButtonPlayerId(session, activePlayers, players);
-	await redealHand(session, activePlayers, nextButtonId);
+	return redealHand(session, activePlayers, nextButtonId);
 }
 
 // Re-deals the current hand: refund all bets and start over with the SAME button.
@@ -743,6 +807,19 @@ export async function endSession(sessionId: string): Promise<void> {
 	const players = (rows as Player[] | null) ?? [];
 	let remaining = Math.max(0, sessionRow?.pot ?? 0);
 
+	// Close the books FIRST, and only if they are still open. Everything below is an
+	// absolute stack write computed from the pot read above, so two clients ending the
+	// same session together (the host tapping End session while the last hand's auto-end
+	// fires) could each hand the felt back. Whoever wins this compare-and-swap owns the
+	// refund; the loser sees no row and stops here, having written nothing.
+	const { data: closed } = await supabase
+		.from('sessions')
+		.update({ status: 'ended', pot: 0, current_bet: 0 })
+		.eq('id', sessionId)
+		.neq('status', 'ended')
+		.select('id');
+	if (!closed?.length) return;
+
 	// Every player's hand columns get cleared, refund or not, so an ended session never
 	// leaves a stale commitment behind to be mistaken for chips owed.
 	const stale = players.filter((p) => p.hand_total_bet > 0 || p.current_round_bet > 0);
@@ -767,10 +844,6 @@ export async function endSession(sessionId: string): Promise<void> {
 			)
 		);
 	}
-	await supabase
-		.from('sessions')
-		.update({ status: 'ended', pot: 0, current_bet: 0 })
-		.eq('id', sessionId);
 
 	// player_stats is a snapshot, not a live view (see supabase/player-stats.sql for
 	// why), and this is the only moment its inputs change — the view is scoped to
@@ -790,8 +863,29 @@ export async function leaveTable(
 	session: Session,
 	allPlayers: Player[]
 ): Promise<void> {
+	// Standing up mid-hand is a fold, and has to be written as one. Deactivating alone
+	// left two things broken. The table could freeze: current_actor_id would go on
+	// pointing at somebody who has closed the page, and the one client that self-corrects
+	// a mis-aimed turn is the actor's own — which just navigated away. And the ledger had
+	// no fold for them, so player_stats counted a hand they walked out on as a hand they
+	// took to showdown (kicking someone already logged the fold; leaving did not).
+	const midHand = session.current_actor_id !== null;
+	if (midHand && !player.folded) {
+		await markFolded(player.id, session);
+	}
+
 	await supabase.from('players').update({ is_active: false }).eq('id', player.id);
 	await logEvent(session.id, 'leave', { playerId: player.id });
+
+	// Hand the action on if they were holding it. `allPlayers` still shows them active and
+	// seated (it predates the write above), which is what advanceTurn needs to know where
+	// to resume from; marking them folded is what keeps it from landing back on them.
+	if (midHand && session.current_actor_id === player.id) {
+		const withFolded = allPlayers
+			.filter((p) => p.is_active)
+			.map((p) => (p.id === player.id ? { ...p, folded: true } : p));
+		await advanceTurn(session, withFolded);
+	}
 
 	// The button only moves if no hand is in play. Mid-hand it stays on the departing
 	// player's seat as a DEAD BUTTON — the blinds are already posted against that seat,
@@ -829,17 +923,8 @@ export async function postBlinds(
 	const playersIn = activePlayers.filter(hasChips);
 	if (playersIn.length < 2) return;
 
-	const sorted = [...playersIn].sort((a, b) => a.seat_order - b.seat_order);
-	const n = sorted.length;
-	// Dead button aware: someone can hold the button and still be missing from playersIn
-	// (busted, or left mid-hand and waiting on the next deal). Their seat keeps the button,
-	// so the blinds land where they would have without the departure.
-	const effectiveBtnIdx = buttonIndexIn(sorted, session, allPlayers) ?? 0;
-
-	// SB sits left of the button at any table size. Heads-up (house rule) the +2
-	// offset wraps back onto the dealer, who posts the BB.
-	const sbPlayer = sorted[(effectiveBtnIdx + 1) % n];
-	const bbPlayer = sorted[(effectiveBtnIdx + 2) % n];
+	const { sb: sbPlayer, bb: bbPlayer } = blindSeats(playersIn, session, allPlayers);
+	if (!sbPlayer || !bbPlayer) return;
 
 	const sbAmount = Math.min(session.small_blind, sbPlayer.stack);
 	const bbAmount = Math.min(session.big_blind, bbPlayer.stack);
@@ -965,8 +1050,17 @@ export async function kickPlayer(
 	const activePlayers = allPlayers.filter((p) => p.is_active);
 
 	// Auto-fold if mid-hand and not already folded, so the hand can continue cleanly.
+	// Only pass the action on when the kicked player was the one holding it: foldHand
+	// advances from current_actor_id whoever it is handed, so kicking a player who was
+	// sitting quietly used to skip the turn of whoever was actually thinking. (The hand
+	// recovered on its own — the street cannot end while the skipped player still owes an
+	// action, so the turn came back around — but one street played out of order.)
 	if (session.current_actor_id && !targetPlayer.folded) {
-		await foldHand(targetPlayer, session, activePlayers);
+		if (session.current_actor_id === targetPlayer.id) {
+			await foldHand(targetPlayer, session, activePlayers);
+		} else {
+			await markFolded(targetPlayer.id, session);
+		}
 	}
 
 	await supabase.from('players').update({ is_active: false }).eq('id', targetPlayer.id);
@@ -1091,16 +1185,33 @@ export async function adjustChips(
 // (current_round_bet / hand_total_bet) are untouched, so pot math is unaffected. Nets
 // shift accordingly (net = stack − buy-in): the giver goes down, the receiver up.
 export async function giveChips(giver: Player, recipient: Player, amount: number): Promise<void> {
-	if (!Number.isInteger(amount) || amount <= 0 || amount > giver.stack) return;
+	if (!Number.isInteger(amount) || amount <= 0) return;
 	if (!recipient.is_active || recipient.id === giver.id) return;
+
+	// Both stacks are read fresh: these are absolute writes, and the caller's rows come
+	// from the realtime cache. Handing chips across the table is something people do right
+	// after a pot lands, which is exactly when an echo is still in flight — crediting the
+	// recipient from a stack that predates their win would wipe the pot they just took.
+	// (Same reasoning as callBet and adjustChips.)
+	const { data: fresh } = await supabase
+		.from('players')
+		.select('id, stack')
+		.in('id', [giver.id, recipient.id]);
+	const stackOf = new Map((fresh ?? []).map((r) => [r.id as string, r.stack as number]));
+	const giverStack = stackOf.get(giver.id) ?? giver.stack;
+	const recipientStack = stackOf.get(recipient.id) ?? recipient.stack;
+	// Checked against the real stack, not the cached one: the cache can show chips that
+	// have already been bet.
+	if (amount > giverStack) return;
+
 	await Promise.all([
 		supabase
 			.from('players')
-			.update({ stack: giver.stack - amount })
+			.update({ stack: giverStack - amount })
 			.eq('id', giver.id),
 		supabase
 			.from('players')
-			.update({ stack: recipient.stack + amount })
+			.update({ stack: recipientStack + amount })
 			.eq('id', recipient.id)
 	]);
 	await logEvent(giver.session_id, 'give', {
@@ -1111,12 +1222,26 @@ export async function giveChips(giver: Player, recipient: Player, amount: number
 }
 
 export async function doRebuy(player: Player, amount: number): Promise<void> {
+	if (!Number.isInteger(amount) || amount <= 0) return;
+
+	// Read fresh, for the usual reason (absolute writes off a realtime cache — see
+	// callBet). A rebuy is bought at the moment of busting, so it lands right behind the
+	// award that busted them: topping up from a cached stack would either re-credit chips
+	// they had already lost or erase the last pot they won.
+	const { data: fresh } = await supabase
+		.from('players')
+		.select('stack, total_buyin')
+		.eq('id', player.id)
+		.single();
+	const stack = fresh?.stack ?? player.stack;
+	const totalBuyin = fresh?.total_buyin ?? player.total_buyin;
+
 	await Promise.all([
 		supabase
 			.from('players')
 			.update({
-				stack: player.stack + amount,
-				total_buyin: player.total_buyin + amount
+				stack: stack + amount,
+				total_buyin: totalBuyin + amount
 			})
 			.eq('id', player.id),
 		supabase.from('rebuys').insert({

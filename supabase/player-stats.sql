@@ -406,7 +406,11 @@ select
 from by_identity
 order by hands desc;
 
-grant select on player_stats_source to anon, authenticated, service_role;
+-- NOT granted to anon/authenticated: read directly this view takes minutes (see the
+-- note at the foot of this file) and the Data API kills it at three seconds, so
+-- exposing it only offers a way to tie up a connection. Everything reads the
+-- materialised player_stats below instead.
+grant select on player_stats_source to service_role;
 
 -- ---------------------------------------------------------------------------
 -- WHY player_stats IS A SNAPSHOT AND NOT THE VIEW ABOVE

@@ -9,7 +9,7 @@
   import { renderSVG } from 'uqr';
   import { groupEventsByHand, describeEvent, streetLabel } from '../lib/utils/ledger';
   import { resolveAward } from '../lib/utils/pots';
-  import { buttonIndexIn } from '../lib/services/table';
+  import { blindSeats } from '../lib/services/table';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -31,6 +31,7 @@
   let showLeaveConfirm = $state(false);
   let showVoidConfirm = $state(false);
   let showResetConfirm = $state(false);
+  let showEndConfirm = $state(false);
   let blindUnit = $state<'SB' | 'BB'>('SB');
   let betStep = $derived(
     blindUnit === 'SB' ? (store?.session?.small_blind ?? 1) : (store?.session?.big_blind ?? 1)
@@ -152,21 +153,16 @@
   const seatsInHand = $derived(activeBySeat.filter((p) => p.stack > 0 || p.hand_total_bet > 0));
 
   // SB/BB badge holders, computed once per state change instead of per player row.
-  // Matches postBlinds exactly, dead button included: buttonIndexIn keeps the button on
-  // the seat of a player who busted or walked mid-hand, so the badges stay put instead of
-  // sliding a seat the moment somebody leaves. Its result can be -1 (button on a seat
-  // ahead of the whole list), hence the extra +length before the modulo.
-  const badgeButtonIdx = $derived(
+  // Answered by the same helper the deal uses, so the badges cannot describe a different
+  // arrangement than the one the chips follow (heads-up, where the button posts the small
+  // blind, is exactly the case where a second copy of the offsets would have gone stale).
+  const blinds = $derived(
     store?.session
-      ? (buttonIndexIn(seatsInHand, store.session, store.players) ?? 0)
-      : 0
+      ? blindSeats(seatsInHand, store.session, store.players)
+      : { sb: null, bb: null }
   );
-  const sbBadgeId = $derived(
-    seatsInHand[(badgeButtonIdx + 1 + seatsInHand.length) % seatsInHand.length]?.id
-  );
-  const bbBadgeId = $derived(
-    seatsInHand[(badgeButtonIdx + 2 + seatsInHand.length) % seatsInHand.length]?.id
-  );
+  const sbBadgeId = $derived(blinds.sb?.id);
+  const bbBadgeId = $derived(blinds.bb?.id);
 
   function cancelLongPress() {
     if (longPressTimer) clearTimeout(longPressTimer);
@@ -508,6 +504,7 @@
     showLeaveConfirm = false;
     showVoidConfirm = false;
     showResetConfirm = false;
+    showEndConfirm = false;
   }
 </script>
 
@@ -922,15 +919,45 @@
                   </div>
                 {/if}
               {/if}
-              <button
-                class="cbtn cbtn-danger cbtn-block"
-                onclick={() => {
-                  s.endSession();
-                  closeMenu();
-                }}
-              >
-                End session
-              </button>
+              <!-- Behind a confirmation like every other irreversible control here:
+                   one tap ends the night for everyone at the table, cashes out every
+                   stack and closes the books. -->
+              {#if !showEndConfirm}
+                <button
+                  class="cbtn cbtn-danger cbtn-block"
+                  onclick={() => {
+                    showRebuy = false;
+                    showGive = false;
+                    showLeaveConfirm = false;
+                    showVoidConfirm = false;
+                    showResetConfirm = false;
+                    showEndConfirm = true;
+                  }}
+                >
+                  End session
+                </button>
+              {:else}
+                <div class="menu-sub">
+                  <p class="menu-note">
+                    End the game for everyone? Final stacks are recorded and the table
+                    closes.
+                  </p>
+                  <button
+                    class="cbtn cbtn-danger cbtn-block"
+                    disabled={s.actionPending}
+                    onclick={async () => {
+                      await s.endSession();
+                      closeMenu();
+                    }}
+                  >
+                    Confirm end session
+                  </button>
+                  <button
+                    class="cbtn cbtn-small cbtn-block"
+                    onclick={() => (showEndConfirm = false)}>Cancel</button
+                  >
+                </div>
+              {/if}
             </div>
           {/if}
         </div>

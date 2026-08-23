@@ -48,7 +48,9 @@ select
   count(p.id)                                   as players,
   coalesce(sum(p.total_buyin), 0)               as total_bought_in,
   s.created_at,
-  s.last_active_at
+  -- sessions.last_active_at was dropped (never written); the heartbeat the phones
+  -- send while a table is open is the real "when was anyone last here".
+  max(p.last_heartbeat_at)                      as last_seen
 from sessions s
 left join players p on p.session_id = s.id
 where s.created_at >= current_date            -- today; widen if you need to

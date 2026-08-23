@@ -23,7 +23,6 @@ create extension if not exists "pgcrypto";
 create table players_identity (
   id uuid primary key default gen_random_uuid(),
   display_name text,
-  email text,
   created_at timestamptz not null default now()
 );
 
@@ -33,7 +32,6 @@ create table sessions (
   join_code text not null,
   status text not null default 'waiting',
   game_mode text not null default 'cash',
-  host_player_id uuid,
   small_blind int not null default 1,
   big_blind int not null default 2,
   -- host-chosen buy-in; every joiner starts with exactly this stack
@@ -53,8 +51,7 @@ create table sessions (
   pot int not null default 0,
   street text not null default 'preflop'
     check (street in ('preflop', 'flop', 'turn', 'river', 'showdown')),
-  created_at timestamptz not null default now(),
-  last_active_at timestamptz
+  created_at timestamptz not null default now()
 );
 
 -- players: one row per seat per session
@@ -76,6 +73,14 @@ create table players (
   last_heartbeat_at timestamptz not null default now(),
   seat_order int not null default 0
 );
+
+-- One seat per person per game. joinSession checks for an existing seat and then
+-- inserts, so without this two tabs racing each other seat the same human twice —
+-- two stacks, two buy-ins, and a lifetime net that counts them both. NULL
+-- identity_ids do not conflict, so guest seats are unaffected.
+-- Added 2026-08: existing databases run supabase/2026-08-23-audit-fixes.sql, which
+-- checks for duplicates first and tells you how to merge them.
+create unique index players_session_identity_idx on players (session_id, identity_id);
 
 -- player FKs on sessions (deferred to avoid the circular reference)
 alter table sessions

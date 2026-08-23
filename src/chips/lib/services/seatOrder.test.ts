@@ -52,7 +52,11 @@ const {
 	getActionOrder,
 	firstPostflopActor,
 	nextButtonPlayerId,
+	advanceTurn,
 	leaveTable,
+	kickPlayer,
+	blindSeats,
+	postBlinds,
 	endHand
 } = await import('./table');
 
@@ -82,7 +86,6 @@ function session(over: Partial<Session> = {}): Session {
 		join_code: 'WOLF',
 		status: 'active',
 		game_mode: 'cash',
-		host_player_id: null,
 		small_blind: 1,
 		big_blind: 2,
 		starting_stack: 100,
@@ -96,7 +99,6 @@ function session(over: Partial<Session> = {}): Session {
 		pot: 0,
 		street: 'preflop',
 		created_at: '',
-		last_active_at: null,
 		...over
 	};
 }
@@ -216,6 +218,151 @@ describe('leaveTable', () => {
 		const s = session({ button_player_id: 'c', current_actor_id: null });
 		await leaveTable(a, s, [a, b, c, d]);
 		expect(writes.filter((w) => w.table === 'sessions')).toEqual([]);
+	});
+
+	// Standing up mid-hand has to be written as a fold. Without it the ledger has no
+	// fold for them, so player_stats scores a hand they walked out on as a hand they
+	// took to showdown — and if the turn was theirs, current_actor_id goes on pointing
+	// at a phone that has left the page.
+	it('folds a player who leaves mid-hand', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: 'b', street: 'flop' });
+		await leaveTable(c, s, [a, b, c, d]);
+
+		expect(writes).toContainEqual({
+			table: 'players',
+			values: { folded: true, acted_on_street: 'flop' }
+		});
+		expect(
+			writes.filter((w) => w.table === 'events').map((w) => w.values.type)
+		).toEqual(['fold', 'leave']);
+	});
+
+	it('passes the action on when the player leaving was holding it', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: 'b', street: 'flop' });
+		await leaveTable(b, s, [a, b, c, d]);
+
+		// c is the next seat along, and the turn must not stay on b.
+		expect(writes).toContainEqual({
+			table: 'sessions',
+			values: { current_actor_id: 'c' }
+		});
+	});
+
+	it('does not touch the turn when the player leaving was not holding it', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: 'b', street: 'flop' });
+		await leaveTable(d, s, [a, b, c, d]);
+
+		expect(writes.filter((w) => w.table === 'sessions')).toEqual([]);
+	});
+
+	it('writes no fold when there is no hand in play', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: null });
+		await leaveTable(c, s, [a, b, c, d]);
+
+		expect(
+			writes.filter((w) => w.table === 'events').map((w) => w.values.type)
+		).toEqual(['leave']);
+	});
+});
+
+// Nothing in the database forbids two rows sharing a seat number, and a join race is
+// how it happens. Every ordering therefore breaks the tie by id, and the turn has to
+// advance by that same comparator.
+describe('advanceTurn with duplicate seat numbers', () => {
+	it('reaches the second player on a shared seat instead of stepping over them', async () => {
+		// Two players both landed on seat 1. Sorted by (seat, id) that is x then y.
+		const x = player('x', 1);
+		const y = player('y', 1);
+		const s = session({ current_actor_id: 'x' });
+
+		await advanceTurn(s, [a, x, y, d]);
+
+		// A raw `seat_order > 1` test skips y entirely and jumps to d, and since the same
+		// thing happens on every lap y never acts and the street can never end.
+		expect(writes).toContainEqual({
+			table: 'sessions',
+			values: { current_actor_id: 'y' }
+		});
+	});
+
+	it('still wraps to the front from the last seat', async () => {
+		const s = session({ current_actor_id: 'd' });
+
+		await advanceTurn(s, [a, b, c, d]);
+
+		expect(writes).toContainEqual({
+			table: 'sessions',
+			values: { current_actor_id: 'a' }
+		});
+	});
+});
+
+describe('kickPlayer', () => {
+	// foldHand advances the turn from current_actor_id whoever it is handed, so kicking
+	// a player who was sitting quietly used to skip the turn of whoever was thinking.
+	it('folds a kicked non-actor without moving the turn', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: 'b', street: 'flop' });
+		await kickPlayer(d, s, [a, b, c, d]);
+
+		expect(writes).toContainEqual({
+			table: 'players',
+			values: { folded: true, acted_on_street: 'flop' }
+		});
+		expect(writes.filter((w) => w.table === 'sessions')).toEqual([]);
+	});
+
+	it('moves the turn on when the kicked player was the actor', async () => {
+		const s = session({ button_player_id: 'a', current_actor_id: 'd', street: 'flop' });
+		await kickPlayer(d, s, [a, b, c, d]);
+
+		// Wraps past the end of the seat list back to a.
+		expect(writes).toContainEqual({
+			table: 'sessions',
+			values: { current_actor_id: 'a' }
+		});
+	});
+});
+
+// Heads-up the button posts the small blind and speaks first before the flop, then
+// last on every street after it. The app had the opposite arrangement (dealer on the
+// big blind) until 2026-08.
+describe('heads-up', () => {
+	const hu = [player('btn', 0), player('other', 1)];
+
+	it('puts the small blind on the button', () => {
+		const s = session({ button_player_id: 'btn' });
+		const { sb, bb } = blindSeats(hu, s);
+		expect([sb?.id, bb?.id]).toEqual(['btn', 'other']);
+	});
+
+	it('has the button act first preflop', () => {
+		const s = session({ button_player_id: 'btn' });
+		expect(getActionOrder(s, hu, true).map((p) => p.id)).toEqual(['btn', 'other']);
+	});
+
+	it('has the big blind act first after the flop', () => {
+		const s = session({ button_player_id: 'btn' });
+		expect(getActionOrder(s, hu, false).map((p) => p.id)).toEqual(['other', 'btn']);
+	});
+
+	it('posts the blinds on the seats blindSeats names', async () => {
+		const s = session({ button_player_id: 'btn', small_blind: 1, big_blind: 2 });
+		await postBlinds(s, hu);
+
+		const posted = writes
+			.filter((w) => w.table === 'events' && String(w.values.type).startsWith('post_'))
+			.map((w) => [w.values.type, w.values.player_id]);
+		expect(posted).toEqual([
+			['post_sb', 'btn'],
+			['post_bb', 'other']
+		]);
+	});
+
+	// Three-handed and up is unchanged: the button is neither blind.
+	it('leaves three-handed blinds alone', () => {
+		const s = session({ button_player_id: 'a' });
+		const { sb, bb } = blindSeats([a, b, c], s);
+		expect([sb?.id, bb?.id]).toEqual(['b', 'c']);
 	});
 });
 

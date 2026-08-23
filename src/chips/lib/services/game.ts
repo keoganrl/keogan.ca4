@@ -115,12 +115,19 @@ export async function joinSession(
 	identityId: string,
 	name: string
 ): Promise<'joined' | 'rejoined'> {
-	const { data: existing } = await supabase
-		.from('players')
-		.select('id, is_active')
-		.eq('session_id', sessionId)
-		.eq('identity_id', identityId)
-		.single();
+	// Deliberately not .single(): it errors on more than one row, and that error is
+	// indistinguishable here from "no row", so a session that had somehow seated this
+	// identity twice would seat them a third time on every rejoin. Taking the first row
+	// re-seats them in the chair they already have.
+	const existing = (
+		await supabase
+			.from('players')
+			.select('id, is_active')
+			.eq('session_id', sessionId)
+			.eq('identity_id', identityId)
+			.order('seat_order')
+			.limit(1)
+	).data?.[0];
 
 	if (existing) {
 		// A kicked or departed player keeps their row (is_active=false) — reactivate it or
@@ -171,7 +178,20 @@ export async function joinSession(
 		})
 		.select('id')
 		.single();
-	if (error || !inserted) throw new Error('Failed to join session');
+
+	if (error || !inserted) {
+		// The unique index on (session_id, identity_id) rejects a second seat for the same
+		// person, which is what two tabs tapping "Take a seat" together looks like. Losing
+		// that race is a rejoin, not a failure — the seat the other tab won is theirs.
+		const { data: raced } = await supabase
+			.from('players')
+			.select('id')
+			.eq('session_id', sessionId)
+			.eq('identity_id', identityId)
+			.limit(1);
+		if (raced?.length) return 'rejoined';
+		throw new Error('Failed to join session');
+	}
 
 	await logEvent(sessionId, 'join', { playerId: inserted.id });
 

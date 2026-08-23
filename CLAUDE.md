@@ -34,7 +34,9 @@ Shared, not endpoints (a leading underscore keeps them off the `/api/*` routes �
 this is load-bearing: `api/profile.test.js` was briefly deployed as a live
 function at `/api/profile.test` returning 500, which is why the test files are
 named `_profile.test.js` and `_recap.test.js`):
-- `api/_supabase.js` — `db()`, `json()`, `countOf()` over the REST API.
+- `api/_supabase.js` — `db()`, `json()`, `countOf()` over the REST API. Uses
+  `SUPABASE_SERVICE_ROLE_KEY` when that is set, the publishable key otherwise (see
+  "Locking down the generated text").
 - `api/_prompts.js` — **the prompts that actually ship.** Single source: the
   prompt lab reads this file and runs it as its "shipped" column, so a variant is
   always compared against what is live. Edit here to change what the app says.
@@ -87,15 +89,92 @@ generation per session, ever. The row is claimed before generating so two open
 screens do not both pay, and a failed run deletes its own claim so the next visit
 retries.
 
+A claim is only honoured for three minutes. A function killed between claiming the
+row and storing the text (a timeout, a crash) never runs its own cleanup, and the
+null row it leaves behind would answer "already generating" forever; past the
+timeout the next visit takes the claim over.
+
 Fast mode is opt-in via `FAST_MODE=1` and defaults OFF: it is a research preview,
 and an org without access gets a hard 429 naming a limit of zero rather than
 slower output. Standard speed streams the first token in about 2s.
+
+### What actually bounds the spend
+
+Be clear-eyed about the guards above: the chips tables are anon-writable by design
+and the publishable key ships in the browser bundle, so a determined stranger can
+manufacture a session that satisfies "ended, 2 players, 5 dealt hands". The
+per-session checks stop accidents and casual abuse. What bounds the money is:
+
+1. **A spend limit on the Anthropic workspace.** Set in the console, outside this
+   repo, and the only control that cannot be reasoned around. Do this.
+2. **`DAILY_CAP` in `api/recap.js`** (20 recaps/day across all sessions) and
+   **`DAILY_PROFILE_CAP` in `api/profile.js`** (60 profiles/day). Both are roughly
+   twenty times normal use, so playing poker will never reach them.
+3. **Drift gating**, which is why a quiet night costs nothing at all.
+
+### Locking down the generated text
+
+`player_profiles` and `session_recaps` are the only tables whose contents cost
+money to make, and the only ones nobody at the table should be writing by hand.
+They ship anon-writable like everything else, which means the publishable key can
+rewrite a profile or DELETE a stored recap — and deleting the recap row resets the
+one-generation-per-session cap.
+
+`supabase/lock-down-generated-text.sql` closes that, but **only run it after
+setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel and redeploying** — it revokes the
+write access the functions otherwise rely on. Order matters; the file spells it
+out. Reads stay open either way.
 
 Dependencies OUTSIDE this repo, same as the guestbook flow:
 - **Vercel env vars:** `ANTHROPIC_API_KEY`, `PROFILE_SECRET` (Production scope).
 - **Supabase webhook:** `sessions` UPDATE → `https://keogan.ca/api/profile`, with
   header `x-webhook-secret` matching `PROFILE_SECRET`.
 - **Migrations:** `supabase/player-profiles.sql`, `supabase/session-recaps.sql`.
+- **Optional:** `SUPABASE_SERVICE_ROLE_KEY` (Production, SECRET — never `PUBLIC_`).
+
+## Poker rules this app implements
+
+Mostly standard, with two deliberate house simplifications. If you change any of
+these, `src/chips/lib/utils/betting.ts` and `seatOrder.test.ts` are where the rules
+are actually pinned down.
+
+- **Heads-up: the button posts the small blind**, acts first preflop and last
+  afterwards. Standard everywhere. (Until 2026-08 this app had it backwards — the
+  dealer on the big blind — so heads-up hands played before then reconstruct with
+  SB and BB swapped in `player_stats`. Nothing else is affected.)
+- **A short all-in does not reopen the betting.** An all-in for less than a full
+  raise leaves players who have already acted with call-or-fold only:
+  `facingShortAllIn` reads it off the ledger, `canRaise` hides the raise panel, and
+  `placeBet` refuses it. Crucially `placeBet` also stops clearing everyone's
+  `acted_on_street` in that case — clearing it is what "reopened" means here.
+- **HOUSE RULE — minimum raise is DOUBLE the current bet**, not the standard
+  current-bet-plus-last-increment (which is smaller in a re-raised pot). Easier to
+  explain across a kitchen table. `minRaiseTotal` is the one definition; the short
+  all-in test uses it too, so the two cannot disagree about what a full raise is.
+- **HOUSE RULE — voided and reset hands still count in the stats.** The chips go
+  back, but the decisions were real, so VPIP/PFR/AF keep them.
+- **Dead button**: someone who busts or leaves mid-hand keeps the button on their
+  seat until the next deal, so the blinds do not shift under a hand in progress.
+  Everything that orders play goes through `buttonIndexIn` for this.
+
+## Invariants worth not breaking
+
+- **Chip conservation.** `sum(stacks) + pot == sum(buy-ins)` at every settled
+  moment. The table banner watches it, `supabase/session-audit.sql` finds where it
+  broke, and `supabase/repairs/` is what fixing it afterwards costs.
+- **Never write an absolute stack from the realtime cache.** Every function that
+  writes `stack`, `total_buyin` or `pot` as a value rather than a delta re-reads the
+  row first. This is not defensive habit; it is the cause of every chip-minting bug
+  this app has had. `callBet`, `awardPot`, `awardPayouts`, `adjustChips`,
+  `giveChips`, `doRebuy`, `endHand`, `redealHand` and `reorderSeats` all do it, and
+  `chipMoves.test.ts` holds the mock honest by making the cache disagree with the
+  database on purpose.
+- **One seat per identity per session**, enforced by a unique index (added in
+  `supabase/2026-08-23-audit-fixes.sql`). `joinSession` treats losing the insert
+  race as a rejoin.
+- **Seat order is not unique**, so every ordering goes through `bySeat` in
+  `src/chips/lib/utils/seat.ts`, which breaks ties by id. Two clients disagreeing
+  about turn order is the failure this prevents.
 
 ## player_stats is a snapshot, not a view
 

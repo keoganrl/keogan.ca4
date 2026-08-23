@@ -1,4 +1,5 @@
 import type { Player } from '../types';
+import { bySeat } from './seat';
 
 export type Pot = { amount: number; eligibleIds: string[] };
 
@@ -94,10 +95,10 @@ export function resolveAward(
 	const leftover: Pot[] = [];
 
 	// Rank players by seat, starting one left of the button, for odd-chip order.
-	const bySeat = [...players].sort((a, b) => a.seat_order - b.seat_order);
-	const btnIdx = bySeat.findIndex((p) => p.id === buttonPlayerId);
+	const seated = [...players].sort(bySeat);
+	const btnIdx = seated.findIndex((p) => p.id === buttonPlayerId);
 	const oddChipRank = new Map<string, number>(
-		bySeat.map((_, i) => [bySeat[(btnIdx + 1 + i) % bySeat.length].id, i])
+		seated.map((_, i) => [seated[(btnIdx + 1 + i) % seated.length].id, i])
 	);
 
 	for (const pot of remainingPots) {

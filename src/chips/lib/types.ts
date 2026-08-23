@@ -13,7 +13,6 @@ export interface Session {
 	join_code: string;
 	status: SessionStatus;
 	game_mode: GameMode;
-	host_player_id: string | null;
 	small_blind: number;
 	big_blind: number;
 	// Host-chosen buy-in; every joiner starts with this stack.
@@ -31,7 +30,6 @@ export interface Session {
 	pot: number;
 	street: string;
 	created_at: string;
-	last_active_at: string | null;
 }
 
 export interface Player {
