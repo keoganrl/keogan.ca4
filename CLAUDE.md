@@ -132,6 +132,28 @@ Dependencies OUTSIDE this repo, same as the guestbook flow:
 - **Migrations:** `supabase/player-profiles.sql`, `supabase/session-recaps.sql`.
 - **Optional:** `SUPABASE_SERVICE_ROLE_KEY` (Production, SECRET — never `PUBLIC_`).
 
+### One screen generates, every screen watches
+
+`api/recap.js` claims the `session_recaps` row before calling the model, so exactly
+one phone streams a given recap and the rest get a 202. Those phones do two things
+at once (`src/chips/components/Cashout.svelte`):
+
+- **Live text** comes over a Supabase realtime BROADCAST channel, `recap:<sessionId>`,
+  relayed by the generating phone as it reads (`lib/utils/recapRelay.ts`). Broadcast
+  is ephemeral pub/sub over the websocket the app already holds — no table, no
+  publication change, nothing to migrate. Messages carry the WHOLE paragraph so far
+  rather than deltas, so a dropped, late or out-of-order one repairs itself and a
+  phone that subscribes late catches up on its first message. Receivers keep whichever
+  text is longer.
+- **The stored copy** is polled underneath it (`lib/utils/recapPolling.ts`), which is
+  what makes the relay optional: if the generating phone locked, left, or finished
+  before this one subscribed, the finished text still arrives. The poll also doubles
+  as the "generation finished" signal, since the row is only written at the end.
+
+The two are raced, so the caret stops on the relay's final message when there is one
+and on the poll when there is not. Before this, the 202 was read as JSON, found no
+`recap` key, and left every phone but the first showing nothing until a reload.
+
 ## Poker rules this app implements
 
 Mostly standard, with two deliberate house simplifications. If you change any of

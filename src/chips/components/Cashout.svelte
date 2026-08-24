@@ -3,6 +3,8 @@
   import { go } from '../lib/nav';
   import { supabase } from '../lib/supabase';
   import { netResult, netColor } from '../lib/utils/format';
+  import { pollForRecap } from '../lib/utils/recapPolling';
+  import { openRecapRelay, subscribeToRecap } from '../lib/utils/recapRelay';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -23,8 +25,51 @@
         body: JSON.stringify({ sessionId: id })
       });
 
-      // A recap written earlier — or one another screen is mid-way through — comes
-      // back as JSON rather than a stream.
+      // Another screen got here first and is generating it right now. Only one screen
+      // ever does — the row is claimed before the model is called — so this phone
+      // waits for the stored copy instead of giving up. Leaving recapDone false keeps
+      // the caret blinking, which is honest: it IS still being written, just not here.
+      if (r.status === 202) {
+        // Live relay from whichever phone is generating, so this screen shows the same
+        // words appearing at the same moment rather than a paragraph landing at the end.
+        // Longest-wins because messages carry the whole paragraph so far: an out-of-order
+        // one cannot rewind the text.
+        let relayFinished: (text: string) => void;
+        const relayDone = new Promise<string>((resolve) => (relayFinished = resolve));
+        const stopListening = subscribeToRecap(id, (text, done) => {
+          if (text.length > recap.length) recap = text;
+          // The generating phone says that was the last of it, so stop the caret now
+          // rather than a poll interval later, when the stored copy confirms what this
+          // screen is already showing.
+          if (done) relayFinished(text);
+        });
+
+        // The stored copy underneath it all. This is what makes the relay optional: if
+        // the generating phone left, locked, or finished before this one subscribed,
+        // the poll still returns the finished text. It doubles as the "it is done"
+        // signal, since the row is only written once generation completes.
+        try {
+          const stored = await Promise.race([
+            relayDone,
+            pollForRecap(async () => {
+              const { data, error } = await supabase
+                .from('session_recaps')
+                .select('recap')
+                .eq('session_id', id)
+                .maybeSingle();
+              if (error) throw error;
+              return data as { recap: string | null } | null;
+            })
+          ]);
+          if (stored && stored.length > recap.length) recap = stored;
+        } finally {
+          stopListening();
+        }
+        recapDone = true;
+        return;
+      }
+
+      // A recap written earlier comes back as JSON rather than a stream.
       if (r.headers.get('content-type')?.includes('application/json')) {
         const body = await r.json();
         if (body.recap) {
@@ -38,12 +83,23 @@
         return;
       }
 
-      const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        recap += decoder.decode(value, { stream: true });
+      // This phone won the claim, so it is the one reading the model's output — and the
+      // only one that can show it to the others as it arrives.
+      const relay = openRecapRelay(id);
+      try {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          recap += decoder.decode(value, { stream: true });
+          relay.send(recap);
+        }
+        // Forced through the throttle: this is the message carrying the complete text,
+        // and the one that tells the other phones to stop their caret.
+        relay.send(recap, true);
+      } finally {
+        relay.close();
       }
     } catch (e) {
       console.warn('recap unavailable:', e);
