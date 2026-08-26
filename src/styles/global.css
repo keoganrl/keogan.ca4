@@ -423,9 +423,23 @@ select {
   align-items: baseline;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
+  /* A long name wraps to a second line and takes the date with it rather than
+     widening the row. */
+  flex-wrap: wrap;
 }
 
-.guestbook-entry-name { font-size: 0.95rem; color: #2a2a2a; }
+/* Guests write whatever they like, including a hundred emoji in a row with no
+   spaces in it. Nothing in normal line breaking can split a run like that, so
+   without `anywhere` the entry sets its own width and the whole PAGE scrolls
+   sideways — every other entry, the form and the heading go with it. `anywhere`
+   (not `break-word`) is the one that also shrinks the min-content width, which
+   is what the flex row above measures. */
+.guestbook-entry-name,
+.guestbook-entry-message {
+  overflow-wrap: anywhere;
+}
+
+.guestbook-entry-name { font-size: 0.95rem; color: #2a2a2a; min-width: 0; }
 .guestbook-entry-date { font-size: 0.8rem; color: #aaa; }
 .guestbook-entry-message { font-size: 1rem; line-height: 1.6; color: #3a3a3a; margin: 0; }
 
