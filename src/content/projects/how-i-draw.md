@@ -8,9 +8,7 @@ summary: "Origin story and process behind the hyperrealistic car drawings."
 
 One of the first hobbies I ever had was drawing cars. The earliest thing I remember wanting to be when I grew up was a car designer. I loved sketching and drawing side profiles of imaginary vehicles. In grade 7, we had an art project of any style that we wanted. I chose a hyperrealistic pencil drawing of a Mustang, which introduced me to an entirely new passion.
 
-My hyperrealism drawings are not from my imagination; they are real photographs which I do my best to recreate. To maintain proportions in my drawings, I overlay a grid on my reference photo, and the first thing I draw on the paper is a matching grid. From there, I lightly draw the prominent lines in the drawing with an extremely hard pencil (5H), and add darker and darker layers.
-
-At some point, I would like to experiment with placing a display or printed photo underneath my paper, projecting the image across, and then tracing it, for more accurate realism.
+Each drawing starts from a photograph I want to recreate. I crop the reference photo to be the same aspect ratio as the paper, convert it to greyscale, and overlay a grid. The first thing I draw on the paper is an extremely light matching grid, and then I use the grid to help me proportionally outline the car’s features in a light pencil. Once that’s done, I don’t really have a strategy except to work from left to right to avoid smudging. Each drawing takes 30-40 hours.
 
 ![Step 1](/images/Gen1.jpeg)
 
