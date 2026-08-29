@@ -116,7 +116,7 @@ export async function mergeIdentities(keepId: string, ghostIds: string[]): Promi
 	// Done in the database, as one transaction. Two statements from here cannot do it
 	// correctly once players carries the one-seat-per-identity index: if the survivor
 	// and a ghost both have a seat in the same session — which is exactly what merging
-	// someone who played a night under two identities means — repointing violates the
+	// someone who played one session under two identities means — repointing violates the
 	// index, and the two chairs have to be folded into one first. See
 	// supabase/one-seat-per-identity.sql.
 	const { error } = await supabase.rpc('merge_identities', {

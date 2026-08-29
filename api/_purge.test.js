@@ -41,7 +41,7 @@ describe('selectForPurge', () => {
   });
 
   // Exactly at the cutoff is not past it. Deleting a boundary row is the kind of
-  // off-by-one that only shows up as a missing night.
+  // off-by-one that only shows up as a missing session.
   it('refuses a row created exactly at the cutoff', () => {
     const r = selectForPurge([{ id: 'a', created_at: CUTOFF.toISOString(), series_id: null }], CUTOFF);
     expect(r.ok).toBe(false);

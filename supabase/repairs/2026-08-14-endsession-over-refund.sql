@@ -21,7 +21,7 @@
 -- six sessions before this runs and none after.
 --
 -- The player rows are named by id alone. This repository is public, and a list of
--- the group's names against a night-by-night account of who lost what is not
+-- the group's names against a session-by-session account of who lost what is not
 -- something to publish on their behalf. The ids resolve in the database for anyone
 -- who needs to audit this.
 

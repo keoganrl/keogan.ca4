@@ -26,7 +26,7 @@ const MIN_PLAYERS = 2;
 const MIN_HANDS = 5;
 
 // Most recaps ever written in one day, across every session. The group plays one
-// session a night, so this is roughly twenty times normal use and will never be
+// session, so this is roughly twenty times normal use and will never be
 // reached by playing poker. It is a ceiling on a bad day, not a quota.
 const DAILY_CAP = 20;
 
@@ -57,22 +57,20 @@ export default async function handler(req, res) {
     if (session.status !== 'ended') {
       return res.status(409).json({ error: 'session has not ended' });
     }
-    // Single sessions get no recap. They keep nothing, so there is nothing for a
-    // paragraph to be part of — and the session itself is deleted after five days.
+    // Single sessions get a recap too, and deliberately so. The recap is about the
+    // session in front of you — see RECAP in _prompts.js, which never mentions a
+    // series, a leaderboard or standings — so a one-off reads exactly like any other
+    // session, and a paragraph at the end of the game is the whole of what it wants.
     //
-    // This sits ABOVE the claim and above the daily counter on purpose, and both
-    // positions matter. Above the claim, so a one-off never leaves a session_recaps
-    // row behind for a recap that is never coming. Above the counter, because
-    // DAILY_CAP is twenty a day across EVERY session: one-off nights drawing on it
-    // would starve the series play it exists for, and the cap is one of the three
-    // things that actually bound the money.
+    // series_id is selected anyway: it costs nothing and it is worth having when
+    // reading these logs back. It is NOT a precondition. Everything below is: the
+    // session must have ended, have two players and five dealt hands, have no recap
+    // yet, and fit under the day's cap. That chain is the endpoint's only real
+    // protection, since it is reachable without a secret.
     //
-    // The client does not call this for single sessions either, but that gate is a
-    // courtesy. This endpoint is reachable without a secret, so its preconditions
-    // are the only real ones it has.
-    if (!session.series_id) {
-      return res.status(422).json({ error: 'single sessions get no recap' });
-    }
+    // What single sessions still do not get is a profile contribution: api/profile.js
+    // skips them, and player_stats_source excludes them outright. The recap only
+    // READS profiles, so the two are independent.
 
     // Already written: hand back the stored copy. This is what makes the endpoint
     // idempotent, and it is also the spend cap — one generation per session, ever.
@@ -126,7 +124,7 @@ export default async function handler(req, res) {
     ]);
 
     const profileOf = new Map(profiles.map((p) => [p.identity_id, p.profile]));
-    const tonight = players
+    const played = players
       .map((p) => ({
         name: p.display_name,
         bought_in: p.total_buyin,
@@ -155,7 +153,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: 'user',
-          content: `Results for the session that just finished, best to worst:\n\n${JSON.stringify(tonight, null, 2)}`,
+          content: `Results for the session that just finished, best to worst:\n\n${JSON.stringify(played, null, 2)}`,
         },
       ],
     });

@@ -5,7 +5,7 @@
 // candidates is not exactly what was asked for, the right move is to delete nothing
 // and say so, because the alternative is deleting rows nobody meant to lose. There is
 // no undo — players, rebuys, hands, events and session_recaps all cascade from
-// sessions, so one wrong id takes a whole night's ledger with it.
+// sessions, so one wrong id takes that session's whole ledger with it.
 
 /** A session is a candidate five days after it was created. */
 export const RETENTION_DAYS = 5;
@@ -23,8 +23,9 @@ export const MAX_PER_RUN = 50;
  * The moment before which a single session is old enough to delete.
  *
  * created_at is the right clock for both shapes this has to cover. A session is
- * created and ended the same evening, so for a played night it is the night; and a
- * game abandoned at the setup screen never gets any later timestamp at all.
+ * played in one sitting and ended the same day it was created, so for a session
+ * somebody actually played it is that session; and a game abandoned at the setup
+ * screen never gets any later timestamp at all.
  */
 export function cutoffFrom(now = Date.now()) {
   return new Date(now - RETENTION_DAYS * 24 * 60 * 60 * 1000);

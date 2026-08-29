@@ -923,7 +923,7 @@
                 {/if}
               {/if}
               <!-- Behind a confirmation like every other irreversible control here:
-                   one tap ends the night for everyone at the table, cashes out every
+                   one tap ends the game for everyone at the table, cashes out every
                    stack and closes the books. -->
               {#if !showEndConfirm}
                 <button

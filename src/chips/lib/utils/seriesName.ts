@@ -24,7 +24,7 @@ export function isValidPrefix(prefix: string): boolean {
  *
  * Deliberately takes the date rather than reading the clock, so a test can pin a
  * month without faking timers. Uses the LOCAL month, not UTC: a series started at
- * ten in the evening on the 31st belongs to the month the players were in, not the
+ * late on the 31st belongs to the month the players were in, not the
  * one their timezone offset lands on.
  */
 export function buildSeriesName(prefix: string, date: Date = new Date()): string {

@@ -85,8 +85,8 @@ arithmetic is ever corrected: without it, one fix would rewrite every profile at
 once. With it, each catches up as its player next sits down.
 
 **The recap is reachable from a browser** and so cannot hold a secret. Its
-protection is structural: the session must exist, belong to a SERIES, have ENDED,
-have at least 2 players and 5 dealt hands, and have no recap yet. That last one caps spend at one
+protection is structural: the session must exist, have ENDED, have at least 2
+players and 5 dealt hands, and have no recap yet. That last one caps spend at one
 generation per session, ever. The row is claimed before generating so two open
 screens do not both pay, and a failed run deletes its own claim so the next visit
 retries.
@@ -100,14 +100,19 @@ Fast mode is opt-in via `FAST_MODE=1` and defaults OFF: it is a research preview
 and an org without access gets a hard 429 naming a limit of zero rather than
 slower output. Standard speed streams the first token in about 2s.
 
-**Single sessions generate nothing at all.** No recap, and no contribution to
-anyone's profile. `api/recap.js` refuses them above both the `session_recaps` claim
-and the daily counter — above the claim so a one-off never leaves a row behind for a
-recap that is not coming, and above the counter because `DAILY_CAP` is shared with
-every session, so one-off nights must not be able to spend it. `api/profile.js` skips
-them in the same guard that ignores non-endings. `Cashout.svelte` does not ask in the
-first place, but that gate is a courtesy — the endpoint's own preconditions are the
-only real ones it has.
+**Single sessions get a recap, but nothing else.** The recap is about the session in
+front of you — `RECAP` in `_prompts.js` never mentions a series, a leaderboard or
+standings — so a one-off reads exactly like any other session and belonging to a
+series is not one of its preconditions. It draws on the same `DAILY_CAP`, which at a
+few games a month is nowhere near binding.
+
+What a single session still does NOT do is move anybody's profile. `api/profile.js`
+skips them in the same guard that ignores non-endings, and `player_stats_source`
+excludes them outright, so one-off play cannot reach VPIP, coaching or the profiles
+tab at all. The two are independent: the recap only READS profiles, it never writes
+them. A single session's recap row cascades away with the session at the five-day
+purge, which is right — it belonged to a game-over screen that no longer has results
+to show.
 
 ### What actually bounds the spend
 
@@ -121,9 +126,9 @@ per-session checks stop accidents and casual abuse. What bounds the money is:
 2. **`DAILY_CAP` in `api/recap.js`** (20 recaps/day across all sessions) and
    **`DAILY_PROFILE_CAP` in `api/profile.js`** (60 profiles/day). Both are roughly
    twenty times normal use, so playing poker will never reach them.
-3. **Drift gating**, which is why a quiet night costs nothing at all.
-4. **Series gating**, which is the first filter of the four: a session that is not
-   part of a series never reaches any of the others.
+3. **Drift gating**, which is why a quiet session costs nothing at all. This is
+   what keeps the PROFILE side cheap; the recap has no equivalent, because a recap
+   is written once per session and then never again.
 
 ### Locking down the generated text
 
@@ -205,7 +210,7 @@ The rules both follow, and that any future deletion path must follow:
    separate project, or rows you created for the test and identified by id.
 
 `players`, `rebuys`, `hands`, `events` and `session_recaps` all declare
-`ON DELETE CASCADE` on `sessions`, so **one session row takes an entire night's
+`ON DELETE CASCADE` on `sessions`, so **one session row takes that session's entire
 ledger with it** — every blind, bet, call and fold. There is no undo and no soft
 delete anywhere in this schema. `player_stats` compounds it: deleted rows sit in the
 snapshot until the next `refresh_player_stats()` and then vanish with nothing marking
@@ -257,7 +262,7 @@ are actually pinned down.
   `supabase/one-seat-per-identity.sql`). `joinSession` treats losing the insert race
   as a rejoin. The index is also why merging identities goes through the
   `merge_identities()` SQL function rather than two statements from the client:
-  merging someone who played one night under two identities gives the survivor two
+  merging someone who played one session under two identities gives the survivor two
   chairs in that session, and those have to be folded into one before the repoint,
   or it violates the index and the client silently no-ops. `merge_seats()` does the
   folding — stacks and buy-ins add, and every reference is repointed BEFORE the row

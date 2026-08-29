@@ -35,7 +35,7 @@ gitignored, the anonymised one is safe to commit.
 
 Pull once and reuse it. If every run re-queries Supabase the data drifts under
 you, and you can no longer tell whether a better output came from a better
-prompt or a different night. Re-run it whenever you want fresher numbers.
+prompt or a different session. Re-run it whenever you want fresher numbers.
 
 ## Run
 

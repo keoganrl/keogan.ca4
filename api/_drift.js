@@ -1,9 +1,9 @@
 // Decides whose profile is stale enough to be worth rewriting.
 //
-// This runs in plain JavaScript before any model call, and most nights it will
+// This runs in plain JavaScript before any model call, and most sessions it will
 // decide the answer is "nobody" — which is the point. A profile that rewrites
 // itself after every session has no weight; the ones that change should mean
-// something. It also keeps the cost at zero on a quiet night.
+// something. It also keeps the cost at zero on a quiet session.
 
 // How far a figure has to move before the text describing it is out of date.
 // Percentage points for the three rates, raw units for aggression factor (which
@@ -50,7 +50,7 @@ export function needsRewrite(current, previous) {
  * have moved. That is mostly redundant — someone absent cannot have new numbers —
  * but it is a real safeguard against the case where the STATS change for another
  * reason, such as a fix to the view's arithmetic. Without it, one corrected
- * calculation would rewrite every profile at the table on the same night. With
+ * calculation would rewrite every profile at the table at once. With
  * it, each player's profile catches up the next time they play.
  */
 export function selectForRewrite({ stats, profiles, participantIds }) {

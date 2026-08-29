@@ -218,7 +218,7 @@ describe('deciding whether to spend anything', () => {
     expect(calls.model).toHaveLength(1);
   });
 
-  // The cap costs a query; a quiet night should not even pay that.
+  // The cap costs a query; a quiet session should not even pay that.
   it('does not check the cap when nobody drifted', async () => {
     state.profiles = state.stats.map((s) => ({
       identity_id: s.identity_id,

@@ -54,9 +54,15 @@ rather more than where the results show up:
 |--------------------------------|--------|--------|
 | Game-over screen with results   | yes    | yes    |
 | On a leaderboard                | no     | yes    |
-| Recap paragraph                 | no     | yes    |
+| Recap paragraph                 | yes    | yes    |
 | Feeds profiles and coaching     | no     | yes    |
 | Kept                            | 5 days | until the series is ended |
+
+The recap is the one generated thing a single session does get. It is written about
+the session in front of you rather than about any standings, so a one-off reads
+exactly like a series game, and the row is deleted along with the session at five
+days. What a single session never does is move anybody's profile or coaching — that
+is enforced in `player_stats_source`, not just in the app.
 
 A series is named `PREFIX-YYYY-MM` — the players pick two to five letters, the
 calendar supplies the rest. The month half is generated rather than typed so that
@@ -137,7 +143,7 @@ select refresh_player_stats();
 ```
 
 The refresh is not optional — `player_stats` excludes single sessions, so until it
-runs, that night's hands are still missing from everybody's figures.
+runs, that session's hands are still missing from everybody's figures.
 
 ### When a session's numbers look wrong
 

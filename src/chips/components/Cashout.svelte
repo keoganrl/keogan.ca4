@@ -19,10 +19,10 @@
   let recap = $state('');
   let recapDone = $state(false);
 
-  // The series this session counted towards, or null if it was a one-off. This one
-  // value decides both of the things that separate the two kinds of game-over
-  // screen: whether there is a leaderboard to link to, and whether a recap is
-  // written at all.
+  // The series this session counted towards, or null if it was a one-off. It decides
+  // exactly one thing on this screen now: whether there is a leaderboard to link to.
+  // The recap is written either way — a one-off session is still a session, and the
+  // paragraph is about the game that just finished rather than about any standings.
   let series = $state<{ id: string; name: string } | null>(null);
 
   async function streamRecap(id: string) {
@@ -124,8 +124,8 @@
       return;
     }
 
-    // Fetched together: the series lookup gates the recap, so waiting on it
-    // separately would delay the paragraph for no reason.
+    // Fetched together rather than in sequence: the results and the Leaderboard
+    // button want to appear at the same moment, and neither should wait on the other.
     const [{ data }, seriesRow] = await Promise.all([
       supabase
         .from('players')
@@ -139,14 +139,12 @@
     series = seriesRow;
     loading = false;
 
-    // Single sessions get no recap, and gating this one call is what enforces it on
-    // the client: the POST, the broadcast subscription and the session_recaps poll
-    // all live inside streamRecap. Left ungated, every phone at a one-off night
-    // would subscribe to a channel nobody will ever publish on and then poll a row
-    // that will never be written, for the poller's full ninety seconds.
+    // Every session gets one, single or series alike. The endpoint decides whether
+    // there is anything worth writing about (two players, five dealt hands) and
+    // whether this phone is the one generating it; all this has to do is ask.
     //
     // Not awaited: the results are the page and must not wait on a paragraph.
-    if (series) streamRecap(sessionId);
+    streamRecap(sessionId);
   });
 </script>
 
@@ -158,10 +156,11 @@
   {#if loading}
     <p class="cnote">Loading…</p>
   {:else}
-    <!-- `series &&` matters as much as the rest of the condition: recapDone starts
-         false, so without it a single session would blink a caret forever waiting
-         for a paragraph that was never requested. -->
-    {#if series && (recap || !recapDone)}
+    <!-- recapDone starts false, so the caret is showing from the first paint. That is
+         honest for every session now that every session asks: something IS being
+         written. A session too small to be worth a paragraph gets a 422, which sets
+         recapDone without any text, and the block disappears. -->
+    {#if recap || !recapDone}
       <!-- aria-live so a screen reader announces the text once it settles rather
            than reading each streamed fragment as it lands. -->
       <p class="recap" class:writing={!recapDone} aria-live="polite" aria-busy={!recapDone}>

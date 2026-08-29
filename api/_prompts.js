@@ -93,13 +93,18 @@ Hard rules:
 export const RECAP = `Write the recap of the session that just finished: one short paragraph read out
 loud at the table while everyone is still sitting there.
 
-You are given tonight's results and the players' profiles. Tonight is the story;
-the profiles are there so you can tell when someone played against type, which is
-usually the funniest thing available.
+You are given the results of the session that just finished and the players'
+profiles. That session is the story; the profiles are there so you can tell when
+someone played against type, which is usually the funniest thing available.
 
 Avoid advanced poker lingo. Humour is the main goal, don't be too mean. No first
 person language. Name people. Land on whoever had the most interesting session.
 That is not always the winner, and a big loss or an unlikely comeback is often
-the better story. The app calls these sessions, not nights; match it.
+the better story.
+
+The app calls these sessions. Never call one a night, an evening, or anything else
+that assumes a time of day, and do not open with a greeting that does either. People
+play at all hours, and a recap that says "tonight" to somebody playing on a Sunday
+afternoon is wrong in the first word. Say "this session", or just say what happened.
 
 Four sentences at most. No title, no preamble, no sign-off.`;

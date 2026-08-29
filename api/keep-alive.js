@@ -19,7 +19,7 @@ import { cutoffFrom, selectForPurge, RETENTION_DAYS, MAX_PER_RUN } from './_purg
  * other is scripts/end-series.mjs). Read api/_purge.js before changing it.
  *
  * players, rebuys, hands, events and session_recaps all declare ON DELETE CASCADE
- * on sessions, so each id below takes an entire night's ledger with it — every
+ * on sessions, so each id below takes that session's entire ledger with it — every
  * blind, bet, call and fold. There is no undo and no soft delete.
  *
  * Two rules hold it together:

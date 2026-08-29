@@ -38,12 +38,12 @@ describe('pollForRecap', () => {
 		const { fetchRow, calls } = rows(
 			{ recap: null },
 			{ recap: null },
-			{ recap: 'Nobody folded all night.' }
+			{ recap: 'Nobody folded once.' }
 		);
 
 		const result = await pollForRecap(fetchRow, { ...clock, intervalMs: 1000 });
 
-		expect(result).toBe('Nobody folded all night.');
+		expect(result).toBe('Nobody folded once.');
 		expect(calls.count).toBe(3);
 		// Stops as soon as it has the text rather than polling out the deadline.
 		expect(clock.elapsed).toBe(3000);
