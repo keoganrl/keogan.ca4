@@ -43,7 +43,8 @@ export async function startSession(
 	bigBlind: number,
 	gameMode: GameMode = 'cash',
 	blindSchedule: BlindLevel[] = [],
-	autoEscalate = true
+	autoEscalate = true,
+	seriesId: string | null = null
 ): Promise<void> {
 	const blindLevelStartedAt =
 		gameMode === 'tournament' && blindSchedule.length > 0 ? new Date().toISOString() : null;
@@ -56,7 +57,15 @@ export async function startSession(
 		game_mode: gameMode,
 		blind_schedule: blindSchedule,
 		blind_level: 0,
-		blind_level_started_at: blindLevelStartedAt
+		blind_level_started_at: blindLevelStartedAt,
+		// Only written when the host actually chose a series, so a database that
+		// predates the column can still start a one-off game (where the value would
+		// be null anyway). It sits in `settings` rather than beside auto_escalate
+		// below BECAUSE it must not be dropped by the retry: silently starting a
+		// series game as a single one would leave it off the leaderboard and delete
+		// it five days later. If the host could pick a series, the column exists —
+		// the setup screen only offers series it read from the series table.
+		...(seriesId ? { series_id: seriesId } : {})
 	};
 
 	let { error: sessionError } = await supabase

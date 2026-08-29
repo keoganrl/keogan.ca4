@@ -12,3 +12,20 @@ export function go(path: string, opts: { replace?: boolean } = {}): void {
 export function inviteUrl(code: string): string {
   return `${window.location.origin}${BASE}/${code}`;
 }
+
+/**
+ * Link to a series' leaderboard.
+ *
+ * In production this is a real path, `/chips/DW-2026-07/leaderboard`, served either
+ * by a prerendered page (for an ended series, built from its committed archive) or
+ * through the vercel.json rewrite to /chips/series for a live one.
+ *
+ * `astro dev` does not apply vercel.json rewrites, so in dev that path 404s for
+ * every live series. The page reads ?series= first for exactly this reason, and
+ * that query form doubles as the fallback if the rewrite is ever misconfigured.
+ */
+export function seriesLeaderboardHref(name: string): string {
+	return import.meta.env.DEV
+		? `${BASE}/series?series=${encodeURIComponent(name)}`
+		: `${BASE}/${encodeURIComponent(name)}/leaderboard`;
+}

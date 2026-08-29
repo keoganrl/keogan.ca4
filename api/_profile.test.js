@@ -70,7 +70,11 @@ const stat = (id, name, over = {}) => ({
 });
 
 const ended = (over = {}) => ({
-  body: { record: { id: 'S1', status: 'ended' }, old_record: { status: 'active' }, ...over },
+  body: {
+    record: { id: 'S1', status: 'ended', series_id: 'series-1' },
+    old_record: { status: 'active' },
+    ...over
+  },
   method: 'POST',
   headers: { 'x-webhook-secret': 'shhh' }
 });
@@ -127,7 +131,13 @@ describe('auth and triggering', () => {
   it('ignores an update that is not a session ending', async () => {
     const r = res();
     await handler(
-      { ...ended(), body: { record: { id: 'S1', status: 'active' }, old_record: { status: 'active' } } },
+      {
+        ...ended(),
+        body: {
+          record: { id: 'S1', status: 'active', series_id: 'series-1' },
+          old_record: { status: 'active' }
+        }
+      },
       r
     );
     expect(r.code).toBe(200);
@@ -135,10 +145,38 @@ describe('auth and triggering', () => {
     expect(calls.model).toHaveLength(0);
   });
 
+  // A one-off session is not part of any leaderboard, and its rows are deleted five
+  // days later — so anything written from them would describe data about to vanish.
+  it('ignores a single session ending', async () => {
+    const r = res();
+    await handler(
+      {
+        ...ended(),
+        body: {
+          record: { id: 'S1', status: 'ended', series_id: null },
+          old_record: { status: 'active' }
+        }
+      },
+      r
+    );
+    expect(r.code).toBe(200);
+    expect(r.body.skipped).toBe('single session');
+    expect(calls.model).toHaveLength(0);
+  });
+
   // Supabase can redeliver, and an ended session can be updated again afterwards.
   it('ignores a session that was already ended before this update', async () => {
     const r = res();
-    await handler({ ...ended(), body: { record: { id: 'S1', status: 'ended' }, old_record: { status: 'ended' } } }, r);
+    await handler(
+      {
+        ...ended(),
+        body: {
+          record: { id: 'S1', status: 'ended', series_id: 'series-1' },
+          old_record: { status: 'ended' }
+        }
+      },
+      r
+    );
     expect(r.code).toBe(200);
     expect(calls.model).toHaveLength(0);
   });

@@ -72,14 +72,35 @@
 
 create or replace view player_stats_source as
 
--- Hand-numbered events for ended sessions only, matching lifetime_stats' scope.
+-- Hand-numbered events for ended SERIES sessions only.
+--
+-- The series_id predicate is doing two jobs, and the second is the load-bearing one.
+--
+-- First, it is the requirement: a one-off session must not feed anybody's generated
+-- profile or coaching, and this view is where those numbers come from.
+--
+-- Second, it keeps a garbage collection from looking like a change of behaviour.
+-- Single sessions are deleted after five days (api/keep-alive.js). player_stats is a
+-- MATERIALIZED snapshot of this query, so if one-off hands were counted here they
+-- would sit in everyone's figures until the purge removed the rows, and the next
+-- refresh_player_stats() would silently subtract them. api/profile.js decides whom to
+-- rewrite by comparing current figures against the ones each profile was written
+-- from, so that subtraction would read as drift and buy a full-table rewrite — paid
+-- for, and caused by nothing but a scheduled delete. Excluding them here means a
+-- purge cannot move these numbers at all.
+--
+-- Added 2026-08 alongside sessions.series_id. Because this is a materialized view,
+-- the change only lands on the next refresh: run `select refresh_player_stats();`
+-- after applying this file.
 with ev as (
   select
     e.*,
     count(*) filter (where e.type = 'deal')
       over (partition by e.session_id order by e.seq rows unbounded preceding) as hand_no
   from events e
-  join sessions s on s.id = e.session_id and s.status = 'ended'
+  join sessions s on s.id = e.session_id
+    and s.status = 'ended'
+    and s.series_id is not null
 ),
 
 -- Who posted the blinds in each hand. array_agg()[1] rather than min()/max(): there is no

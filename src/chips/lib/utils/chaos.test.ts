@@ -6,6 +6,7 @@ function rows(identity: string, netBbs: number[], bigBlind = 2): SessionResult[]
 	return netBbs.map((bb, i) => ({
 		identity_id: identity,
 		display_name: identity,
+		series_id: 'series-1',
 		session_id: `${identity}-${i}`,
 		created_at: `2026-01-0${i + 1}T00:00:00Z`,
 		big_blind: bigBlind,
@@ -25,6 +26,7 @@ describe('chaosScores', () => {
 			{
 				identity_id: 'me',
 				display_name: 'me',
+				series_id: 'series-1',
 				session_id: 'night-1',
 				created_at: '2026-01-01T00:00:00Z',
 				big_blind: 2,
@@ -34,6 +36,7 @@ describe('chaosScores', () => {
 			{
 				identity_id: 'me',
 				display_name: 'me',
+				series_id: 'series-1',
 				session_id: 'night-1',
 				created_at: '2026-01-01T00:00:00Z',
 				big_blind: 2,

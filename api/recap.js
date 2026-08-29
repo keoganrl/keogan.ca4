@@ -52,10 +52,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [session] = await json(`sessions?select=id,status&id=eq.${sessionId}`);
+    const [session] = await json(`sessions?select=id,status,series_id&id=eq.${sessionId}`);
     if (!session) return res.status(404).json({ error: 'no such session' });
     if (session.status !== 'ended') {
       return res.status(409).json({ error: 'session has not ended' });
+    }
+    // Single sessions get no recap. They keep nothing, so there is nothing for a
+    // paragraph to be part of — and the session itself is deleted after five days.
+    //
+    // This sits ABOVE the claim and above the daily counter on purpose, and both
+    // positions matter. Above the claim, so a one-off never leaves a session_recaps
+    // row behind for a recap that is never coming. Above the counter, because
+    // DAILY_CAP is twenty a day across EVERY session: one-off nights drawing on it
+    // would starve the series play it exists for, and the cap is one of the three
+    // things that actually bound the money.
+    //
+    // The client does not call this for single sessions either, but that gate is a
+    // courtesy. This endpoint is reachable without a secret, so its preconditions
+    // are the only real ones it has.
+    if (!session.series_id) {
+      return res.status(422).json({ error: 'single sessions get no recap' });
     }
 
     // Already written: hand back the stored copy. This is what makes the endpoint

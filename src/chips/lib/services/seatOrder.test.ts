@@ -85,6 +85,7 @@ function session(over: Partial<Session> = {}): Session {
 		id: 'sess',
 		join_code: 'WOLF',
 		status: 'active',
+		series_id: 'series-1',
 		game_mode: 'cash',
 		small_blind: 1,
 		big_blind: 2,

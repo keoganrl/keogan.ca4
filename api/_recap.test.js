@@ -30,7 +30,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 const state = {
-  session: { id: 'S', status: 'ended' },
+  session: { id: 'S', status: 'ended', series_id: 'series-1' },
   recapRow: null,
   players: 4,
   hands: 20,
@@ -89,7 +89,7 @@ beforeEach(() => {
   process.env.PUBLIC_SUPABASE_ANON_KEY = 'anon';
   calls.db = [];
   calls.model = [];
-  state.session = { id: ID, status: 'ended' };
+  state.session = { id: ID, status: 'ended', series_id: 'series-1' };
   state.recapRow = null;
   state.players = 4;
   state.hands = 20;
@@ -133,6 +133,34 @@ describe('what it refuses', () => {
     await handler(req(), r);
     expect(r.code).toBe(409);
     expect(calls.model).toHaveLength(0);
+  });
+
+  // Single sessions keep nothing, so there is nothing for a paragraph to be part of.
+  it('rejects a single session', async () => {
+    state.session = { id: ID, status: 'ended', series_id: null };
+    const r = res();
+    await handler(req(), r);
+    expect(r.code).toBe(422);
+    expect(calls.model).toHaveLength(0);
+  });
+
+  // Position matters: refusing after the claim would leave a session_recaps row for
+  // a recap that is never coming, and that row is what makes a later, legitimate
+  // request answer "already generating" instead of writing one.
+  it('refuses a single session before claiming a row', async () => {
+    state.session = { id: ID, status: 'ended', series_id: null };
+    await handler(req(), res());
+    expect(calls.db.filter((c) => c.path === 'session_recaps' && c.method === 'POST')).toHaveLength(
+      0
+    );
+  });
+
+  // DAILY_CAP is twenty a day across every session. One-off nights must not be able
+  // to spend it, or a run of them starves the series play the budget exists for.
+  it('refuses a single session before counting against the daily cap', async () => {
+    state.session = { id: ID, status: 'ended', series_id: null };
+    await handler(req(), res());
+    expect(calls.db.filter((c) => c.path.startsWith('session_recaps?claimed_at'))).toHaveLength(0);
   });
 
   // The spend cap: an ended session can only ever produce one generation.

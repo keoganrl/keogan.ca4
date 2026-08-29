@@ -6,6 +6,7 @@ function row(name: string, over: Partial<LifetimeStat> = {}): LifetimeStat {
 	return {
 		identity_id: name,
 		display_name: name,
+		series_id: 'series-1',
 		sessions_played: 5,
 		total_net: 0,
 		biggest_win: 0,

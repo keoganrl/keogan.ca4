@@ -37,6 +37,14 @@ import { facingShortAllIn, minRaiseTotal } from '../utils/betting';
 
 export function createTableStore(sessionId: string, identityId: string) {
 	let session = $state<Session | null>(null);
+	// The name of the series this session counts towards, or '' for a one-off.
+	//
+	// Resolved once and kept beside the session rather than embedded in the session
+	// select. `session` is replaced wholesale by realtime postgres_changes payloads,
+	// and those carry only the row's own columns — an embedded series(name) would
+	// survive the initial load and then vanish the first time anything on the table
+	// changed. The name cannot change, so fetching it once is also simply correct.
+	let seriesName = $state('');
 	let players = $state<Player[]>([]);
 	let events = $state<GameEvent[]>([]);
 	let loading = $state(true);
@@ -119,6 +127,17 @@ export function createTableStore(sessionId: string, identityId: string) {
 				.order('seq')
 		]);
 		if (sessionData) session = sessionData as Session;
+		// Only worth asking once, and only when there is something to ask about.
+		if (session?.series_id && !seriesName) {
+			supabase
+				.from('series')
+				.select('name')
+				.eq('id', session.series_id)
+				.maybeSingle()
+				.then(({ data }) => {
+					if (data?.name) seriesName = data.name;
+				});
+		}
 		if (playersData) players = playersData as Player[];
 		if (eventsData?.length) {
 			// A realtime insert may have landed while this fetch was in flight — dedupe by id.
@@ -942,6 +961,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 		},
 		get ended() {
 			return ended;
+		},
+		get seriesName() {
+			return seriesName;
 		},
 		get loading() {
 			return loading;

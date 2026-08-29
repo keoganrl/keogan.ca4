@@ -1,0 +1,36 @@
+---
+import ChipsLayout from '../../../layouts/ChipsLayout.astro';
+import Leaderboard from '../../../chips/components/Leaderboard.svelte';
+import { allArchives, handCountsOf } from '../../../chips/lib/archive';
+
+// Ended series only. Each one has a committed snapshot in src/chips/archive/, so its
+// board prerenders to static HTML and keeps working with no database behind it —
+// which is the whole point, since ending a series deletes the rows it was built from.
+//
+// A LIVE series has no file here and so no page: it falls through to the vercel.json
+// rewrite, which serves /chips/series and renders it from Supabase. That ordering is
+// free — Vercel's rewrites only apply when nothing on the filesystem matched — and it
+// means a series' URL never changes when it ends. The page behind it does.
+export function getStaticPaths() {
+  return allArchives().map((archive) => ({
+    params: { series: archive.name },
+    props: { archive }
+  }));
+}
+
+const { archive } = Astro.props;
+---
+
+<ChipsLayout title={`${archive.name} — Chips`}>
+  <Leaderboard
+    stats={archive.stats}
+    results={archive.results}
+    profiles={archive.profiles}
+    handCounts={handCountsOf(archive)}
+    playerStats={archive.playerStats}
+    seriesName={archive.name}
+    endedAt={archive.endedAt}
+    frozen={true}
+    client:load
+  />
+</ChipsLayout>

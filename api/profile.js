@@ -49,6 +49,17 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, skipped: 'not a session ending' });
   }
 
+  // Single sessions never move anybody's profile. Two reasons, and the second is the
+  // one that costs money: a one-off does not belong to a leaderboard, and its rows
+  // are deleted five days later — so a rewrite here would be written from figures
+  // that are about to vanish. player_stats excludes single sessions at the source
+  // (supabase/player-stats.sql), so in practice nobody would have drifted and this
+  // would return early anyway; the guard makes that explicit and free, and keeps
+  // one-off nights off the shared DAILY_PROFILE_CAP.
+  if (!record.series_id) {
+    return res.status(200).json({ ok: true, skipped: 'single session' });
+  }
+
   try {
     // The snapshot is what everything below reads, and endSession's own refresh is
     // fire-and-forget on the client — it may have failed, or raced this webhook.
