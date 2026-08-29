@@ -21,7 +21,9 @@ life until it was ported from `src/pages/api/notify.ts` to `api/notify.js`.)
 Current endpoints:
 - `api/keep-alive.js` — daily Vercel cron (see vercel.json) that pings Supabase
   so the free-tier project doesn't pause. **Load-bearing:** if it stops, the DB
-  eventually pauses and guestbook + /chips + notify all go down together.
+  eventually pauses and guestbook + /chips + notify all go down together. It also
+  runs the five-day purge of single sessions — see "Deleting /chips data" below.
+  The ping runs first and unchanged, and a failing purge cannot take it down.
 - `api/notify.js` — Supabase Database Webhook target. Fires on new
   `guestbook_entries` rows and emails via Resend.
 - `api/profile.js` — Supabase Database Webhook target. Fires on `sessions`
@@ -83,8 +85,8 @@ arithmetic is ever corrected: without it, one fix would rewrite every profile at
 once. With it, each catches up as its player next sits down.
 
 **The recap is reachable from a browser** and so cannot hold a secret. Its
-protection is structural: the session must exist, have ENDED, have at least 2
-players and 5 dealt hands, and have no recap yet. That last one caps spend at one
+protection is structural: the session must exist, belong to a SERIES, have ENDED,
+have at least 2 players and 5 dealt hands, and have no recap yet. That last one caps spend at one
 generation per session, ever. The row is claimed before generating so two open
 screens do not both pay, and a failed run deletes its own claim so the next visit
 retries.
@@ -97,6 +99,15 @@ timeout the next visit takes the claim over.
 Fast mode is opt-in via `FAST_MODE=1` and defaults OFF: it is a research preview,
 and an org without access gets a hard 429 naming a limit of zero rather than
 slower output. Standard speed streams the first token in about 2s.
+
+**Single sessions generate nothing at all.** No recap, and no contribution to
+anyone's profile. `api/recap.js` refuses them above both the `session_recaps` claim
+and the daily counter — above the claim so a one-off never leaves a row behind for a
+recap that is not coming, and above the counter because `DAILY_CAP` is shared with
+every session, so one-off nights must not be able to spend it. `api/profile.js` skips
+them in the same guard that ignores non-endings. `Cashout.svelte` does not ask in the
+first place, but that gate is a courtesy — the endpoint's own preconditions are the
+only real ones it has.
 
 ### What actually bounds the spend
 
@@ -111,6 +122,8 @@ per-session checks stop accidents and casual abuse. What bounds the money is:
    **`DAILY_PROFILE_CAP` in `api/profile.js`** (60 profiles/day). Both are roughly
    twenty times normal use, so playing poker will never reach them.
 3. **Drift gating**, which is why a quiet night costs nothing at all.
+4. **Series gating**, which is the first filter of the four: a session that is not
+   part of a series never reaches any of the others.
 
 ### Locking down the generated text
 
@@ -153,6 +166,55 @@ at once (`src/chips/components/Cashout.svelte`):
 The two are raced, so the caret stops on the relay's final message when there is one
 and on the poll when there is not. Before this, the 202 was read as JSON, found no
 `recap` key, and left every phone but the first showing nothing until a reload.
+
+## /chips series, and deleting data
+
+A session is either a one-off (`sessions.series_id` null) or part of a named series.
+Single play gets a game-over screen and nothing else: no leaderboard, no recap, no
+contribution to anyone's profile, and it is deleted after five days. Series play
+works as the leaderboard always did, scoped to one series. README.md has the user-
+facing description, the URL scheme, and the runbook.
+
+Ending a series is a **protocol, not a feature**. There is no UI for it and there
+should not be. `scripts/end-series.mjs`, run in two separate invocations with a human
+looking at a deployed page in between; the header of that file explains why the two
+phases cannot be one command.
+
+### Deleting /chips data
+
+Until series shipped, the only DELETE in this repo removed ghost `players_identity`
+rows during a merge. There are now exactly **two** places allowed to delete /chips
+data, and nothing else should ever grow the ability:
+
+- `api/keep-alive.js` — the five-day purge of single sessions (decision logic in
+  `api/_purge.js`).
+- `scripts/end-series.mjs --confirm` — the end-of-series wipe.
+
+The rules both follow, and that any future deletion path must follow:
+
+1. **Delete by explicit primary-key list, never by filter.** A filter travels as a
+   query string and a lost parameter does not error, it widens the result:
+   `DELETE /sessions?series_id=is.null` that loses its filter matches every session
+   ever played. A list of ids cannot mean anything but those ids.
+2. **Re-assert the predicate on the rows that came back**, before deleting them. That
+   is the only place a widened result is visible.
+3. **Refuse rather than correct.** An unexpected row, an oversized set, a cutoff in
+   the future: delete nothing and report why. `api/_purge.js` is entirely this.
+4. **Archive first, and verify the archive is deployed** before deleting anything.
+5. **Never run a destructive statement against production while developing.** Use a
+   separate project, or rows you created for the test and identified by id.
+
+`players`, `rebuys`, `hands`, `events` and `session_recaps` all declare
+`ON DELETE CASCADE` on `sessions`, so **one session row takes an entire night's
+ledger with it** — every blind, bet, call and fold. There is no undo and no soft
+delete anywhere in this schema. `player_stats` compounds it: deleted rows sit in the
+snapshot until the next `refresh_player_stats()` and then vanish with nothing marking
+the change, which is why the wipe refreshes it explicitly.
+
+`series` rows are kept forever once ended — three small columns, and
+`/chips/leaderboard` lists them as the directory. `player_profiles` survives a wipe
+too: profiles are per-identity, so the next series opens with everyone's existing
+blurb and the drift check rewrites them off the new series' hands.
 
 ## Poker rules this app implements
 
@@ -209,7 +271,15 @@ are actually pinned down.
 
 `supabase/player-stats.sql` defines `player_stats_source` (the query) and
 `player_stats` (a MATERIALIZED snapshot of it). Read the snapshot; never point
-anything at the source. The source cannot be planned — the planner estimates its
+anything at the source.
+
+**The source counts ended SERIES sessions only.** Single sessions are excluded, and
+the second reason is the one that costs money if you undo it: they are deleted after
+five days, so if their hands were counted here, the next `refresh_player_stats()`
+would silently subtract them — and `api/profile.js` decides whom to rewrite by
+comparing current figures against the ones each profile was written from, so that
+subtraction reads as drift and buys a full-table rewrite caused by nothing but a
+scheduled delete. The source cannot be planned — the planner estimates its
 first stage at ~13 rows when it returns thousands and nested-loops all the way up,
 taking over two minutes on a ledger each stage handles in milliseconds, so every
 Data API query against it failed on the 3-second statement timeout. The full
