@@ -414,7 +414,9 @@
           <span class="stat">
             {#if sortBy === 'total_net'}
               <span class="stat-num {netClass(player.total_net)}">{netStr(player.total_net)}</span>
-              <span class="stat-label">lifetime net</span>
+              <!-- "series net", not "lifetime": the board is scoped to one series
+                   now, and this figure only covers the sessions in it. -->
+              <span class="stat-label">series net</span>
             {:else if sortBy === 'times_first'}
               <span class="stat-num net-up">{player.times_first ?? 0}</span>
               <span class="stat-label">times first</span>
