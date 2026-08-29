@@ -18,8 +18,9 @@ RLS policies, the required Data API grants, and enables realtime on
 
 #### Migrations, in order
 
-Fresh install: run 1-5. An existing database: run whichever it has not had. Every
-file is safe to re-run.
+Fresh install: run 1-5; 6 is for existing databases only. An existing database:
+run whichever it has not had. Every file is safe to re-run except `chips-schema.sql`,
+which creates tables unguarded and is an install script rather than a migration.
 
 1. `supabase/chips-schema.sql` — tables, `lifetime_stats`, `session_results`, RLS,
    grants, realtime.
@@ -35,6 +36,12 @@ file is safe to re-run.
    together adds their stacks and buy-ins, which is right for two chairs somebody
    really played and wrong for a phantom row carrying a buy-in nobody paid.
    The leaderboard's merge button calls `merge_identities()` from this file.
+6. `supabase/2026-08-29-series.sql` — series. Adds the `series` table and
+   `sessions.series_id`, gives both leaderboard views a `series_id`, and folds every
+   session played so far into `DW-2026-07`. **Run it before deploying the code that
+   ships with it:** until it has, every session ever played has `series_id` NULL,
+   which is what the five-day purge in `api/keep-alive.js` looks for. A fresh
+   install gets all of this from `chips-schema.sql` and should skip this file.
 
 Optional, and only after setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel:
 `supabase/lock-down-generated-text.sql` makes the profile and recap tables

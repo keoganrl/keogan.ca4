@@ -367,31 +367,15 @@ alter publication supabase_realtime add table events;
 
 -- ------------------------------------------------------------- backfill
 
--- ONE-TIME migration, 2026-08, for the databases that predate series.
+-- Nothing to backfill on a fresh install: series_id is NULL on every new session
+-- until a host picks a series at setup, which is correct.
 --
--- ############################################################################
--- ORDERING HAZARD. Run this BEFORE deploying the code that adds the purge to
--- api/keep-alive.js. The purge deletes sessions whose series_id IS NULL and
--- which are more than five days old — which, until this block has run, is every
--- session ever played. Deploying in the other order schedules the entire history
--- for deletion.
+-- An EXISTING database — one that predates series — needs the whole of
+-- supabase/2026-08-29-series.sql instead of this file. That migration adds the
+-- series table and the column, replaces the two views above with the versions
+-- that carry series_id, and folds every session played so far into a series
+-- called DW-2026-07.
 --
--- Verify before shipping any code:
---   select count(*) from sessions where series_id is null;   -- must be 0
--- ############################################################################
---
--- Everything played so far was one continuous leaderboard, so it all becomes one
--- series. On day one this changes nothing anyone can see: every ended session is
--- in DW-2026-07, so both views filtered to it return exactly the rows they
--- returned before.
-
-insert into series (name, status) values ('DW-2026-07', 'live')
-  on conflict (name) do nothing;
-
-update sessions
-   set series_id = (select id from series where name = 'DW-2026-07')
- where series_id is null;
-
--- player_stats is a MATERIALIZED view and its source now excludes single sessions
--- (see supabase/player-stats.sql), so it holds stale rows until refreshed.
-select refresh_player_stats();
+-- It has to run BEFORE the code that ships with it. Until it does, every session
+-- ever played has series_id NULL, which is exactly what api/keep-alive.js deletes
+-- after five days.
