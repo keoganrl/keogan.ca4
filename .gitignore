@@ -33,3 +33,6 @@ pnpm-debug.log*
 scripts/prompt-lab/fixtures/players.real.json
 scripts/prompt-lab/out/
 .env.local
+
+# series archives: the raw dumps taken before a wipe stay local
+backups/

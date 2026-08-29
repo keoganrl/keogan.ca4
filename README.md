@@ -18,8 +18,9 @@ RLS policies, the required Data API grants, and enables realtime on
 
 #### Migrations, in order
 
-Fresh install: run 1-5. An existing database: run whichever it has not had. Every
-file is safe to re-run.
+Fresh install: run 1-5; 6 is for existing databases only. An existing database:
+run whichever it has not had. Every file is safe to re-run except `chips-schema.sql`,
+which creates tables unguarded and is an install script rather than a migration.
 
 1. `supabase/chips-schema.sql` — tables, `lifetime_stats`, `session_results`, RLS,
    grants, realtime.
@@ -35,6 +36,12 @@ file is safe to re-run.
    together adds their stacks and buy-ins, which is right for two chairs somebody
    really played and wrong for a phantom row carrying a buy-in nobody paid.
    The leaderboard's merge button calls `merge_identities()` from this file.
+6. `supabase/2026-08-29-series.sql` — series. Adds the `series` table and
+   `sessions.series_id`, gives both leaderboard views a `series_id`, and folds every
+   session played so far into `DW-2026-07`. **Run it before deploying the code that
+   ships with it:** until it has, every session ever played has `series_id` NULL,
+   which is what the five-day purge in `api/keep-alive.js` looks for. A fresh
+   install gets all of this from `chips-schema.sql` and should skip this file.
 
 Optional, and only after setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel:
 `supabase/lock-down-generated-text.sql` makes the profile and recap tables
@@ -43,6 +50,107 @@ read-only to the browser. See CLAUDE.md.
 `supabase/stats-selftest.sql` checks the stats reconstruction against a synthetic
 ledger with hand-computed answers. It runs in a transaction and rolls back, so it
 is safe against the live database; zero rows means pass.
+
+### Single sessions and series
+
+Every game is one of two things, chosen on the setup screen with **single** as the
+default. The difference is one nullable column, `sessions.series_id`, and it decides
+rather more than where the results show up:
+
+|                                | single | series |
+|--------------------------------|--------|--------|
+| Game-over screen with results   | yes    | yes    |
+| On a leaderboard                | no     | yes    |
+| Recap paragraph                 | yes    | yes    |
+| Feeds profiles and coaching     | no     | yes    |
+| Kept                            | 5 days | until the series is ended |
+
+The recap is the one generated thing a single session does get. It is written about
+the session in front of you rather than about any standings, so a one-off reads
+exactly like a series game, and the row is deleted along with the session at five
+days. What a single session never does is move anybody's profile or coaching — that
+is enforced in `player_stats_source`, not just in the app.
+
+A series is named `PREFIX-YYYY-MM` — the players pick two to five letters, the
+calendar supplies the rest. The month half is generated rather than typed so that
+lexicographic order and chronological order are the same order, which is what lets
+the directory sort on the name alone.
+
+`/chips/leaderboard` is that directory. Each series' board is at
+`/chips/<NAME>/leaderboard`, and the same URL serves two different things depending
+on whether the series has ended:
+
+- **live** — no file matches, so the `vercel.json` rewrite hands it to
+  `/chips/series`, which renders it from Supabase. (`astro dev` does not apply
+  rewrites, so in dev use `/chips/series?series=<NAME>`.)
+- **ended** — a committed snapshot in `src/chips/archive/` prerenders it to static
+  HTML with no database behind it.
+
+Vercel only applies rewrites after the filesystem misses, so those two compose
+without any ordering rules of their own. A series' URL does not change when it ends;
+only the page behind it does.
+
+**Single sessions contribute nothing to `player_stats`**, which is enforced in
+`player_stats_source` rather than anywhere in the app. That is partly the
+requirement and partly self-defence: single sessions are deleted after five days,
+and if their hands were counted, the next `refresh_player_stats()` would silently
+subtract them — which `api/profile.js` reads as drift and pays to rewrite. Excluding
+them at the source means a scheduled delete cannot move anybody's numbers.
+
+The five-day purge lives in `api/keep-alive.js` and ships **switched off**: without
+`PURGE_ENABLED=1` it logs exactly what it would delete and stops. Leave it that way
+for a week of cron runs, read the ids, then enable it.
+
+### Ending a series
+
+There is no button for this and there should not be: it deletes a season of poker.
+It is a protocol an agent in this repo can run, in two separate invocations, with a
+human looking at a deployed page in between.
+
+```
+npm run end-series -- DW-2026-07                       # phase one: archive
+npm run end-series -- DW-2026-07 --confirm --confirm-name=DW-2026-07   # phase two: delete
+```
+
+1. **Phase one.** Marks the series `ended` first, so nothing can join it mid-archive
+   — that is the only write it makes, and it is reversible. Then it writes two files:
+   `src/chips/archive/DW-2026-07.json`, the committed snapshot the frozen board
+   renders from, and `backups/DW-2026-07-<timestamp>.json`, a gitignored dump of
+   every session, player, rebuy, hand, event, recap and profile in the series.
+2. **Move the raw dump off the machine.** It is the only thing that could rebuild
+   the series, and phase two refuses to run if it is not there.
+3. **Commit the archive, push, wait for the deploy.**
+4. **Look at the frozen board** at `keogan.ca/chips/DW-2026-07/leaderboard` and
+   compare every tab against the live one.
+5. **Only then, phase two.** It re-checks all of the above — the series is ended, the
+   archive parses and holds standings, the raw dump exists, and the archive names the
+   same sessions the database still has — then deletes by explicit id list, verifies
+   that nothing outside the series moved, and refreshes `player_stats`.
+
+**Steps 4 and 5 are not interchangeable.** `players`, `rebuys`, `hands`, `events` and
+`session_recaps` all cascade from `sessions`, so phase two takes every ledger row in
+the series with it. If in doubt, stop after phase one: a series marked `ended` with
+its rows intact is a perfectly stable state — it takes no new sessions, its board
+still renders, and nothing has been lost.
+
+The archive deliberately omits `coaching`. It is written to be read by the player it
+is about, and `src/chips/archive/` is committed to a public repository; the frozen
+board shows profiles and the detailed stats panel without it. The full text is in the
+raw dump.
+
+#### Adding a session to a series afterwards
+
+This is the whole reason single sessions are kept five days rather than deleted at
+the final hand. Somebody plays a one-off, and it turns out it should have counted:
+
+```sql
+update sessions set series_id = (select id from series where name = 'DW-2026-08')
+ where id = '<session uuid>';
+select refresh_player_stats();
+```
+
+The refresh is not optional — `player_stats` excludes single sessions, so until it
+runs, that session's hands are still missing from everybody's figures.
 
 ### When a session's numbers look wrong
 

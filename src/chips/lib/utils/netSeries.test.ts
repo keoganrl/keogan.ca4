@@ -13,6 +13,7 @@ function row(
 	return {
 		identity_id: identity,
 		display_name: identity,
+		series_id: 'series-1',
 		session_id: session,
 		// Distinct, ordered timestamps unless a test overrides them.
 		created_at: `2026-01-${String(session.length + 1).padStart(2, '0')}T00:00:0${seq % 10}Z`,

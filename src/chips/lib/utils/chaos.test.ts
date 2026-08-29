@@ -6,6 +6,7 @@ function rows(identity: string, netBbs: number[], bigBlind = 2): SessionResult[]
 	return netBbs.map((bb, i) => ({
 		identity_id: identity,
 		display_name: identity,
+		series_id: 'series-1',
 		session_id: `${identity}-${i}`,
 		created_at: `2026-01-0${i + 1}T00:00:00Z`,
 		big_blind: bigBlind,
@@ -25,7 +26,8 @@ describe('chaosScores', () => {
 			{
 				identity_id: 'me',
 				display_name: 'me',
-				session_id: 'night-1',
+				series_id: 'series-1',
+				session_id: 'session-1',
 				created_at: '2026-01-01T00:00:00Z',
 				big_blind: 2,
 				net: 60,
@@ -34,19 +36,20 @@ describe('chaosScores', () => {
 			{
 				identity_id: 'me',
 				display_name: 'me',
-				session_id: 'night-1',
+				series_id: 'series-1',
+				session_id: 'session-1',
 				created_at: '2026-01-01T00:00:00Z',
 				big_blind: 2,
 				net: 40,
 				net_bb: 20
 			},
-			...rows('me', [-10, 5]).map((r, i) => ({ ...r, session_id: `night-${i + 2}` }))
+			...rows('me', [-10, 5]).map((r, i) => ({ ...r, session_id: `session-${i + 2}` }))
 		];
 
 		const me = find(chaosScores(twoSeats), 'me');
-		// Three nights, not four.
+		// Three sessions, not four.
 		expect(me.sessionsPlayed).toBe(3);
-		// And the night was +50bb across the two chairs, not a +30 and a +20 — which as
+		// And the session was +50bb across the two chairs, not a +30 and a +20 — which as
 		// two separate results would read as a steadier player than they were.
 		expect(me.bestSession).toBe(50);
 	});

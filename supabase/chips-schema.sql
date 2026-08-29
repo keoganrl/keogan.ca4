@@ -26,6 +26,30 @@ create table players_identity (
   created_at timestamptz not null default now()
 );
 
+-- series: a named run of sessions that share a leaderboard, e.g. 'DW-2026-07'.
+--
+-- A session with series_id set counts towards that series' board and keeps its
+-- data until the series is deliberately ended. A session with series_id NULL is a
+-- one-off: it gets a game-over screen, no leaderboard, no recap, no contribution
+-- to anyone's profile, and api/keep-alive.js deletes it after five days.
+--
+-- Rows are kept forever once ended — three small columns, and /chips/leaderboard
+-- lists them as the series directory. Ending a series is an agent protocol, not a
+-- UI action: see scripts/end-series.mjs and the runbook in README.md.
+--
+-- Added 2026-08: existing databases need this table, the sessions.series_id column
+-- below, and the backfill block at the foot of this file.
+create table series (
+  id uuid primary key default gen_random_uuid(),
+  -- 2-5 letter prefix chosen at creation, then the month it started: 'DW-2026-07'.
+  name text not null unique,
+  -- 'ended' removes it from the new-game screen. Set by phase one of end-series,
+  -- before the archive is taken, so nothing can join mid-archive.
+  status text not null default 'live' check (status in ('live', 'ended')),
+  created_at timestamptz not null default now(),
+  ended_at timestamptz
+);
+
 -- sessions: one row per game
 create table sessions (
   id uuid primary key default gen_random_uuid(),
@@ -51,8 +75,25 @@ create table sessions (
   pot int not null default 0,
   street text not null default 'preflop'
     check (street in ('preflop', 'flop', 'turn', 'river', 'showdown')),
+  -- Which series this session counts towards; NULL means a one-off session.
+  --
+  -- Nullable rather than defaulted on purpose: createGame() inserts this row from
+  -- the home screen, BEFORE the host has chosen single or series on /chips/setup,
+  -- so there is nothing to write yet. startSession() fills it in.
+  --
+  -- ON DELETE SET NULL, not CASCADE: dropping a series row must never take its
+  -- sessions with it. The only thing allowed to delete sessions is
+  -- scripts/end-series.mjs, deliberately and after archiving.
+  --
+  -- Added 2026-08: existing databases need
+  --   alter table sessions add column series_id uuid references series(id) on delete set null;
+  --   create index sessions_series_idx on sessions (series_id);
+  series_id uuid references series(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Every leaderboard query filters on this, and the purge scans for NULLs.
+create index sessions_series_idx on sessions (series_id);
 
 -- players: one row per seat per session
 create table players (
@@ -225,12 +266,23 @@ select
     where e.player_id = p.id
       and e.all_in
       and e.type in ('bet', 'raise', 'call')
-  )), 0)::int as all_ins
+  )), 0)::int as all_ins,
+  -- Which series these figures belong to. Appended last because CREATE OR REPLACE
+  -- only permits ADDING columns to a view, never reordering them — the same reason
+  -- times_first sits away from times_last above.
+  --
+  -- Added 2026-08. This column also changes the GRAIN of every row: the board is
+  -- now per-series, so a player who has played in two series gets two rows and
+  -- their sessions_played / total_net / times_first are that series' figures, not
+  -- their lifetime ones. Sessions with a NULL series_id (one-offs) still appear;
+  -- the client filters them out with .eq('series_id', …), and the purge removes
+  -- them within five days.
+  s.series_id
 from players_identity pi
 join players p on p.identity_id = pi.id
 join sessions s on s.id = p.session_id and s.status = 'ended'
 join session_extremes se on se.session_id = p.session_id
-group by pi.id, pi.display_name;
+group by pi.id, pi.display_name, s.series_id;
 
 -- session_results: one row per player per ended session — the per-session grain the
 -- lifetime board can't show. Backs the net chart (cumulative net over time) and the
@@ -260,7 +312,10 @@ select
   p.stack - p.total_buyin                                                   as net,
   round((p.stack - p.total_buyin)::numeric
         / nullif(coalesce((s.blind_schedule -> 0 ->> 'big_blind')::numeric,
-                          s.big_blind), 0), 2)                              as net_bb
+                          s.big_blind), 0), 2)                              as net_bb,
+  -- Added 2026-08, appended last for the same CREATE OR REPLACE reason as above.
+  -- The net chart and the chaos score are per-series; the client filters on this.
+  s.series_id
 from players p
 join sessions s on s.id = p.session_id and s.status = 'ended'
 left join players_identity pi on pi.id = p.identity_id
@@ -279,6 +334,7 @@ alter table players enable row level security;
 alter table rebuys enable row level security;
 alter table hands enable row level security;
 alter table events enable row level security;
+alter table series enable row level security;
 
 create policy "anon full access" on players_identity for all to anon using (true) with check (true);
 create policy "anon full access" on sessions for all to anon using (true) with check (true);
@@ -286,13 +342,17 @@ create policy "anon full access" on players for all to anon using (true) with ch
 create policy "anon full access" on rebuys for all to anon using (true) with check (true);
 create policy "anon full access" on hands for all to anon using (true) with check (true);
 create policy "anon full access" on events for all to anon using (true) with check (true);
+-- Series are created from the setup screen like everything else here, so writes
+-- stay open. Ending one is an agent protocol run with the service-role key, but
+-- that bypasses RLS anyway.
+create policy "anon full access" on series for all to anon using (true) with check (true);
 
 -- ---------------------------------------------------------------- grants
 
 -- Table-level privileges for the Data API roles. RLS alone is not enough —
 -- without these GRANTs the anon role gets "permission denied for table …".
 -- (Identity columns need no separate sequence grant.)
-grant all on table players_identity, sessions, players, rebuys, hands, events
+grant all on table players_identity, sessions, players, rebuys, hands, events, series
   to anon, authenticated, service_role;
 grant select on lifetime_stats, session_results to anon, authenticated, service_role;
 
@@ -303,3 +363,19 @@ grant select on lifetime_stats, session_results to anon, authenticated, service_
 alter publication supabase_realtime add table sessions;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table events;
+
+
+-- ------------------------------------------------------------- backfill
+
+-- Nothing to backfill on a fresh install: series_id is NULL on every new session
+-- until a host picks a series at setup, which is correct.
+--
+-- An EXISTING database — one that predates series — needs the whole of
+-- supabase/2026-08-29-series.sql instead of this file. That migration adds the
+-- series table and the column, replaces the two views above with the versions
+-- that carry series_id, and folds every session played so far into a series
+-- called DW-2026-07.
+--
+-- It has to run BEFORE the code that ships with it. Until it does, every session
+-- ever played has series_id NULL, which is exactly what api/keep-alive.js deletes
+-- after five days.

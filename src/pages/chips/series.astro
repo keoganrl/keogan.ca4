@@ -1,0 +1,14 @@
+---
+import ChipsLayout from '../../layouts/ChipsLayout.astro';
+import SeriesBoard from '../../chips/components/SeriesBoard.svelte';
+
+// The board for a LIVE series. Reached two ways, both landing here:
+//   * production — vercel.json rewrites /chips/<NAME>/leaderboard to this page when
+//     no prerendered archive matched, so the pretty URL works for a running series;
+//   * dev — /chips/series?series=<NAME>, because astro dev ignores vercel.json.
+// The component reads the name from whichever of the two it finds.
+---
+
+<ChipsLayout title="Leaderboard — Chips">
+  <SeriesBoard client:only="svelte" />
+</ChipsLayout>

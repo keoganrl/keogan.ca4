@@ -2,10 +2,10 @@
 // and refreshes the generated player profiles. Native Vercel function (matches
 // notify.js) — Astro's static output doesn't deploy src/pages/api routes.
 //
-// Most nights this makes NO model call at all. It refreshes the stats snapshot,
+// Most sessions this makes NO model call at all. It refreshes the stats snapshot,
 // compares each player's current figures to the ones their existing profile was
 // written from, and returns early if nobody has moved. A profile that rewrote
-// itself every session would mean nothing; the cost of a quiet night should be
+// itself every session would mean nothing; the cost of a quiet session should be
 // zero, and is.
 //
 // When someone has moved, every player's stats and every current profile go in a
@@ -20,7 +20,7 @@ import { SHARED, PROFILE, COACHING } from './_prompts.js';
 
 const MODEL = 'claude-opus-5';
 
-// Most profiles this will rewrite in a day, across everyone. A busy night moves a
+// Most profiles this will rewrite in a day, across everyone. A busy session moves a
 // handful, and the largest run ever made was a first-time write of the whole table,
 // so this is several full tables' worth. Drift gating is what makes calls rare; this
 // is the backstop for the case where something makes drift stop being rare — a
@@ -49,6 +49,17 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, skipped: 'not a session ending' });
   }
 
+  // Single sessions never move anybody's profile. Two reasons, and the second is the
+  // one that costs money: a one-off does not belong to a leaderboard, and its rows
+  // are deleted five days later — so a rewrite here would be written from figures
+  // that are about to vanish. player_stats excludes single sessions at the source
+  // (supabase/player-stats.sql), so in practice nobody would have drifted and this
+  // would return early anyway; the guard makes that explicit and free, and keeps
+  // one-off sessions off the shared DAILY_PROFILE_CAP.
+  if (!record.series_id) {
+    return res.status(200).json({ ok: true, skipped: 'single session' });
+  }
+
   try {
     // The snapshot is what everything below reads, and endSession's own refresh is
     // fire-and-forget on the client — it may have failed, or raced this webhook.
@@ -68,7 +79,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, rewritten: 0, reason: 'nobody drifted' });
     }
 
-    // Checked after the drift gate, so a quiet night still costs one cheap count and
+    // Checked after the drift gate, so a quiet session still costs one cheap count and
     // no model call. Counts profiles written in the last day, which is the closest
     // stored record of what has been spent.
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -112,7 +123,7 @@ export default async function handler(req, res) {
       // Roast-adjacent copy about named people is exactly the shape that can trip a
       // classifier, and a decline arrives as a stop_reason rather than an exception.
       // The fallback re-runs the same request on another model inside this call, so
-      // a decline costs a moment rather than the night's profiles.
+      // a decline costs a moment rather than the session's profiles.
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       system: `${SHARED}\n\n---\n\n${PROFILE}\n\n---\n\n${COACHING}`,

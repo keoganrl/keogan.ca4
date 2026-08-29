@@ -10,7 +10,8 @@
     "test": "vitest run",
     "lab:pull": "node --env-file-if-exists=.env.local scripts/prompt-lab/pull.js",
     "lab:table": "node --env-file-if-exists=.env.local scripts/prompt-lab/table.js",
-    "lab": "node --env-file-if-exists=.env.local scripts/prompt-lab/run.js"
+    "lab": "node --env-file-if-exists=.env.local scripts/prompt-lab/run.js",
+    "end-series": "node --env-file-if-exists=.env.local scripts/end-series.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

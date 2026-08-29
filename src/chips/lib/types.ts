@@ -8,6 +8,19 @@ export interface BlindLevel {
 	duration_minutes: number;
 }
 
+export type SeriesStatus = 'live' | 'ended';
+
+// A named run of sessions that share a leaderboard, e.g. 'DW-2026-07'. Ending one
+// is an agent protocol (scripts/end-series.mjs), never a UI action, which is why
+// there is no 'end' anywhere in the client.
+export interface Series {
+	id: string;
+	name: string;
+	status: SeriesStatus;
+	created_at: string;
+	ended_at: string | null;
+}
+
 export interface Session {
 	id: string;
 	join_code: string;
@@ -29,6 +42,12 @@ export interface Session {
 	current_bet: number;
 	pot: number;
 	street: string;
+	// The series this session counts towards, or null for a one-off session.
+	//
+	// Null is not just "no leaderboard": it also means no recap, no contribution to
+	// anyone's generated profile, and deletion after five days. Everything that keys
+	// off single-vs-series play reads this one field.
+	series_id: string | null;
 	created_at: string;
 }
 
@@ -101,6 +120,9 @@ export interface LifetimeStat {
 	// happened to be all-in are excluded — see the column in chips-schema.sql. Optional
 	// because a database that predates events.all_in has no such column in the view.
 	all_ins?: number;
+	// Which series these figures cover. The board is per-series, so a player who has
+	// played in two gets two rows and each row's totals are that series' alone.
+	series_id: string | null;
 }
 
 // One row per player per ended session (the `session_results` view). The per-session
@@ -114,6 +136,7 @@ export interface SessionResult {
 	big_blind: number;
 	net: number;
 	net_bb: number;
+	series_id: string | null;
 }
 
 // One row of the player_stats view (supabase/player-stats.sql): playing-style
@@ -161,6 +184,9 @@ export interface PlayerStat {
 export interface PlayerProfile {
 	identity_id: string;
 	profile: string | null;
-	coaching: string | null;
+	// Optional because an archived series ships without it: coaching is written to
+	// be read by the person it is about, and the archive is a file in a public repo.
+	// A frozen board therefore renders profiles and stats but no coaching.
+	coaching?: string | null;
 	generated_at: string;
 }

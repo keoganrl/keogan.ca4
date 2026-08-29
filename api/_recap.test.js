@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // REFUSES to do. Each guard gets a test, because a regression in one of them turns
 // a public URL into a way to spend the owner's money.
 const calls = { db: [], model: [] };
-let streamChunks = ['A ', 'good ', 'night.'];
+let streamChunks = ['A ', 'good ', 'session.'];
 let modelBehaviour = () => {};
 let finalMessage = { stop_reason: 'end_turn' };
 
@@ -30,7 +30,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 const state = {
-  session: { id: 'S', status: 'ended' },
+  session: { id: 'S', status: 'ended', series_id: 'series-1' },
   recapRow: null,
   players: 4,
   hands: 20,
@@ -89,13 +89,13 @@ beforeEach(() => {
   process.env.PUBLIC_SUPABASE_ANON_KEY = 'anon';
   calls.db = [];
   calls.model = [];
-  state.session = { id: ID, status: 'ended' };
+  state.session = { id: ID, status: 'ended', series_id: 'series-1' };
   state.recapRow = null;
   state.players = 4;
   state.hands = 20;
   state.claimOk = true;
   state.recapsToday = 0;
-  streamChunks = ['A ', 'good ', 'night.'];
+  streamChunks = ['A ', 'good ', 'session.'];
   finalMessage = { stop_reason: 'end_turn' };
   modelBehaviour = () => {};
   delete process.env.FAST_MODE;
@@ -132,6 +132,30 @@ describe('what it refuses', () => {
     const r = res();
     await handler(req(), r);
     expect(r.code).toBe(409);
+    expect(calls.model).toHaveLength(0);
+  });
+
+  // Belonging to a series is NOT a precondition. The recap is about the session in
+  // front of you, so a one-off gets one on the same terms as any other session: the
+  // thresholds below are what decide, not what kind of game it was.
+  it('writes a recap for a single session', async () => {
+    state.session = { id: ID, status: 'ended', series_id: null };
+    const r = res();
+    await handler(req(), r);
+    expect(r.written).toBe('A good session.');
+    expect(calls.model).toHaveLength(1);
+    expect(calls.db.filter((c) => c.path === 'session_recaps' && c.method === 'POST')).toHaveLength(
+      1
+    );
+  });
+
+  // The thresholds are what a one-off has to clear, and they are unchanged.
+  it('still refuses a single session that was barely played', async () => {
+    state.session = { id: ID, status: 'ended', series_id: null };
+    state.hands = 2;
+    const r = res();
+    await handler(req(), r);
+    expect(r.code).toBe(422);
     expect(calls.model).toHaveLength(0);
   });
 
@@ -215,7 +239,7 @@ describe('the happy path', () => {
   it('streams the text out as it arrives', async () => {
     const r = res();
     await handler(req(), r);
-    expect(r.written).toBe('A good night.');
+    expect(r.written).toBe('A good session.');
     expect(r.ended).toBe(true);
   });
 
@@ -223,7 +247,7 @@ describe('the happy path', () => {
     const r = res();
     await handler(req(), r);
     const patch = calls.db.find((c) => c.method === 'PATCH');
-    expect(JSON.parse(patch.body).recap).toBe('A good night.');
+    expect(JSON.parse(patch.body).recap).toBe('A good session.');
   });
 
   it('asks for low effort on Opus, and no fast mode unless enabled', async () => {
@@ -260,10 +284,10 @@ describe('the happy path', () => {
     expect(calls.model).toHaveLength(2);
     expect(calls.model[0].speed).toBe('fast');
     expect(calls.model[1].speed).toBeUndefined();
-    expect(r.written).toBe('A good night.');
+    expect(r.written).toBe('A good session.');
   });
 
-  it('gives the model tonight\'s results and the players\' profiles', async () => {
+  it('gives the model the session results and the players\' profiles', async () => {
     await handler(req(), res());
     const content = calls.model[0].messages[0].content;
     expect(content).toContain('Ada');

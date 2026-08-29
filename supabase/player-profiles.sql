@@ -10,7 +10,7 @@
 -- compares each player's current figures to the snapshot stored here and rewrites
 -- only those that have moved past a threshold. Without it there is no way to ask
 -- "is this text still true?" without asking the model, which would mean paying for
--- an answer that is usually no on a night when nothing changed.
+-- an answer that is usually no after a session where nothing changed.
 
 create table if not exists player_profiles (
   identity_id    uuid primary key references players_identity (id) on delete cascade,
@@ -25,7 +25,7 @@ create table if not exists player_profiles (
   stats_snapshot jsonb,
 
   -- Which session's ending produced this text. Handy when a profile reads oddly
-  -- and you want to see the night that caused it.
+  -- and you want to see the session that caused it.
   generated_from uuid references sessions (id) on delete set null,
   generated_at   timestamptz not null default now()
 );

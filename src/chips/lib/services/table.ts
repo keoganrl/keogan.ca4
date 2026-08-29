@@ -847,12 +847,12 @@ export async function endSession(sessionId: string): Promise<void> {
 
 	// player_stats is a snapshot, not a live view (see supabase/player-stats.sql for
 	// why), and this is the only moment its inputs change — the view is scoped to
-	// ended sessions, so a night's hands enter the numbers exactly here.
+	// ended sessions, so a session's hands enter the numbers exactly here.
 	//
 	// Deliberately not awaited into the caller's failure path: the session HAS ended
 	// by this point, and a refresh that fails must not surface as "ending the game
 	// failed" or leave the host tapping a button that already worked. Worst case the
-	// profiles tab is one night behind until the next session ends.
+	// profiles tab is one session behind until the next session ends.
 	supabase.rpc('refresh_player_stats').then(({ error }) => {
 		if (error) console.warn('player_stats refresh failed:', error);
 	});

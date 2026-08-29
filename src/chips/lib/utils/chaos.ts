@@ -42,7 +42,7 @@ export function chaosScores(rows: SessionResult[]): ChaosScore[] {
 	// session (they joined from a private tab and the two identities were later merged),
 	// and session_results has a row per seat. Counting those as two sessions would both
 	// inflate their session count and feed the deviation two half-results instead of the
-	// one real one — splitting a big night into two small ones reads as steadiness.
+	// one real one — splitting a big result into two small ones reads as steadiness.
 	const byPlayer = new Map<string, { name: string; nets: Map<string, number> }>();
 	for (const r of rows) {
 		let entry = byPlayer.get(r.identity_id);

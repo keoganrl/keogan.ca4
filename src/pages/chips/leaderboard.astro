@@ -1,8 +1,18 @@
 ---
 import ChipsLayout from '../../layouts/ChipsLayout.astro';
-import Leaderboard from '../../chips/components/Leaderboard.svelte';
+import SeriesDirectory from '../../chips/components/SeriesDirectory.svelte';
+import { allArchives } from '../../chips/lib/archive';
+
+// The directory. This URL used to be the one global board; it now lists the series,
+// each of which has its own. Old links land here rather than 404ing, one tap from
+// where they were going.
+//
+// Ended series are passed in from the committed archives so the list renders even if
+// Supabase is unreachable — their boards are static, so the index to them should not
+// need a database either. The component merges the live rows over these.
+const archived = allArchives().map((a) => ({ name: a.name, endedAt: a.endedAt }));
 ---
 
-<ChipsLayout title="Leaderboard — Chips">
-  <Leaderboard client:load />
+<ChipsLayout title="Leaderboards — Chips">
+  <SeriesDirectory archived={archived} client:load />
 </ChipsLayout>

@@ -18,74 +18,64 @@
     SessionResult
   } from '../lib/types';
 
-  // The five stat columns are all sorts of the same lifetime board; 'chaos' and
-  // 'profiles' each have their own rows, so they are tabs rather than more sorts.
+  // The board renders what it is given and fetches nothing. Two callers supply the
+  // data: SeriesBoard.svelte queries a live series, and the archived route passes a
+  // committed snapshot straight through from its Astro frontmatter. Keeping the
+  // fetching outside is what lets an ended series render as static HTML with no
+  // database behind it at all.
+  interface Props {
+    /** Series-scoped lifetime_stats rows — the five sort tabs. */
+    stats: LifetimeStat[];
+    /** Series-scoped session_results rows — the net chart and the chaos tab. */
+    results: SessionResult[];
+    profiles: PlayerProfile[];
+    handCounts: { identity_id: string; hands: number }[];
+    seriesName: string;
+    /**
+     * An ended series, rendered from its committed archive. Frozen boards have no
+     * live rows behind them, so anything that reads or writes the database is off:
+     * the merge tool, and the on-demand fetch of your own detailed stats.
+     */
+    frozen?: boolean;
+    endedAt?: string | null;
+    /**
+     * Every player's full player_stats row. Only supplied for a frozen board, where
+     * the detail panel cannot go and fetch one. Live boards leave it out and fetch
+     * just the viewer's own row when they open their card.
+     */
+    playerStats?: PlayerStat[];
+    loading?: boolean;
+    errorMsg?: string;
+    /** Re-fetch after a merge. Live boards only — a frozen one has nothing to merge. */
+    onReload?: () => void | Promise<void>;
+  }
+
+  let {
+    stats,
+    results,
+    profiles,
+    handCounts,
+    seriesName,
+    frozen = false,
+    endedAt = null,
+    playerStats = [],
+    loading = false,
+    errorMsg = '',
+    onReload
+  }: Props = $props();
+
+  // The five stat columns are all sorts of the same board; 'chaos' and 'profiles'
+  // each have their own rows, so they are tabs rather than more sorts.
   type Tab = LeaderboardSortKey | 'chaos' | 'profiles';
 
-  let stats = $state<LifetimeStat[]>([]);
-  let results = $state<SessionResult[]>([]);
-  let profiles = $state<PlayerProfile[]>([]);
-  // Hand counts for everyone, for the profiles tab's ordering and its detail line.
-  // Cheap now that player_stats is a snapshot rather than a query.
-  let handCounts = $state<{ identity_id: string; hands: number }[]>([]);
-  let loading = $state(true);
-  let errorMsg = $state('');
   let sortBy = $state<Tab>('total_net');
   // Tapping a name dims every other line — the only reliable way to pick one player
   // out once there are more than a handful on the chart.
   let highlighted = $state('');
 
-  async function loadStats() {
-    // Surface failures instead of silently rendering an empty board — a missing
-    // view or a permissions error looks identical to "no games yet" otherwise.
-    try {
-      const [statsRes, resultsRes, profilesRes, handsRes] = await Promise.all([
-        supabase.from('lifetime_stats').select('*'),
-        supabase.from('session_results').select('*'),
-        supabase.from('player_profiles').select('identity_id, profile, coaching, generated_at'),
-        supabase.from('player_stats').select('identity_id, hands')
-      ]);
-      if (statsRes.error) throw statsRes.error;
-      stats = (statsRes.data ?? []) as LifetimeStat[];
-      // The chart and chaos score are enhancements, not the board: a database that
-      // predates the session_results view should still render the leaderboard rather
-      // than showing everyone an error.
-      if (resultsRes.error) {
-        console.warn('session_results unavailable — chart and chaos hidden:', resultsRes.error);
-        results = [];
-      } else {
-        results = (resultsRes.data ?? []) as SessionResult[];
-      }
-      // Same reasoning as the chart: a database without the profiles table should
-      // still render the board rather than showing everyone an error.
-      if (profilesRes.error) {
-        console.warn('player_profiles unavailable — blurbs hidden:', profilesRes.error);
-        profiles = [];
-      } else {
-        profiles = (profilesRes.data ?? []) as PlayerProfile[];
-      }
-      if (handsRes.error) {
-        console.warn('player_stats unavailable — hand counts hidden:', handsRes.error);
-        handCounts = [];
-      } else {
-        handCounts = (handsRes.data ?? []) as { identity_id: string; hands: number }[];
-      }
-    } catch (e) {
-      console.error('Leaderboard failed to load:', e);
-      // Supabase returns a plain PostgrestError object (not an Error), so read
-      // its message directly — that's where "relation … does not exist" etc. live.
-      const msg =
-        e instanceof Error ? e.message : (e as { message?: string } | null)?.message;
-      errorMsg = msg || 'Could not load the leaderboard.';
-    } finally {
-      loading = false;
-    }
-  }
-
   onMount(() => {
-    loadStats();
     // Populates $displayName from this device's saved identity — the merge tool
-    // below is gated on it.
+    // below is gated on it, and it is how a row knows it is yours.
     initIdentity();
   });
 
@@ -94,7 +84,9 @@
   // who wanted to could set it, so this hides a footgun from guests rather than
   // enforcing a permission.
   const OWNER_NAME = 'keogan';
-  let isOwner = $derived($displayName.trim().toLowerCase() === OWNER_NAME);
+  // Never on a frozen board: its rows were archived from a database that no longer
+  // holds them, so a merge there would rewrite nothing and mean nothing.
+  let isOwner = $derived(!frozen && $displayName.trim().toLowerCase() === OWNER_NAME);
 
   // Merge mode: collapse duplicate identities (someone who joins from a private tab
   // gets a fresh identity every visit, so one human shows up several times). Select
@@ -127,7 +119,7 @@
         keepId,
         selectedIds.filter((id) => id !== keepId)
       );
-      await loadStats();
+      await onReload?.();
       exitMergeMode();
     } finally {
       merging = false;
@@ -150,6 +142,15 @@
   async function loadMyStats() {
     if (myStatsState === 'loading' || myStatsState === 'ready') return;
     myStatsState = 'loading';
+
+    // A frozen board carries every player's row in its snapshot, because there is no
+    // database left to ask. Live boards fetch only the viewer's own row.
+    if (frozen) {
+      myStats = playerStats.find((s) => s.identity_id === $identityId) ?? null;
+      myStatsState = myStats ? 'ready' : 'missing';
+      return;
+    }
+
     const { data, error } = await supabase
       .from('player_stats')
       .select('*')
@@ -231,9 +232,15 @@
 </script>
 
 <div class="chips-page">
-  <p class="chips-back"><a href="/chips">← chips</a></p>
-  <h1 class="chips-title">Leaderboard</h1>
-  <p class="chips-sub">Lifetime records across every game</p>
+  <p class="chips-back"><a href="/chips/leaderboard">← series</a></p>
+  <h1 class="chips-title">{seriesName}</h1>
+  <p class="chips-sub">
+    {#if frozen}
+      Final standings{endedAt ? ` — ended ${new Date(endedAt).toLocaleDateString()}` : ''}
+    {:else}
+      Records across this series
+    {/if}
+  </p>
 
   <nav class="sorts">
     {#each columns as col (col.key)}
@@ -246,7 +253,7 @@
   {#if loading}
     <p class="cnote">Loading…</p>
   {:else if errorMsg}
-    <p class="cerror">Couldn’t load the leaderboard — {errorMsg}</p>
+    <p class="cerror">Couldn’t load this series — {errorMsg}</p>
   {:else if stats.length === 0}
     <p class="cnote">No completed sessions yet.</p>
   {:else if sortBy === 'chaos'}

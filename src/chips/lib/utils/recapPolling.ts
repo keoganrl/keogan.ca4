@@ -43,7 +43,7 @@ export async function pollForRecap(
 ): Promise<string | null> {
 	const intervalMs = opts.intervalMs ?? 1200;
 	// Long enough for a slow generation on a full table, short enough that a screen
-	// left open on a dead claim gives up rather than polling all night. A claim that
+	// left open on a dead claim gives up rather than polling forever. A claim that
 	// outlives its function is reclaimed by the next visit anyway (api/recap.js
 	// treats one older than a few minutes as abandoned).
 	const timeoutMs = opts.timeoutMs ?? 90_000;

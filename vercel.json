@@ -1,5 +1,14 @@
 {
   "crons": [
-    { "path": "/api/keep-alive", "schedule": "0 12 * * *" }
+    {
+      "path": "/api/keep-alive",
+      "schedule": "0 12 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/chips/:series/leaderboard",
+      "destination": "/chips/series"
+    }
   ]
 }

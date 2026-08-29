@@ -50,7 +50,7 @@ export interface NetSeriesData {
  *
  * Every line shares an x-axis of *global* session number, not each player's own count —
  * a player's third session and someone else's third session are usually different
- * evenings, so per-player indexing would silently compare unrelated points. On a
+ * sessions, so per-player indexing would silently compare unrelated points. On a
  * session a player sat out, their total carries forward flat: they neither won nor lost.
  *
  * All lines start at zero at index 0 (before any session). A player who debuts late is

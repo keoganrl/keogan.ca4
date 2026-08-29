@@ -57,7 +57,7 @@ describe('selectForRewrite', () => {
 		expect(selectForRewrite({ stats, profiles, participantIds: ['a', 'b'] })).toEqual(['b']);
 	});
 
-	it('picks nobody on a night that changed nothing', () => {
+	it('picks nobody after a session that changed nothing', () => {
 		const profiles = stats.map((s) => ({
 			identity_id: s.identity_id,
 			profile: 'x',
@@ -78,7 +78,7 @@ describe('selectForRewrite', () => {
 
 	// The guard that matters: if the VIEW's arithmetic is ever corrected, everyone's
 	// numbers shift at once. Without the participant gate that would rewrite the
-	// whole table in one night; with it, each profile catches up as its player next
+	// whole table at once; with it, each profile catches up as its player next
 	// sits down.
 	it('never rewrites someone who did not play, however far their numbers moved', () => {
 		const profiles = [

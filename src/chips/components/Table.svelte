@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
-  import { go, inviteUrl } from '../lib/nav';
+  import { go, inviteUrl, seriesLeaderboardHref } from '../lib/nav';
   import { initIdentity, identityId } from '../lib/stores/identity';
   import { createTableStore, type TableStore } from '../lib/stores/table.svelte';
   import { netResult, netColor } from '../lib/utils/format';
@@ -694,15 +694,18 @@
           <!-- Activity / ledger -->
           <button class="cbtn cbtn-block" onclick={openLedger}>Activity</button>
 
-          <!-- Leaderboard — opens in a new tab so the live table isn't torn down. -->
-          <a
-            class="cbtn cbtn-block menu-link"
-            href="/chips/leaderboard"
-            target="_blank"
-            rel="noopener"
-          >
-            Leaderboard
-          </a>
+          <!-- Leaderboard — series games only, since a single session is not on one.
+               Opens in a new tab so the live table isn't torn down. -->
+          {#if s.seriesName}
+            <a
+              class="cbtn cbtn-block menu-link"
+              href={seriesLeaderboardHref(s.seriesName)}
+              target="_blank"
+              rel="noopener"
+            >
+              Leaderboard
+            </a>
+          {/if}
 
           <!-- Rebuy -->
           {#if !showRebuy}
@@ -920,7 +923,7 @@
                 {/if}
               {/if}
               <!-- Behind a confirmation like every other irreversible control here:
-                   one tap ends the night for everyone at the table, cashes out every
+                   one tap ends the game for everyone at the table, cashes out every
                    stack and closes the books. -->
               {#if !showEndConfirm}
                 <button

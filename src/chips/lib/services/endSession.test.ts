@@ -174,7 +174,7 @@ describe('endSession', () => {
 	});
 
 	// player_stats is a snapshot scoped to ended sessions, so this is the moment a
-	// night's hands enter it. Miss the refresh and the profiles tab silently shows
+	// session's hands enter it. Miss the refresh and the profiles tab silently shows
 	// numbers that never move.
 	it('refreshes the stats snapshot once the session is closed', async () => {
 		state.players = [player('a')];

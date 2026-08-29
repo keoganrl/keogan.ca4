@@ -5,6 +5,8 @@
   import { netResult, netColor } from '../lib/utils/format';
   import { pollForRecap } from '../lib/utils/recapPolling';
   import { openRecapRelay, subscribeToRecap } from '../lib/utils/recapRelay';
+  import { getSeriesForSession } from '../lib/services/series';
+  import { seriesLeaderboardHref } from '../lib/nav';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -16,6 +18,12 @@
   // message where a joke should be is worse than no paragraph at all.
   let recap = $state('');
   let recapDone = $state(false);
+
+  // The series this session counted towards, or null if it was a one-off. It decides
+  // exactly one thing on this screen now: whether there is a leaderboard to link to.
+  // The recap is written either way — a one-off session is still a session, and the
+  // paragraph is about the game that just finished rather than about any standings.
+  let series = $state<{ id: string; name: string } | null>(null);
 
   async function streamRecap(id: string) {
     try {
@@ -116,15 +124,25 @@
       return;
     }
 
-    const { data } = await supabase
-      .from('players')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('stack', { ascending: false });
+    // Fetched together rather than in sequence: the results and the Leaderboard
+    // button want to appear at the same moment, and neither should wait on the other.
+    const [{ data }, seriesRow] = await Promise.all([
+      supabase
+        .from('players')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('stack', { ascending: false }),
+      getSeriesForSession(sessionId).catch(() => null)
+    ]);
 
     if (data) players = data as Player[];
+    series = seriesRow;
     loading = false;
 
+    // Every session gets one, single or series alike. The endpoint decides whether
+    // there is anything worth writing about (two players, five dealt hands) and
+    // whether this phone is the one generating it; all this has to do is ask.
+    //
     // Not awaited: the results are the page and must not wait on a paragraph.
     streamRecap(sessionId);
   });
@@ -138,6 +156,10 @@
   {#if loading}
     <p class="cnote">Loading…</p>
   {:else}
+    <!-- recapDone starts false, so the caret is showing from the first paint. That is
+         honest for every session now that every session asks: something IS being
+         written. A session too small to be worth a paragraph gets a 422, which sets
+         recapDone without any text, and the block disappears. -->
     {#if recap || !recapDone}
       <!-- aria-live so a screen reader announces the text once it settles rather
            than reading each streamed fragment as it lands. -->
@@ -163,7 +185,9 @@
 
     <div class="actions">
       <a class="cbtn" href="/chips">Home</a>
-      <a class="cbtn" href="/chips/leaderboard">Leaderboard</a>
+      {#if series}
+        <a class="cbtn" href={seriesLeaderboardHref(series.name)}>Leaderboard</a>
+      {/if}
     </div>
   {/if}
 </div>

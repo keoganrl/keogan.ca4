@@ -16,7 +16,7 @@
 -- from a private tab gets a fresh identity, so one human appears several times on
 -- the leaderboard; merging them repoints every seat onto the surviving identity, and
 -- if they played the SAME session under two identities, the survivor now holds two
--- seats in it. That is not a mistake — it is the true state of the night — but it
+-- seats in it. That is not a mistake — it is the true state of that session — but it
 -- has to be represented as one seat, or every per-session number counts them twice.
 --
 -- ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@
 --
 -- A row with a real buy-in and a handful of events is a chair that was played: fold
 -- it in. A row with a buy-in and ZERO events never played a hand, and whether its
--- buy-in was real is a question about the night, not about the database — if nobody
+-- buy-in was real is a question about the session, not about the database — if nobody
 -- actually put those chips in, delete that row instead of merging it.
 
 
