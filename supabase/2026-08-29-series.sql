@@ -237,16 +237,25 @@ select refresh_player_stats();
 
 
 -- ---------------------------------------------------------------------------
--- 6. VERIFY — both must be true before the code deploys
+-- 6. VERIFY — read the result of the LAST query before deploying anything
 -- ---------------------------------------------------------------------------
--- orphans must be 0. Anything left NULL is invisible on every board AND five days
--- from deletion.
+-- The Supabase SQL editor shows the result of the last statement in a script, so
+-- the decisive check goes last on purpose. Do not skim past it.
+
+-- First, the board. It should look exactly like the leaderboard did before this
+-- ran: one row per player, every one of them carrying the same series_id.
+select display_name, sessions_played, total_net, series_id
+  from lifetime_stats
+ order by total_net desc;
+
+-- And the check that actually gates the deploy. `orphans` MUST be 0.
+--
+-- A session left with series_id NULL is invisible on every board and is exactly
+-- what api/keep-alive.js deletes after five days. Note this counts ALL sessions,
+-- not just ended ones: a game abandoned at the setup screen never reaches
+-- lifetime_stats, so the board query above cannot see it, and it is a purge
+-- candidate all the same. This is the query that can.
 select count(*) filter (where series_id is null)     as orphans,
        count(*) filter (where series_id is not null) as in_a_series,
        count(*)                                      as total
   from sessions;
-
--- The board should be unchanged: one row per player, all of them in DW-2026-07.
-select display_name, sessions_played, total_net, series_id
-  from lifetime_stats
- order by total_net desc;
