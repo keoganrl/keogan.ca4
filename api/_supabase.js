@@ -42,7 +42,49 @@ export async function json(path, init) {
 }
 
 /**
+ * Every row matching `path`, following PostgREST's pagination to the end.
+ *
+ * A plain GET stops at the server's row cap — 1000 by default — and says nothing
+ * about it. A truncated response is shaped exactly like a complete small one, so
+ * nothing downstream can tell the difference. The first run of
+ * scripts/end-series.mjs wrote a "full" backup of DW-2026-07 containing 1000 of its
+ * 4947 events, and the only thing that gave it away was that 1000 is a suspiciously
+ * round number. Anything that must be COMPLETE — above all a backup taken before a
+ * delete — has to come through here rather than through json().
+ *
+ * `path` MUST carry an `order=` clause, and it is rejected rather than defaulted.
+ * Paging an unordered query is the same bug wearing a better disguise: without a
+ * total order the server may return pages that overlap or skip rows, so the result
+ * is silently wrong instead of silently short. The right column differs per table
+ * (session_recaps has no `id` at all), so only the caller can choose it.
+ *
+ * Pages advance by the number of rows actually returned, not by `pageSize`, so a
+ * server whose cap is lower than the page asked for still paginates correctly
+ * instead of stopping after one short page.
+ */
+export async function jsonAll(path, pageSize = 1000) {
+  if (!/[?&]order=/.test(path)) {
+    throw new Error(`jsonAll needs an order= clause for stable paging: ${path}`);
+  }
+
+  const rows = [];
+  for (let offset = 0, page = 0; ; page++) {
+    // A server that ignored `offset` would loop forever handing back page one.
+    // Failing loudly beats filling memory with the same thousand rows.
+    if (page > 500) throw new Error(`jsonAll: refusing to page past ${offset} rows: ${path}`);
+
+    const batch = await json(`${path}&limit=${pageSize}&offset=${offset}`);
+    if (!batch?.length) return rows;
+    rows.push(...batch);
+    offset += batch.length;
+  }
+}
+
+/**
  * Row count from a PostgREST exact-count response, e.g. "0-0/12" -> 12.
+ *
+ * Unlike a bare GET this is never capped: the total comes from the Content-Range
+ * header rather than from the number of rows in the body.
  *
  * `column` is only there to keep the response body to one small column; it must be a
  * column the table actually has, which is why it is a parameter — session_recaps is
