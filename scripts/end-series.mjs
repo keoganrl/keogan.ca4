@@ -29,7 +29,7 @@
 // The full runbook, including where the raw dump has to go before phase two, is in
 // README.md under "Ending a series".
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { db, json } from '../api/_supabase.js';
+import { db, json, jsonAll, countOf } from '../api/_supabase.js';
 
 const ARCHIVE_DIR = 'src/chips/archive';
 const BACKUP_DIR = 'backups';
@@ -59,16 +59,20 @@ const archivePath = `${ARCHIVE_DIR}/${name}.json`;
 const projectRef = process.env.PUBLIC_SUPABASE_URL.replace(/^https?:\/\//, '').split('.')[0];
 const usingServiceRole = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Every read here goes through jsonAll or countOf, never a bare json(). A capped
+// GET would understate the size of what is about to be deleted, and `ids` is the
+// list phase two deletes BY — a short list would leave sessions behind and a short
+// count would make the whole thing look smaller than it is.
 async function counts(seriesId) {
-  const sessions = await json(`sessions?select=id&series_id=eq.${seriesId}`);
+  const sessions = await jsonAll(`sessions?select=id&series_id=eq.${seriesId}&order=id`);
   const ids = sessions.map((s) => s.id);
   if (ids.length === 0) return { ids, players: 0, events: 0 };
   const inList = `in.(${ids.join(',')})`;
   const [players, events] = await Promise.all([
-    json(`players?select=id&session_id=${inList}`),
-    json(`events?select=id&session_id=${inList}`),
+    countOf(`players?session_id=${inList}`),
+    countOf(`events?session_id=${inList}`),
   ]);
-  return { ids, players: players.length, events: events.length };
+  return { ids, players, events };
 }
 
 async function loadSeries() {
@@ -111,10 +115,12 @@ async function archive() {
   const endedAt = (await loadSeries()).ended_at;
 
   const [stats, results, allProfiles, allPlayerStats] = await Promise.all([
-    json(`lifetime_stats?select=*&series_id=eq.${series.id}`),
-    json(`session_results?select=*&series_id=eq.${series.id}`),
-    json('player_profiles?select=*'),
-    json('player_stats?select=*'),
+    jsonAll(`lifetime_stats?select=*&series_id=eq.${series.id}&order=identity_id`),
+    // identity_id alone is not unique here (one row per player per session), so the
+    // order has to be the pair or paging could overlap.
+    jsonAll(`session_results?select=*&series_id=eq.${series.id}&order=session_id,identity_id`),
+    jsonAll('player_profiles?select=*&order=identity_id'),
+    jsonAll('player_stats?select=*&order=identity_id'),
   ]);
 
   // player_profiles and player_stats are keyed by identity and span every series, so
@@ -145,13 +151,43 @@ async function archive() {
   // because it holds the whole ledger and everyone's coaching text.
   const inList = `in.(${before.ids.join(',')})`;
   const [sessions, players, rebuys, hands, events, recaps] = await Promise.all([
-    json(`sessions?select=*&series_id=eq.${series.id}`),
-    json(`players?select=*&session_id=${inList}`),
-    json(`rebuys?select=*&session_id=${inList}`),
-    json(`hands?select=*&session_id=${inList}`),
-    json(`events?select=*&session_id=${inList}&order=seq`),
-    json(`session_recaps?select=*&session_id=${inList}`),
+    jsonAll(`sessions?select=*&series_id=eq.${series.id}&order=id`),
+    jsonAll(`players?select=*&session_id=${inList}&order=id`),
+    jsonAll(`rebuys?select=*&session_id=${inList}&order=id`),
+    jsonAll(`hands?select=*&session_id=${inList}&order=id`),
+    jsonAll(`events?select=*&session_id=${inList}&order=seq`),
+    jsonAll(`session_recaps?select=*&session_id=${inList}&order=session_id`),
   ]);
+
+  // Count the same things a second way — off Content-Range, which is never capped —
+  // and refuse to write a dump that does not match. Everything above already pages
+  // properly; this is here because a short backup is the one failure this whole
+  // protocol cannot survive, and it is indistinguishable from a small one by eye.
+  // The first run of this script wrote 1000 of DW-2026-07's 4947 events and looked
+  // entirely healthy doing it.
+  const expected = {
+    sessions: await countOf(`sessions?series_id=eq.${series.id}`),
+    players: await countOf(`players?session_id=${inList}`),
+    rebuys: await countOf(`rebuys?session_id=${inList}`),
+    hands: await countOf(`hands?session_id=${inList}`),
+    events: await countOf(`events?session_id=${inList}`),
+    session_recaps: await countOf(`session_recaps?session_id=${inList}`, 'session_id'),
+  };
+  const got = {
+    sessions: sessions.length,
+    players: players.length,
+    rebuys: rebuys.length,
+    hands: hands.length,
+    events: events.length,
+    session_recaps: recaps.length,
+  };
+  const short = Object.keys(expected).filter((k) => expected[k] !== got[k]);
+  if (short.length > 0) {
+    die(
+      `Incomplete read, refusing to write a partial backup:\n` +
+        short.map((k) => `      ${k}: got ${got[k]}, expected ${expected[k]}`).join('\n')
+    );
+  }
 
   mkdirSync(BACKUP_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -248,7 +284,9 @@ async function wipe() {
     );
   }
 
-  const totalBefore = (await json('sessions?select=id')).length;
+  // countOf, not a row fetch: this number exists to prove nothing OUTSIDE the series
+  // moved, and a capped read would quietly compare two wrong totals to each other.
+  const totalBefore = await countOf('sessions?id=not.is.null');
 
   console.log(`\n  Supabase project : ${projectRef}`);
   console.log(`  Key              : ${usingServiceRole ? 'service role' : 'publishable'}`);
@@ -267,7 +305,7 @@ async function wipe() {
   }
 
   // Nothing outside the series should have moved.
-  const totalAfter = (await json('sessions?select=id')).length;
+  const totalAfter = await countOf('sessions?id=not.is.null');
   const expected = totalBefore - before.ids.length;
   if (totalAfter !== expected) {
     die(
