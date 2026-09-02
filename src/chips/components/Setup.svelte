@@ -41,6 +41,17 @@
   // picks the rest.
   const previewName = $derived(isValidPrefix(prefix) ? buildSeriesName(prefix) : '');
 
+  // Escalation defaults OPPOSITE ways depending on mode: on for a single session
+  // (usually the only hand of poker anyone plays that day, so it should get
+  // somewhere), off for a series (a recurring game with its own house pace, where
+  // the host is more likely choosing on purpose than leaving a default in place).
+  // Only the default moves — picking a mode never overrides a toggle the host has
+  // already touched by hand within that same choice.
+  function selectMode(next: 'single' | 'series') {
+    mode = next;
+    autoEscalate = next === 'single';
+  }
+
   async function loadSeries() {
     try {
       liveSeries = await listLiveSeries();
@@ -84,6 +95,15 @@
 
   const startingSmallBlind = $derived(schedule[0].small_blind);
   const startingBigBlind = $derived(schedule[0].big_blind);
+
+  // What each session-length button actually buys in starting blinds. Computed per
+  // option rather than read off `schedule` above, which only knows the CURRENTLY
+  // selected length — series mode shows this instead of the button's duration, so a
+  // host picking a series game sees the number that matters to a poker table.
+  function blindsFor(mins: CashSessionLength): string {
+    const [level] = generateCashEscalationSchedule(BUY_IN, mins);
+    return `${level.small_blind}/${level.big_blind}`;
+  }
 
   onMount(async () => {
     await initIdentity();
@@ -159,12 +179,12 @@
       <button
         class="cchoice grow"
         class:active={mode === 'single'}
-        onclick={() => (mode = 'single')}>Single</button
+        onclick={() => selectMode('single')}>Single</button
       >
       <button
         class="cchoice grow"
         class:active={mode === 'series'}
-        onclick={() => (mode = 'series')}>Series</button
+        onclick={() => selectMode('series')}>Series</button
       >
     </div>
 
@@ -223,13 +243,16 @@
   <!-- Blind settings — always on screen, no disclosure. -->
   <div class="group">
     <div class="subgroup">
-      <span class="clabel">Session length</span>
+      <!-- Series mode swaps the label along with the buttons: "Session length: 25/50"
+           reads as a typo, and the buttons below no longer say anything about length. -->
+      <span class="clabel">{mode === 'series' ? 'Starting blinds' : 'Session length'}</span>
       <div class="choices">
         {#each [[60, '1h'] as const, [120, '2h'] as const, [180, '3h+'] as const] as [mins, label] (mins)}
           <button
             class="cchoice grow"
             class:active={sessionMinutes === mins}
-            onclick={() => (sessionMinutes = mins)}>{label}</button
+            onclick={() => (sessionMinutes = mins)}
+            >{mode === 'series' ? blindsFor(mins) : label}</button
           >
         {/each}
       </div>

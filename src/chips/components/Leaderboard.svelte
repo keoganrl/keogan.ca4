@@ -233,14 +233,8 @@
 
 <div class="chips-page">
   <p class="chips-back"><a href="/chips/leaderboard">← series</a></p>
-  <h1 class="chips-title">{seriesName}</h1>
-  <p class="chips-sub">
-    {#if frozen}
-      Final standings{endedAt ? ` — ended ${new Date(endedAt).toLocaleDateString()}` : ''}
-    {:else}
-      Records across this series
-    {/if}
-  </p>
+  <h1 class="chips-title">Leaderboard</h1>
+  <p class="chips-sub">{seriesName}</p>
 
   <nav class="sorts">
     {#each columns as col (col.key)}
