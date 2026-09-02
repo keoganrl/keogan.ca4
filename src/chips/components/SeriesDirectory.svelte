@@ -49,7 +49,7 @@
 <div class="chips-page">
   <p class="chips-back"><a href="/chips">← chips</a></p>
   <h1 class="chips-title">Leaderboards</h1>
-  <p class="chips-sub">One board per series</p>
+  <p class="chips-sub">Choose a series</p>
 
   {#if loading && ended.length === 0}
     <p class="cnote">Loading…</p>
