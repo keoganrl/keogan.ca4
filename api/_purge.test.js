@@ -108,6 +108,11 @@ global.fetch = vi.fn(async (url, init = {}) => {
   if (path.startsWith('guestbook_entries')) {
     return state.pingOk ? ok([]) : { ok: false, status: 503, text: async () => 'paused' };
   }
+  // The same cron also runs the 18-hour auto-end sweep, which asks for open sessions
+  // first. Answered explicitly with nothing so these tests exercise only the purge —
+  // otherwise it would fall through to the purge's own row list below and the two
+  // sweeps would be entangled. auto-end has its own tests in _autoEnd.test.js.
+  if (path.startsWith('sessions?select=id,join_code,status,created_at')) return ok([]);
   if (path.startsWith('sessions?select')) return ok(state.rows);
   if (path.startsWith('sessions?id=in.')) return ok(null);
   return { ok: false, status: 404, text: async () => 'unknown' };

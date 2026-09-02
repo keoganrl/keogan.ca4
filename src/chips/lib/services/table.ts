@@ -777,6 +777,13 @@ export async function claimHost(myPlayer: Player, currentHost: Player | undefine
 }
 
 export async function endSession(sessionId: string): Promise<void> {
+	// ############################################################################
+	// The refund rule below has a SECOND implementation: planRefunds in
+	// api/_autoEnd.js, used by the cron that closes sessions nobody ended after 18
+	// idle hours. The two must agree. Change one, change the other — planRefunds has
+	// the tests, including chip conservation, in api/_autoEnd.test.js.
+	// ############################################################################
+	//
 	// Hand back anything still on the felt — blinds included — before the books close.
 	// The leaderboard reads net as stack − buy-in, so chips abandoned in an unfinished
 	// pot would score as permanent losses for whoever had bet them. Inactive players

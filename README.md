@@ -101,6 +101,26 @@ The five-day purge lives in `api/keep-alive.js` and ships **switched off**: with
 `PURGE_ENABLED=1` it logs exactly what it would delete and stops. Leave it that way
 for a week of cron runs, read the ids, then enable it.
 
+### Sessions nobody ended
+
+The leaderboard only counts sessions with `status = 'ended'`, and for a long time the
+only thing that ended one was somebody tapping "End session". A game everyone walked
+away from stayed open forever and counted for nothing — DW-2026-07 turned out to be
+carrying two of them, both real five-player games from July.
+
+The same daily cron now closes any session that has been open with **nothing happening
+in it for 18 hours**. The clock runs from the last thing in the ledger — a bet, a call,
+a fold, a deal — not from whether a browser tab is still open, because a forgotten tab
+would otherwise keep a dead game alive indefinitely.
+
+It settles the table properly on the way out rather than just flipping the status:
+chips still on the felt go back to whoever bet them, capped at the pot, exactly as
+"End session" does. A session closed this way lands on the leaderboard like any other,
+and someone opening its game-over screen still gets the recap.
+
+Games abandoned at the setup screen before anyone sat down are left alone — there is
+nothing to settle and nobody to score. The purge collects those.
+
 ### Ending a series
 
 There is no button for this and there should not be: it deletes a season of poker.
