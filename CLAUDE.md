@@ -22,8 +22,9 @@ Current endpoints:
 - `api/keep-alive.js` — daily Vercel cron (see vercel.json) that pings Supabase
   so the free-tier project doesn't pause. **Load-bearing:** if it stops, the DB
   eventually pauses and guestbook + /chips + notify all go down together. It also
-  runs the five-day purge of single sessions — see "Deleting /chips data" below.
-  The ping runs first and unchanged, and a failing purge cannot take it down.
+  runs two sweeps: the 18-hour auto-end (below) and the five-day purge of single
+  sessions (see "Deleting /chips data"). The ping runs first and unchanged, and
+  neither sweep can take it down — their failures go in the response body.
 - `api/notify.js` — Supabase Database Webhook target. Fires on new
   `guestbook_entries` rows and emails via Resend.
 - `api/profile.js` — Supabase Database Webhook target. Fires on `sessions`
@@ -171,6 +172,40 @@ at once (`src/chips/components/Cashout.svelte`):
 The two are raced, so the caret stops on the relay's final message when there is one
 and on the poll when there is not. Before this, the 202 was read as JSON, found no
 `recap` key, and left every phone but the first showing nothing until a reload.
+
+## Sessions that nobody ended
+
+Nothing used to end a session except a human tapping "End session", and the
+leaderboard counts only sessions with `status = 'ended'`. A game everyone walked
+away from stayed `active` forever and contributed nothing — not to the board, not
+to anyone's stats. DW-2026-07 was carrying two of these (five players each, played
+in July) and they were invisible until the series was archived and someone counted
+the rows.
+
+The daily cron now closes any `active` or `paused` session whose last LEDGER EVENT
+is more than `IDLE_HOURS` (18) old, falling back to `created_at` when no hand was
+ever dealt. Decision logic and the refund maths are in `api/_autoEnd.js`, tested in
+`api/_autoEnd.test.js`.
+
+Three things worth knowing before changing it:
+
+- **The clock is the last event, not `players.last_heartbeat_at`.** A heartbeat only
+  says a browser tab is open, which a forgotten laptop keeps saying indefinitely —
+  exactly the session this is meant to close. An event says somebody actually bet,
+  called, folded or dealt.
+- **Ending a session is not flipping a status.** Chips still on the felt have to be
+  handed back or the leaderboard scores them as permanent losses for whoever bet
+  them, and the refund is capped at `sessions.pot` rather than `hand_total_bet` —
+  read the comment on `endSession` for the live bug that shaped that rule.
+  `planRefunds` in `api/_autoEnd.js` is a SECOND implementation of it; the two must
+  stay in step.
+- **The close is a compare-and-swap** (`status=neq.ended`), same as the client's,
+  because the host can tap "End session" at the moment the cron fires. Whoever wins
+  the swap owns the refund; the loser writes nothing.
+
+`waiting` sessions are deliberately left alone: they were never started, so there
+was no "End session" to skip and there are no players to settle. The purge sweeps
+the single ones; series ones simply sit, contributing nothing.
 
 ## /chips series, and deleting data
 
