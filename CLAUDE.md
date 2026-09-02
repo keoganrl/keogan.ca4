@@ -185,6 +185,20 @@ should not be. `scripts/end-series.mjs`, run in two separate invocations with a 
 looking at a deployed page in between; the header of that file explains why the two
 phases cannot be one command.
 
+Two things that cost time the first time this was run for real:
+
+- **Reads must page.** PostgREST caps a GET at 1000 rows and says nothing about it,
+  so anything that has to be COMPLETE goes through `jsonAll()` in `api/_supabase.js`,
+  never `json()`. The first archive of DW-2026-07 wrote a backup holding 1000 of its
+  4947 events and looked perfectly healthy doing it. `jsonAll` demands an `order=`
+  clause because paging an unordered query overlaps and skips rows instead — wrong
+  rather than merely short. Phase one now re-counts every table off `Content-Range`
+  and refuses to write a dump that disagrees.
+- **From an agent sandbox, Node needs `NODE_USE_ENV_PROXY=1`.** `curl` picks up
+  `HTTPS_PROXY` on its own; Node's fetch does not, and the egress proxy answers the
+  direct connection with `403 Host not in allowlist`, which reads like a Supabase
+  permissions problem and is not one. Irrelevant on a normal machine.
+
 ### Deleting /chips data
 
 Until series shipped, the only DELETE in this repo removed ghost `players_identity`
