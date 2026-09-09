@@ -1724,28 +1724,39 @@
     margin: 0;
     font-size: 0.9rem;
   }
-  /* The turn bar pulses: a still bar in the corner of the eye is a bar people miss,
-     and the whole table waits on the one person who isn't looking. */
+  /* The turn bar moves: a still bar in the corner of the eye is a bar people miss, and
+     the whole table waits on the one person who isn't looking. It holds still for most
+     of the cycle and then bobs once — a tap on the shoulder rather than a wave. The
+     stillness is what does the work; motion that never stops is motion you stop seeing.
+     Vertical, too, so it reads differently from everything else on a phone, which only
+     ever slides sideways. */
   .banner-turn {
     background: var(--ink);
     color: var(--paper);
     border-radius: 2rem;
     padding: 0.45rem 1rem;
-    animation: turn-pulse 1.5s ease-in-out infinite;
+    animation: turn-nudge 3s ease-in-out infinite;
   }
   .banner-turn p {
     font-weight: 700;
     letter-spacing: 0.08em;
   }
-  @keyframes turn-pulse {
+  /* The bob itself is ~0.75s wherever the cycle length lands; changing the 3s above
+     changes how long the bar rests between bobs, so these stops move with it. */
+  @keyframes turn-nudge {
     0%,
+    75%,
     100% {
-      transform: scale(1);
-      box-shadow: 0 0 0 0 rgba(42, 42, 42, 0.4);
+      transform: translateY(0);
     }
-    55% {
-      transform: scale(1.035);
-      box-shadow: 0 0 0 0.55rem rgba(42, 42, 42, 0);
+    79% {
+      transform: translateY(3px);
+    }
+    84% {
+      transform: translateY(-2px);
+    }
+    89% {
+      transform: translateY(1px);
     }
   }
 

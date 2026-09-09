@@ -223,8 +223,10 @@ next one.
 
 ### "Your turn", and the loud version
 
-The turn bar pulses — a still bar in the corner of your eye is one people miss, and the
-whole table waits on whoever is not looking. **Menu → Turn alert** switches it to
+The turn bar holds still and then bobs, once every three seconds — a still bar in the
+corner of your eye is one people miss, and the whole table waits on whoever is not
+looking. The pause between bobs is the working part: motion that never stops is motion
+you stop seeing. **Menu → Turn alert** switches it to
 *Obnoxious*: the bar goes big and multicoloured and an animated rainbow border rings the
 whole page while the action is on you. It is a per-device preference kept in
 `localStorage` (`poker_turn_alert`, see `lib/stores/turnAlert.ts`), so it survives into
