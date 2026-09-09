@@ -558,10 +558,6 @@
       ></button>
       <div class="cmodal">
         <p class="cmodal-title">Folding under zero pressure?</p>
-        <p>
-          Nobody has bet a thing — you can check and see the next card for <em>free</em>. Folding
-          now is surrendering to an army that hasn't shown up.
-        </p>
         <div class="btn-row">
           <button
             class="cbtn cbtn-primary"
