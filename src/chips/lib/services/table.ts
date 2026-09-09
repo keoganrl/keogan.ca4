@@ -198,59 +198,6 @@ export function firstPostflopActor(
 	);
 }
 
-/**
- * Players who must act before `targetId` on the current street, in action order.
- *
- * Walks forward (in seat order, wrapping) from `session.current_actor_id`, collecting
- * every eligible player up to — but not including — the target. "Eligible" means active,
- * not folded, and holding chips (all-in players can't act, so they're skipped).
- *
- * Returns `[]` when the target is the current actor (it's already their turn), and `null`
- * when there is no current actor or the target isn't an eligible actor. The wrap handles
- * the normal "last to act post-flop" case where the target's seat is behind the actor's.
- */
-export function playersBeforeTarget(
-	session: Session,
-	activePlayers: Player[],
-	targetId: string
-): Player[] | null {
-	const eligible = activePlayers
-		.filter((p) => p.is_active && !p.folded && p.stack > 0)
-		.sort(bySeat);
-	const startIdx = eligible.findIndex((p) => p.id === session.current_actor_id);
-	if (startIdx === -1) return null; // no current actor among eligible players
-	if (!eligible.some((p) => p.id === targetId)) return null; // target can't act
-	if (session.current_actor_id === targetId) return []; // already the target's turn
-
-	const before: Player[] = [];
-	const n = eligible.length;
-	for (let i = 0; i < n; i++) {
-		const p = eligible[(startIdx + i) % n];
-		if (p.id === targetId) return before;
-		before.push(p);
-	}
-	return null; // unreachable: target is guaranteed present
-}
-
-/**
- * Decides how each intervening player is resolved when someone acts out of turn:
- * a player folds if they still owe chips to match the current bet, otherwise they check.
- * This makes "out-of-turn call ⇒ others fold" and "out-of-turn check ⇒ others check"
- * fall out automatically.
- */
-export function interveningResolutions(
-	before: Player[],
-	currentBet: number
-): { fold: string[]; check: string[] } {
-	const fold: string[] = [];
-	const check: string[] = [];
-	for (const p of before) {
-		if (p.current_round_bet < currentBet) fold.push(p.id);
-		else check.push(p.id);
-	}
-	return { fold, check };
-}
-
 // A player is dealt into a hand only if they have chips to play with.
 const hasChips = (p: Player) => p.stack > 0;
 // Would the player still be broke after this hand's bets are refunded to them?
@@ -289,22 +236,6 @@ export async function advanceTurn(session: Session, activePlayers: Player[]): Pr
 		.update({ current_actor_id: next.id })
 		.eq('id', session.id)
 		.eq('street', session.street);
-}
-
-// Points the turn at `actorId`, scoped to the street it was decided on. If another client
-// has already advanced the street (and set that street's first actor), this stale write is
-// a no-op and won't clobber it — same guard as advanceTurn. Used by out-of-turn play, where
-// the store resolves the players ahead of someone then claims the turn for them mid-street.
-export async function setCurrentActor(
-	sessionId: string,
-	actorId: string,
-	street: string
-): Promise<void> {
-	await supabase
-		.from('sessions')
-		.update({ current_actor_id: actorId })
-		.eq('id', sessionId)
-		.eq('street', street);
 }
 
 // Writes the fold and its ledger line, without touching whose turn it is. Split out

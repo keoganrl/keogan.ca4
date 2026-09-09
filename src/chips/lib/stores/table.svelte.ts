@@ -14,7 +14,6 @@ import {
 	kickPlayer as kickPlayerService,
 	leaveTable as leaveTableService,
 	advanceTurn as advanceTurnService,
-	setCurrentActor as setCurrentActorService,
 	foldHand as foldHandService,
 	callBet as callBetService,
 	streetReadyToAdvance,
@@ -26,8 +25,6 @@ import {
 	setBlindLevel as setBlindLevelService,
 	cashEscalationActive,
 	reorderSeats as reorderSeatsService,
-	playersBeforeTarget,
-	interveningResolutions,
 	logEvent
 } from '../services/table';
 import type { Session, Player, GameEvent } from '../types';
@@ -63,17 +60,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 	);
 
 	const isMyTurn = $derived(!!me && !!session && session.current_actor_id === me.id);
-
-	// Players who would have to check/fold before `me` could act out of turn, in action
-	// order. Empty when it's already my turn; null when out-of-turn play isn't possible.
-	const playersBeforeMe = $derived.by(() => {
-		if (!me || !session || !session.current_actor_id) return null;
-		return playersBeforeTarget(
-			session,
-			players.filter((p) => p.is_active),
-			me.id
-		);
-	});
 
 	const staleHost = $derived.by(() => {
 		if (!players.length) return false;
@@ -441,46 +427,13 @@ export function createTableStore(sessionId: string, identityId: string) {
 		);
 	}
 
-	// Resolves the players ahead of `me` so action reaches me, then points the turn at me.
-	// Each intervening player folds if they still owe chips, otherwise checks. Setting
-	// current_actor_id to me makes the subsequent advanceTurn advance from my seat. The actor
-	// write is street-scoped (setCurrentActor) so that if a concurrent street transition has
-	// already set the new street's first actor, this mid-street claim can't clobber it.
-	async function resolveInterveningBeforeMe() {
-		if (!me || !session) return;
-		const before = playersBeforeMe;
-		if (!before || !before.length) return;
-		const currentBet = session.current_bet;
-		const street = session.street;
-		const { fold, check } = interveningResolutions(before, currentBet);
-
-		players = players.map((p) => {
-			if (fold.includes(p.id)) return { ...p, folded: true, acted_on_street: street };
-			if (check.includes(p.id)) return { ...p, acted_on_street: street };
-			return p;
-		});
-		session = { ...session, current_actor_id: me.id };
-
-		await Promise.all([
-			fold.length
-				? supabase.from('players').update({ folded: true, acted_on_street: street }).in('id', fold)
-				: Promise.resolve(),
-			check.length
-				? supabase.from('players').update({ acted_on_street: street }).in('id', check)
-				: Promise.resolve(),
-			setCurrentActorService(sessionId, me.id, street)
-		]);
-
-		// Log each auto-resolved player in action order (before me acts).
-		for (const p of before) {
-			await logEvent(sessionId, fold.includes(p.id) ? 'fold' : 'check', {
-				playerId: p.id,
-				street
-			});
-		}
-	}
-
-	async function placeBet(amount: number, outOfTurn = false): Promise<string> {
+	// Betting, checking and calling are turn-gated in the UI: only the current actor is
+	// offered them. Folding is the one action anybody can take at any time — it costs
+	// nobody else anything and needs no resolution of the players ahead. (There used to
+	// be an "act out of turn and auto-check/fold everyone ahead of you" path here; it was
+	// confirmed behind a modal that people tapped through without reading, which quietly
+	// folded players who hadn't acted.)
+	async function placeBet(amount: number): Promise<string> {
 		if (!me || !session) return 'Not ready';
 		if (amount <= 0) return 'Enter a bet amount.';
 		if (amount > me.stack) return "You don't have enough chips.";
@@ -501,9 +454,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (me.acted_on_street === session.street && facingShortAllIn(events, session)) {
 			return 'That all-in was too small to reopen the betting — call or fold.';
 		}
-
-		if (outOfTurn) await resolveInterveningBeforeMe();
-		if (!me || !session) return 'Not ready';
 
 		// The chip arithmetic below is a set of ABSOLUTE writes, so compute it from
 		// freshly read rows, never the realtime cache: a dropped echo of my own blind
@@ -600,9 +550,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		return '';
 	}
 
-	async function passTurn(outOfTurn = false) {
-		if (!me || !session) return;
-		if (outOfTurn) await resolveInterveningBeforeMe();
+	async function passTurn() {
 		if (!me || !session) return;
 		const checkStreet = session.street;
 		players = players.map((p) => (p.id === me!.id ? { ...p, acted_on_street: checkStreet } : p));
@@ -640,9 +588,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		);
 	}
 
-	async function call(outOfTurn = false) {
-		if (!me || !session) return;
-		if (outOfTurn) await resolveInterveningBeforeMe();
+	async function call() {
 		if (!me || !session) return;
 		const myPlayer = me;
 		const mySession = session;
@@ -953,9 +899,6 @@ export function createTableStore(sessionId: string, identityId: string) {
 		get isMyTurn() {
 			return isMyTurn;
 		},
-		get playersBeforeMe() {
-			return playersBeforeMe;
-		},
 		get staleHost() {
 			return staleHost;
 		},
@@ -1012,8 +955,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		init,
 		destroy,
 		// Chip-moving actions are serialised — a second tap while one is in flight is a no-op.
-		placeBet: (amount: number, outOfTurn = false) =>
-			runExclusive(() => placeBet(amount, outOfTurn), ''),
+		placeBet: (amount: number) => runExclusive(() => placeBet(amount), ''),
 		awardPot: (winnerId: string, amount: number) =>
 			runExclusive(() => awardPot(winnerId, amount), undefined),
 		awardBestHand: (winnerIds: string[]) =>
@@ -1024,9 +966,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 		buildDebugReport,
 		resetAwards,
 		confirmNextStreet: () => runExclusive(confirmNextStreet, undefined),
-		passTurn: (outOfTurn = false) => runExclusive(() => passTurn(outOfTurn), undefined),
+		passTurn: () => runExclusive(passTurn, undefined),
 		fold: () => runExclusive(fold, undefined),
-		call: (outOfTurn = false) => runExclusive(() => call(outOfTurn), undefined),
+		call: () => runExclusive(call, undefined),
 		doRebuy,
 		endHand: () => runExclusive(performEndHand, undefined),
 		voidHand: () => runExclusive(performVoidHand, undefined),

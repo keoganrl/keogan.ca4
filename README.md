@@ -205,6 +205,33 @@ down. It needs the full roster — inactive rows included — which is why `getA
 collapse back to seat 0, which is the bug people saw as "the order went funny after
 someone left".
 
+### Acting is turn-gated; folding is not
+
+Check, call and raise appear only when the action is actually on you. They used to be
+live out of turn, behind a confirmation listing everyone ahead of you and what they
+would be marked as — and people tapped Confirm without reading it, checking or folding
+players who had not acted. It never got used for the thing it was for, so it is gone.
+
+Fold stays available at any time: declaring you are out costs nobody else anything and
+moves no chips. Out of turn it renders as a quiet outline rather than a full-width red
+button, so it is harder to hit by accident. Folding when nobody has bet still asks
+whether you meant it.
+
+The raise panel is also per-decision: it closes when the action leaves you and again on
+every new deal, so a slider left open never carries the previous hand's amount into the
+next one.
+
+### "Your turn", and the loud version
+
+The turn bar pulses — a still bar in the corner of your eye is one people miss, and the
+whole table waits on whoever is not looking. **Menu → Turn alert** switches it to
+*Obnoxious*: the bar goes big and multicoloured and an animated rainbow border rings the
+whole page while the action is on you. It is a per-device preference kept in
+`localStorage` (`poker_turn_alert`, see `lib/stores/turnAlert.ts`), so it survives into
+future sessions and changes nothing for anyone else at the table. Under
+`prefers-reduced-motion` both soften: the rainbow holds still and the standard bar fades
+slowly instead of pulsing.
+
 ### Two rules worth knowing
 
 **Heads-up, the button posts the small blind** and acts first before the flop, last

@@ -3,6 +3,7 @@
   import { fade } from 'svelte/transition';
   import { go, inviteUrl, seriesLeaderboardHref } from '../lib/nav';
   import { initIdentity, identityId } from '../lib/stores/identity';
+  import { turnAlert, setTurnAlert } from '../lib/stores/turnAlert';
   import { createTableStore, type TableStore } from '../lib/stores/table.svelte';
   import { netResult, netColor } from '../lib/utils/format';
   import { snapToStep } from '../lib/utils/bet';
@@ -374,44 +375,55 @@
     if (showBetting) betAmount = store?.minRaiseAdd ?? betAmount;
   }
 
-  // Pending out-of-turn action awaiting confirmation (null = none).
-  let pendingOutOfTurn = $state<{ action: 'check' | 'call' | 'raise'; amount: number } | null>(
-    null
-  );
+  function closeBetPanel() {
+    showBetting = false;
+    betError = '';
+    betAmount = store?.session?.big_blind ?? 0;
+  }
 
-  // What each player ahead of me will be marked as if I confirm the pending action.
-  const ootResolutions = $derived.by(() => {
-    const before = store?.playersBeforeMe ?? [];
-    const currentBet = store?.session?.current_bet ?? 0;
-    return before.map((p) => ({
-      player: p,
-      action: p.current_round_bet < currentBet ? 'Fold' : 'Check'
-    }));
+  // The panel is a per-decision thing: it must never survive the decision it was opened
+  // for. It closes when the action leaves me (whether I acted, folded, or somebody else's
+  // raise took the turn away) and again on every fresh deal — a slider left open across a
+  // new hand still holds the last hand's amount, which is exactly the tap nobody checks.
+  $effect(() => {
+    if (!store?.isMyTurn && showBetting) closeBetPanel();
   });
 
-  async function runPlaceBet(outOfTurn: boolean) {
+  // The 'deal' event is the hand-start marker (see groupEventsByHand); scanning back from
+  // the newest event finds it within the current hand rather than walking the session.
+  const lastDealSeq = $derived.by(() => {
+    const evs = store?.events ?? [];
+    for (let i = evs.length - 1; i >= 0; i--) {
+      if (evs[i].type === 'deal') return evs[i].seq;
+    }
+    return -1;
+  });
+  let seenDealSeq = $state(-1);
+  $effect(() => {
+    if (lastDealSeq !== seenDealSeq) {
+      seenDealSeq = lastDealSeq;
+      if (showBetting) closeBetPanel();
+    }
+  });
+
+  // Is the table waiting on ME right now? Drives the turn alert (and, in loud mode, the
+  // border around the whole page). streetComplete means the betting is done and the
+  // banner has already switched to "betting complete", so nothing should be shouting.
+  const alertingMyTurn = $derived(!!store?.isMyTurn && !store?.streetComplete);
+  const loudAlert = $derived(alertingMyTurn && $turnAlert === 'loud');
+
+  async function handlePlaceBet() {
     betError = '';
-    const err = (await store?.placeBet(betAmount, outOfTurn)) ?? '';
+    const err = (await store?.placeBet(betAmount)) ?? '';
     if (err) {
       betError = err;
       return;
     }
-    showBetting = false;
-    betAmount = store?.session?.big_blind ?? 0;
+    closeBetPanel();
   }
 
-  function handlePlaceBet() {
-    if (store?.isMyTurn) {
-      void runPlaceBet(false);
-    } else {
-      pendingOutOfTurn = { action: 'raise', amount: betAmount };
-    }
-  }
-
-  // Check / Call tapped: act immediately if it's my turn, otherwise confirm out of turn.
   function handleCheck() {
-    if (store?.isMyTurn) void store.passTurn();
-    else pendingOutOfTurn = { action: 'check', amount: 0 };
+    void store?.passTurn();
   }
 
   // Folding when checking is free deserves a gentle intervention.
@@ -423,22 +435,12 @@
       showFoldWarning = true;
       return;
     }
-    showBetting = false;
+    closeBetPanel();
     void store?.fold();
   }
 
   function handleCall() {
-    if (store?.isMyTurn) void store.call();
-    else pendingOutOfTurn = { action: 'call', amount: 0 };
-  }
-
-  async function confirmOutOfTurn() {
-    const pending = pendingOutOfTurn;
-    if (!pending || !store) return;
-    pendingOutOfTurn = null;
-    if (pending.action === 'check') await store.passTurn(true);
-    else if (pending.action === 'call') await store.call(true);
-    else await runPlaceBet(true);
+    void store?.call();
   }
 
   // One tap in the imbalance banner copies a full diagnostic dump (database rows,
@@ -540,50 +542,11 @@
       </div>
     {/if}
 
-    <!-- Out-of-turn confirmation -->
-    {#if pendingOutOfTurn}
-      <button
-        class="cmodal-backdrop"
-        onclick={() => (pendingOutOfTurn = null)}
-        aria-label="Cancel"
-      ></button>
-      <div class="cmodal">
-        <p class="cmodal-title">Acting out of turn</p>
-        {#if ootResolutions.length}
-          <p>Confirm the players before you have already acted:</p>
-          <ul class="oot-list">
-            {#each ootResolutions as r (r.player.id)}
-              <li class="oot-row">
-                <span>{r.player.display_name}</span>
-                <span class="pill" class:pill-fold={r.action === 'Fold'}
-                  >{r.action.toLowerCase()}</span
-                >
-              </li>
-            {/each}
-          </ul>
-        {:else}
-          <p>No players are waiting ahead of you.</p>
-        {/if}
-        <p>
-          Then you'll
-          {#if pendingOutOfTurn.action === 'check'}
-            <strong>check</strong>.
-          {:else if pendingOutOfTurn.action === 'call'}
-            {@const owed = (s.session?.current_bet ?? 0) - (s.me?.current_round_bet ?? 0)}
-            {#if owed >= (s.me?.stack ?? 0)}
-              <strong>go all in for {s.me?.stack ?? 0}</strong>.
-            {:else}
-              <strong>call {owed}</strong>.
-            {/if}
-          {:else}
-            <strong>raise to {pendingOutOfTurn.amount}</strong>.
-          {/if}
-        </p>
-        <div class="btn-row">
-          <button class="cbtn" onclick={() => (pendingOutOfTurn = null)}>Cancel</button>
-          <button class="cbtn cbtn-primary" onclick={confirmOutOfTurn}>Confirm</button>
-        </div>
-      </div>
+    <!-- Loud turn alert: an animated border around the whole viewport, on top of
+         everything and clickable through. Only while the table is waiting on this
+         player, and only for people who asked for it in the menu. -->
+    {#if loudAlert}
+      <div class="loud-border" aria-hidden="true"></div>
     {/if}
 
     <!-- Zero-pressure fold warning -->
@@ -613,7 +576,7 @@
             class="cbtn cbtn-danger"
             onclick={() => {
               showFoldWarning = false;
-              showBetting = false;
+              closeBetPanel();
               void s.fold();
             }}
           >
@@ -706,6 +669,33 @@
               Leaderboard
             </a>
           {/if}
+
+          <!-- Turn alert style. A setting for THIS PHONE only (localStorage, kept for
+               future sessions) — it changes nothing for anyone else at the table. -->
+          <div class="alert-setting">
+            <p class="clabel">Turn alert</p>
+            <div class="choices">
+              <button
+                class="cchoice"
+                class:active={$turnAlert === 'standard'}
+                onclick={() => setTurnAlert('standard')}
+              >
+                Standard
+              </button>
+              <button
+                class="cchoice"
+                class:active={$turnAlert === 'loud'}
+                onclick={() => setTurnAlert('loud')}
+              >
+                Obnoxious
+              </button>
+            </div>
+            <p class="cnote alert-note">
+              {$turnAlert === 'loud'
+                ? 'The whole screen lights up when the action is on you.'
+                : 'A pulsing bar when the action is on you.'}
+            </p>
+          </div>
 
           <!-- Rebuy -->
           {#if !showRebuy}
@@ -1119,7 +1109,11 @@
       <div class="banner banner-done"><p>betting complete</p></div>
     {:else if s.currentActor}
       {#if s.currentActor.identity_id === $identityId}
-        <div class="banner banner-turn"><p>your turn</p></div>
+        <!-- Pulses so it registers in peripheral vision; louder still if this device
+             asked for it (menu → turn alert). -->
+        <div class="banner banner-turn" class:loud={$turnAlert === 'loud'}>
+          <p>your turn</p>
+        </div>
       {:else}
         <div class="banner banner-wait">
           <p>waiting for <strong>{s.currentActor.display_name}</strong></p>
@@ -1291,27 +1285,41 @@
       <div class="action-bar">
         <!-- Primary actions: Fold / Check+Call / Raise. Nothing is actionable until the
              host deals the first hand (current_actor_id) — betting into a table that
-             hasn't started only ever confused people. -->
+             hasn't started only ever confused people.
+
+             Check, call and raise are offered ONLY on your turn. They used to be live
+             out of turn behind a confirmation that auto-checked-or-folded everyone ahead
+             of you; people tapped Confirm without reading it and folded players who had
+             not acted. Folding early is the one thing that stays: it takes nothing away
+             from anybody, so it needs no confirmation — but out of turn it's a quiet
+             outline rather than a full-width red target, since nothing there is urgent. -->
         {#if s.session?.current_actor_id && !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
           <div class="btn-row">
-            <button class="act act-fold" onclick={handleFold} disabled={s.actionPending}>
+            <button
+              class="act act-fold"
+              class:act-quiet={!s.isMyTurn}
+              onclick={handleFold}
+              disabled={s.actionPending}
+            >
               Fold
             </button>
-            {#if callAmount > 0}
-              <!-- Calling for everything you have is an all-in, not a call for more
-                   chips than you hold: name it that way and show the real number. -->
-              <button class="act act-check" onclick={handleCall} disabled={s.actionPending}>
-                {callAmount >= s.me.stack ? `All in ${s.me.stack}` : `Call ${callAmount}`}
-              </button>
-            {:else}
-              <button class="act act-check" onclick={handleCheck} disabled={s.actionPending}
-                >Check</button
-              >
-            {/if}
-            {#if s.canRaise}
-              <button class="act act-raise" onclick={openRaise}>
-                {showBetting ? 'Close bet' : 'Raise'}
-              </button>
+            {#if s.isMyTurn}
+              {#if callAmount > 0}
+                <!-- Calling for everything you have is an all-in, not a call for more
+                     chips than you hold: name it that way and show the real number. -->
+                <button class="act act-check" onclick={handleCall} disabled={s.actionPending}>
+                  {callAmount >= s.me.stack ? `All in ${s.me.stack}` : `Call ${callAmount}`}
+                </button>
+              {:else}
+                <button class="act act-check" onclick={handleCheck} disabled={s.actionPending}
+                  >Check</button
+                >
+              {/if}
+              {#if s.canRaise}
+                <button class="act act-raise" onclick={openRaise}>
+                  {showBetting ? 'Close bet' : 'Raise'}
+                </button>
+              {/if}
             {/if}
           </div>
         {/if}
@@ -1451,7 +1459,7 @@
         <!-- Raise / Bet panel. Folded (or all-in) means there is nothing left to raise
              with, so the panel closes itself however you got there — your own fold,
              an out-of-turn fold, or a kick that auto-folded you. -->
-        {#if showBetting && s.session?.current_actor_id && s.canRaise && !s.streetComplete && !s.me.folded && s.me.stack > 0}
+        {#if showBetting && s.isMyTurn && s.session?.current_actor_id && s.canRaise && !s.streetComplete && !s.me.folded && s.me.stack > 0}
           <div class="bet-panel">
             <div class="btn-row wrap">
               {#each [[0.5, '½ pot'], [0.75, '¾ pot'], [1, '1× pot'], [2, '2× pot']] as [frac, label] (frac)}
@@ -1637,6 +1645,30 @@
   }
 
   /* --- Banners --- */
+
+  /* The loud turn alert's palette, listed twice so a 200%-wide background always shows
+     one complete rainbow (see .banner-turn.loud). The series colours, reused: they were
+     already picked to be distinguishable side by side. */
+  .banner-turn.loud,
+  .loud-border {
+    --rainbow: linear-gradient(
+      90deg,
+      #e34948,
+      #eda100,
+      #1baf7a,
+      #2a78d6,
+      #4a3aa7,
+      #e87ba4,
+      #e34948,
+      #eda100,
+      #1baf7a,
+      #2a78d6,
+      #4a3aa7,
+      #e87ba4,
+      #e34948
+    );
+  }
+
   .banner {
     margin: 0.75rem 1.25rem 0;
     text-align: center;
@@ -1645,15 +1677,114 @@
     margin: 0;
     font-size: 0.9rem;
   }
+  /* The turn bar pulses: a still bar in the corner of the eye is a bar people miss,
+     and the whole table waits on the one person who isn't looking. */
   .banner-turn {
     background: var(--ink);
     color: var(--paper);
     border-radius: 2rem;
     padding: 0.45rem 1rem;
+    animation: turn-pulse 1.5s ease-in-out infinite;
   }
   .banner-turn p {
     font-weight: 700;
     letter-spacing: 0.08em;
+  }
+  @keyframes turn-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(42, 42, 42, 0.4);
+    }
+    55% {
+      transform: scale(1.035);
+      box-shadow: 0 0 0 0.55rem rgba(42, 42, 42, 0);
+    }
+  }
+
+  /* Loud mode. Same bar, bigger and running a rainbow through it, paired with the
+     border below. Deliberately hard to ignore; nobody gets it unless they pick it. */
+  .banner-turn.loud {
+    /* The palette twice over, at 200% width: the visible half is always exactly one
+       full rainbow, and sliding it by one palette length loops seamlessly. */
+    background: var(--rainbow);
+    background-size: 200% 100%;
+    color: #fff;
+    border-radius: 1rem;
+    padding: 0.8rem 1rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    animation:
+      rainbow-slide 3.5s linear infinite,
+      loud-pulse 0.85s ease-in-out infinite;
+  }
+  .banner-turn.loud p {
+    font-size: 1.3rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  @keyframes loud-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+  @keyframes rainbow-slide {
+    to {
+      background-position: -100% 0;
+    }
+  }
+
+  /* The border is a fixed frame drawn with a gradient behind a mask that punches the
+     middle out, so it rings the viewport without covering anything and without a fourth
+     element per edge. Where the mask can't be composited the frame would be a full-screen
+     rainbow rectangle, so it's hidden outside @supports rather than degraded. */
+  .loud-border {
+    display: none;
+  }
+  @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+    .loud-border {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      pointer-events: none;
+      padding: 7px;
+      background: var(--rainbow);
+      background-size: 200% 100%;
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      animation: rainbow-slide 3.5s linear infinite;
+    }
+  }
+
+  /* Reduced motion: keep the alert, drop the movement. Colour and a slow fade still
+     read as "you", which is the whole job. */
+  @media (prefers-reduced-motion: reduce) {
+    .banner-turn {
+      animation: turn-fade 3s ease-in-out infinite;
+    }
+    .banner-turn.loud,
+    .loud-border {
+      animation: none;
+    }
+    @keyframes turn-fade {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.6;
+      }
+    }
   }
   .banner-wait { color: var(--faint); }
   .banner-imbalance {
@@ -1825,6 +1956,12 @@
   .act-fold { background: var(--down); }
   .act-check { background: var(--muted); }
   .act-raise { background: var(--up); }
+  /* Folding out of turn: available, but not a big red button you brush past. */
+  .act-quiet {
+    background: none;
+    color: var(--down);
+    border: 1px solid var(--rule);
+  }
   .grow { flex: 1; }
   .center { text-align: center; }
 
@@ -1884,23 +2021,6 @@
     align-items: center;
     justify-content: space-between;
   }
-
-  .oot-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .oot-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--hairline);
-    font-size: 0.95rem;
-  }
-  .pill-fold { color: var(--down); border-color: #d9c1ba; }
 
   .qr-modal { align-items: center; text-align: center; }
   .qr-code-label { font-size: 1.1rem; color: var(--ink); }
@@ -2004,6 +2124,16 @@
     gap: 0.5rem;
   }
   .choices .cchoice { flex: 1; }
+
+  .alert-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.85rem 0;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .alert-note { margin: 0; }
 
   .host-controls {
     border-top: 1px solid var(--hairline);
