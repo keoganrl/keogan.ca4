@@ -349,7 +349,10 @@
     betAmount = store.session?.big_blind ?? 0;
   });
 
-  onDestroy(() => store?.destroy());
+  onDestroy(() => {
+    if (confettiTimer) clearTimeout(confettiTimer);
+    store?.destroy();
+  });
 
   $effect(() => {
     if (store?.ended) go(`/cashout?session=${sessionId}`);
@@ -411,6 +414,41 @@
   // banner has already switched to "betting complete", so nothing should be shouting.
   const alertingMyTurn = $derived(!!store?.isMyTurn && !store?.streetComplete);
   const loudAlert = $derived(alertingMyTurn && $turnAlert === 'loud');
+
+  // Confetti on the MOMENT the turn arrives (loud mode only) — the border and the bar
+  // say "it is still your turn", this says "it just became your turn", which is the part
+  // an oblivious player misses. One burst per turn: it's keyed off the transition into
+  // my turn, not the state, so a re-render or a realtime echo can't re-fire it.
+  const CONFETTI_COLOURS = ['#e34948', '#eda100', '#1baf7a', '#2a78d6', '#4a3aa7', '#e87ba4'];
+  let confetti = $state<
+    { id: number; left: number; delay: number; drift: number; spin: number; size: number; colour: string }[]
+  >([]);
+  let confettiTimer: ReturnType<typeof setTimeout> | null = null;
+  let confettiFiredFor = false;
+
+  function fireConfetti() {
+    if (typeof window === 'undefined') return;
+    // The bar and border already soften here; a screenful of falling paper does not.
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const burst = Date.now();
+    confetti = Array.from({ length: 44 }, (_, i) => ({
+      id: burst + i,
+      left: Math.random() * 100,
+      delay: Math.random() * 0.4,
+      drift: (Math.random() - 0.5) * 120,
+      spin: 360 + Math.random() * 720,
+      size: 6 + Math.random() * 5,
+      colour: CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]
+    }));
+    // Longest piece is delay (0.4s) + fall (2.2s); clear a beat after the last one lands.
+    if (confettiTimer) clearTimeout(confettiTimer);
+    confettiTimer = setTimeout(() => (confetti = []), 2800);
+  }
+
+  $effect(() => {
+    if (loudAlert && !confettiFiredFor) fireConfetti();
+    confettiFiredFor = loudAlert;
+  });
 
   async function handlePlaceBet() {
     betError = '';
@@ -547,6 +585,19 @@
          player, and only for people who asked for it in the menu. -->
     {#if loudAlert}
       <div class="loud-border" aria-hidden="true"></div>
+    {/if}
+
+    {#if confetti.length}
+      <div class="confetti" aria-hidden="true">
+        {#each confetti as bit (bit.id)}
+          <span
+            class="confetti-bit"
+            style="left:{bit.left}%; width:{bit.size}px; height:{bit.size * 1.7}px;
+                   background:{bit.colour}; animation-delay:{bit.delay}s;
+                   --drift:{bit.drift}px; --spin:{bit.spin}deg"
+          ></span>
+        {/each}
+      </div>
     {/if}
 
     <!-- Zero-pressure fold warning -->
@@ -1759,6 +1810,36 @@
         linear-gradient(#000 0 0);
       mask-composite: exclude;
       animation: rainbow-slide 3.5s linear infinite;
+    }
+  }
+
+  /* Confetti: one burst as the turn lands. Fixed and click-through like the border,
+     just under it so the frame stays the top layer. Each piece carries its own drift
+     and spin as custom properties, so 44 of them share one keyframe. */
+  .confetti {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .confetti-bit {
+    position: absolute;
+    top: -5dvh;
+    border-radius: 1px;
+    animation: confetti-fall 2.2s cubic-bezier(0.3, 0.55, 0.5, 1) forwards;
+  }
+  @keyframes confetti-fall {
+    from {
+      transform: translate3d(0, 0, 0) rotate(0deg);
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+    }
+    to {
+      transform: translate3d(var(--drift), 108dvh, 0) rotate(var(--spin));
+      opacity: 0;
     }
   }
 
