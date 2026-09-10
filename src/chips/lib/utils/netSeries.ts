@@ -11,6 +11,13 @@ import type { SessionResult } from '../types';
  * Three slots (aqua, yellow, magenta) sit under 3:1 contrast against the paper. That is
  * allowed only because identity is never carried by colour alone here: every line is also
  * named in the list underneath, with its swatch beside the name.
+ *
+ * These are the LIGHT-MODE values. Dark mode lifts three of the eight (blue, green,
+ * violet) so they clear the dark surface; those overrides live in the --series-N tokens
+ * in src/styles/chips.css, and only lightness moves — the slot order and the hues, which
+ * are what carry the colourblind guarantee, are identical in both modes. Anything that
+ * PAINTS a series colour should therefore use `seriesVar(slot)` rather than this array,
+ * which stays the canonical definition and the light-mode value.
  */
 export const SERIES_COLORS = [
 	'#2a78d6', // blue
@@ -23,10 +30,24 @@ export const SERIES_COLORS = [
 	'#e34948' // red
 ] as const;
 
+/**
+ * The CSS token for a palette slot. Painting through the token rather than the hex is
+ * what lets dark mode lift a colour without this module knowing which mode it is in —
+ * `color` below stays the light-mode value and the definition of the slot.
+ */
+export function seriesVar(slot: number): string {
+	return `var(--series-${slot + 1})`;
+}
+
 export interface PlayerSeries {
 	identityId: string;
 	displayName: string;
+	/** Light-mode hex for this player's slot. To PAINT it, use `colorVar` instead. */
 	color: string;
+	/** `color` as its CSS token, so the paint follows the phone's light/dark setting. */
+	colorVar: string;
+	/** Index into SERIES_COLORS, before the repeat wraps it. */
+	slot: number;
 	/** Past slot 8 the palette repeats, so a dashed stroke keeps the pair apart. */
 	dashed: boolean;
 	/** Cumulative net after each session in `sessionIds` order; index 0 is the pre-game zero. */
@@ -99,6 +120,7 @@ export function buildNetSeries(rows: SessionResult[]): NetSeriesData {
 	let max = 0;
 	const series: PlayerSeries[] = orderedIds.map((identityId, i) => {
 		const entry = byPlayer.get(identityId)!;
+		const slot = i % SERIES_COLORS.length;
 		const firstIndex = debutOf(identityId);
 		const points: number[] = [0];
 		let running = 0;
@@ -111,7 +133,9 @@ export function buildNetSeries(rows: SessionResult[]): NetSeriesData {
 		return {
 			identityId,
 			displayName: entry.name,
-			color: SERIES_COLORS[i % SERIES_COLORS.length],
+			color: SERIES_COLORS[slot],
+			colorVar: seriesVar(slot),
+			slot,
 			dashed: i >= SERIES_COLORS.length,
 			points,
 			firstIndex,

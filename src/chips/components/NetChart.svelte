@@ -78,10 +78,13 @@
     <!-- one line per player -->
     <g transform="translate({PAD_L},{PAD_T})">
       {#each ordered as s (s.identityId)}
+        <!-- The stroke goes through inline `style`, not the `stroke` presentation
+             attribute: presentation attributes can't hold a var(), and painting through
+             the token is what makes the line follow the phone's dark-mode setting. -->
         <polyline
           class="series"
           points={pathFor(s)}
-          stroke={s.color}
+          style="stroke: {s.colorVar}"
           stroke-dasharray={s.dashed ? '5 3' : undefined}
           opacity={opacityOf(s.identityId)}
         />

@@ -419,7 +419,16 @@
   // say "it is still your turn", this says "it just became your turn", which is the part
   // an oblivious player misses. One burst per turn: it's keyed off the transition into
   // my turn, not the state, so a re-render or a realtime echo can't re-fire it.
-  const CONFETTI_COLOURS = ['#e34948', '#eda100', '#1baf7a', '#2a78d6', '#4a3aa7', '#e87ba4'];
+  // Tokens rather than hexes: these land in an inline `background`, so they pick up
+  // the dark-mode series overrides in chips.css the same way the rainbow bar does.
+  const CONFETTI_COLOURS = [
+    'var(--series-8)',
+    'var(--series-4)',
+    'var(--series-3)',
+    'var(--series-1)',
+    'var(--series-7)',
+    'var(--series-5)'
+  ];
   let confetti = $state<
     { id: number; left: number; delay: number; drift: number; spin: number; size: number; colour: string }[]
   >([]);
@@ -1612,7 +1621,7 @@
     background: var(--paper);
     border: 1px solid var(--rule);
     border-radius: 4px;
-    box-shadow: 0 12px 40px rgba(42, 42, 42, 0.18);
+    box-shadow: 0 12px 40px var(--shadow-strong);
     padding: 1.5rem 2.75rem;
   }
   .street-pop-text {
@@ -1700,19 +1709,19 @@
   .loud-border {
     --rainbow: linear-gradient(
       90deg,
-      #e34948,
-      #eda100,
-      #1baf7a,
-      #2a78d6,
-      #4a3aa7,
-      #e87ba4,
-      #e34948,
-      #eda100,
-      #1baf7a,
-      #2a78d6,
-      #4a3aa7,
-      #e87ba4,
-      #e34948
+      var(--series-8),
+      var(--series-4),
+      var(--series-3),
+      var(--series-1),
+      var(--series-7),
+      var(--series-5),
+      var(--series-8),
+      var(--series-4),
+      var(--series-3),
+      var(--series-1),
+      var(--series-7),
+      var(--series-5),
+      var(--series-8)
     );
   }
 
@@ -2113,6 +2122,10 @@
   .qr-modal { align-items: center; text-align: center; }
   .qr-code-label { font-size: 1.1rem; color: var(--ink); }
   .qr-box {
+    /* The one surface that stays white in dark mode, and must: uqr draws black
+       modules on a white rect, and a scanner needs the quiet zone around them to be
+       light too. Tokenising this would put a dark quiet zone around a white code and
+       break the scan. */
     background: #fff;
     border: 1px solid var(--hairline);
     border-radius: 4px;
@@ -2312,7 +2325,7 @@
     overflow-y: auto;
     background: var(--paper);
     border-top: 1px solid var(--rule);
-    box-shadow: 0 -8px 30px rgba(42, 42, 42, 0.12);
+    box-shadow: 0 -8px 30px var(--shadow-soft);
     z-index: 50;
     padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
   }

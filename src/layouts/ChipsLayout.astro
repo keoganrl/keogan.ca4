@@ -25,7 +25,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta name="theme-color" content="#fdfbf7" />
+    <!-- The browser chrome follows the phone's setting the same way the page does.
+         Two tags with media queries, not one: a single theme-color would leave a
+         paper-coloured address bar sitting above a dark page. Values track --paper
+         in src/styles/chips.css. -->
+    <meta name="theme-color" content="#fdfbf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1917" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

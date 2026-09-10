@@ -24,7 +24,15 @@
    chart. Keep that list and the chart in sync or the palette stops being legal.
 
    The canonical values live in src/chips/lib/utils/netSeries.ts (SERIES_COLORS);
-   the tokens below mirror them for CSS that needs them. */
+   the tokens below mirror them for CSS that needs them.
+
+   DARK MODE follows the phone, with no toggle anywhere — see the @media block
+   under :root. It works by overriding tokens and nothing else, so the one rule
+   that matters when adding anything to /chips is: never write a colour literal.
+   Take a token, and the new thing is dark-correct without being touched. The
+   three literals that survive are all in Table.svelte and all deliberate — the
+   white QR quiet zone, and the white text and its shadow on the rainbow turn
+   bar — each with a comment saying why. */
 
 /* Metric overrides: keep identical to the ones in global.css (and keep the two
    files' font-face blocks in sync — chips pages load this copy, not that one).
@@ -94,6 +102,67 @@
   --series-7: #4a3aa7;
   --series-8: #e34948;
   --serif-display: 'Libre Baskerville', Georgia, serif;
+  /* The red hairline on a destructive button: --down washed most of the way out
+     to paper, so it reads as a warning without shouting. */
+  --rule-danger: #d9c1ba;
+  /* Lifted surfaces (modals, drawers, sheets) sit on paper, so what separates
+     them is a rule and a shadow. Both colours are tokens because a shadow that
+     works on paper is invisible on a dark surface. */
+  --shadow-strong: rgba(42, 42, 42, 0.18);
+  --shadow-soft: rgba(42, 42, 42, 0.12);
+  --backdrop: rgba(42, 42, 42, 0.35);
+  /* Tell the browser which way round we are, so form controls, the caret and the
+     scrollbars follow. Overridden below rather than left as `light dark`: the app
+     picks its own surface, and letting the UA pick a second one gets them out of step. */
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark mode — the same room with the lamp off.                        */
+/*                                                                     */
+/* No toggle anywhere, deliberately: the phone already has one, and a   */
+/* second switch is a second thing to be wrong. Everything here is a    */
+/* token override — no rule below this block is duplicated for dark, so */
+/* a new component that uses the tokens is dark-correct for free, and a */
+/* new component that hardcodes a colour is the only way to break it.   */
+/*                                                                     */
+/* The greys are warm, not neutral: the paper is warm, and a cold dark  */
+/* under warm type reads as a different site rather than the same one   */
+/* at night. Contrast against the dark surface is held at or above the  */
+/* light-mode ratio for every role, so nothing gets quietly harder to   */
+/* read after sundown.                                                  */
+/*                                                                     */
+/* MONEY and IDENTITY keep their hues exactly. Only lightness moves,    */
+/* and only on the slots that would otherwise sink into the surface     */
+/* (blue, green, violet) — the palette's slot ORDER is what carries the */
+/* colourblind guarantee, and reordering or re-hueing would void it.    */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1917;
+    --ink: #e8e4dc;
+    --ink-soft: #d5d0c7;
+    --muted: #a09a90;
+    --faint: #8a857c;
+    --whisper: #6a6560;
+    --hairline: #2c2a27;
+    --rule: #45423d;
+    /* Money, lifted to clear the dark surface at the same ratios the light
+       pair clears the paper (~5:1). Same greens, same reds, more light. */
+    --up: #5ea36d;
+    --down: #d1705c;
+    --rule-danger: #6b4038;
+    /* Player identity. Slots 2, 3, 4, 5 and 8 already clear the dark surface
+       at their shipped values and are left exactly alone. */
+    --series-1: #4a90e2;
+    --series-6: #2fa82f;
+    --series-7: #8878e0;
+    /* Shadows go black rather than grey — a grey shadow on a dark surface is a
+       lighter patch, which reads as a glow. */
+    --shadow-strong: rgba(0, 0, 0, 0.55);
+    --shadow-soft: rgba(0, 0, 0, 0.45);
+    --backdrop: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -233,7 +302,7 @@ body.chips textarea {
 /* Destructive or losing actions speak in the ledger's red, still quietly. */
 .cbtn-danger {
   color: var(--down);
-  border-color: #d9c1ba;
+  border-color: var(--rule-danger);
 }
 
 .cbtn-small {
@@ -424,7 +493,7 @@ body.chips input[type='range'] { accent-color: var(--ink); }
 .cmodal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(42, 42, 42, 0.35);
+  background: var(--backdrop);
   border: none;
   padding: 0;
   cursor: default;
@@ -442,7 +511,7 @@ body.chips input[type='range'] { accent-color: var(--ink); }
   background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: 4px;
-  box-shadow: 0 12px 40px rgba(42, 42, 42, 0.18);
+  box-shadow: 0 12px 40px var(--shadow-strong);
   padding: 1.5rem;
   z-index: 50;
   display: flex;
@@ -472,7 +541,7 @@ body.chips input[type='range'] { accent-color: var(--ink); }
   width: min(19rem, 85vw);
   background: var(--paper);
   border-left: 1px solid var(--rule);
-  box-shadow: -8px 0 30px rgba(42, 42, 42, 0.12);
+  box-shadow: -8px 0 30px var(--shadow-soft);
   z-index: 50;
   display: flex;
   flex-direction: column;

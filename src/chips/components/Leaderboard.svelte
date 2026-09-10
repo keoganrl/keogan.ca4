@@ -203,7 +203,7 @@
   let chaos = $derived(chaosScores(results));
   // identity_id -> the colour of that player's line, so the list doubles as the legend.
   let colorOf = $derived(
-    new Map(netData.series.map((s) => [s.identityId, { color: s.color, dashed: s.dashed }]))
+    new Map(netData.series.map((s) => [s.identityId, { color: s.colorVar, dashed: s.dashed }]))
   );
 
   const columns: { key: Tab; label: string }[] = [

@@ -270,6 +270,46 @@ the change, which is why the wipe refreshes it explicitly.
 too: profiles are per-identity, so the next series opens with everyone's existing
 blurb and the drift check rewrites them off the new series' hands.
 
+## Dark mode (/chips only)
+
+`/chips` follows the phone's light/dark setting and has no toggle, by design: the
+OS already has one, and a second switch is a second thing to be out of step. The
+rest of the site is unaffected — `ChipsLayout.astro` loads `src/styles/chips.css`
+and never `global.css`.
+
+The whole implementation is one `@media (prefers-color-scheme: dark)` block in
+`chips.css` that redefines the `:root` tokens. **Nothing else is duplicated for
+dark**, which gives one rule for anything added to /chips later:
+
+> Never write a colour literal. Use a token and the new thing is dark-correct
+> without anyone thinking about it.
+
+Three literals survive, all in `Table.svelte`, all commented in place: the QR
+box's white quiet zone (a scanner needs it light in both modes) and the white
+text plus its drop shadow on the rainbow turn bar. A literal anywhere else is the
+only way to break this — `dist/chips/**` can be grepped for `#` inside a colour
+declaration to check.
+
+Two details that are easy to undo by accident:
+
+- **Money and identity keep their hues; only lightness moves.** Three series
+  slots (blue, green, violet) sink into the dark surface at their shipped values
+  and are lifted; the other five are byte-identical in both modes. The palette's
+  slot ORDER is the colourblind guarantee (see the header of `chips.css`), so
+  re-hueing or reordering for dark would void it.
+- **Series colours are painted through `seriesVar(slot)`, not `SERIES_COLORS`.**
+  `PlayerSeries.color` is still the light-mode hex and still the definition of
+  the slot; `colorVar` is the same slot as `var(--series-N)`, and that is what
+  the chart's stroke and the leaderboard's swatch use. The chart's stroke had to
+  move from the `stroke` presentation attribute to an inline `style` for this —
+  presentation attributes cannot hold a `var()`.
+
+Overlays (modal, drawer, blind-schedule sheet) are separated from the page by
+`--backdrop`, not by their shadow: paper-on-paper with a drop shadow is a
+light-mode idea, and a grey shadow on a dark surface reads as a glow. That is why
+`--shadow-strong` / `--shadow-soft` go black-and-stronger in dark rather than
+just being inverted.
+
 ## Poker rules this app implements
 
 Mostly standard, with two deliberate house simplifications. If you change any of
