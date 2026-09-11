@@ -351,6 +351,7 @@
 
   onDestroy(() => {
     if (confettiTimer) clearTimeout(confettiTimer);
+    cancelPendingConfetti();
     store?.destroy();
   });
 
@@ -454,9 +455,35 @@
     confettiTimer = setTimeout(() => (confetti = []), 2800);
   }
 
+  // Fired a beat AFTER the turn arrives, not on the transition itself. Whose turn it is
+  // and whether the street is over come off two different rows, delivered as separate
+  // realtime payloads, so the moment the action lands on me can read "my turn, street
+  // still live" and then correct itself to "betting complete" a beat later. That
+  // half-second is invisible in the banner and unmissable in confetti — it was the
+  // burst that went off for a turn that never actually came. If the alert hasn't held
+  // for the settle window, there is nothing to celebrate.
+  const CONFETTI_SETTLE_MS = 500;
+  let confettiPending: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelPendingConfetti() {
+    if (confettiPending) clearTimeout(confettiPending);
+    confettiPending = null;
+  }
+
   $effect(() => {
-    if (loudAlert && !confettiFiredFor) fireConfetti();
-    confettiFiredFor = loudAlert;
+    const armed = loudAlert;
+    if (armed && !confettiFiredFor) {
+      cancelPendingConfetti();
+      confettiPending = setTimeout(() => {
+        confettiPending = null;
+        // Re-read rather than trusting the value this effect ran with: the whole point
+        // is that it may have been a transient.
+        if (loudAlert) fireConfetti();
+      }, CONFETTI_SETTLE_MS);
+    } else if (!armed) {
+      cancelPendingConfetti();
+    }
+    confettiFiredFor = armed;
   });
 
   async function handlePlaceBet() {

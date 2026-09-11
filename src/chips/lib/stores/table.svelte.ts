@@ -554,13 +554,18 @@ export function createTableStore(sessionId: string, identityId: string) {
 		if (!me || !session) return;
 		const checkStreet = session.street;
 		players = players.map((p) => (p.id === me!.id ? { ...p, acted_on_street: checkStreet } : p));
-		await Promise.all([
-			supabase.from('players').update({ acted_on_street: checkStreet }).eq('id', me.id),
-			advanceTurnService(
-				session,
-				players.filter((p) => p.is_active)
-			)
-		]);
+		// Strictly ordered, NOT Promise.all: every other client learns about these two
+		// writes as separate realtime payloads, in commit order. Racing them lets the
+		// turn land on the next player before my acted flag does, and for that beat
+		// their client reads "it's my turn AND the street isn't over" — which is what
+		// fired the turn confetti on a check that had actually closed the round. Every
+		// other action (call, bet, fold) already writes the player row first for its
+		// own reasons; this was the one that didn't.
+		await supabase.from('players').update({ acted_on_street: checkStreet }).eq('id', me.id);
+		await advanceTurnService(
+			session,
+			players.filter((p) => p.is_active)
+		);
 		await logEvent(sessionId, 'check', { playerId: me.id, street: checkStreet });
 	}
 

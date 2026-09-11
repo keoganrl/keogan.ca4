@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { go } from '../lib/nav';
   import { supabase } from '../lib/supabase';
-  import { netResult, netColor } from '../lib/utils/format';
+  import { byNet, netResult, netColor } from '../lib/utils/format';
   import { pollForRecap } from '../lib/utils/recapPolling';
   import { openRecapRelay, subscribeToRecap } from '../lib/utils/recapRelay';
   import { getSeriesForSession } from '../lib/services/series';
@@ -127,15 +127,16 @@
     // Fetched together rather than in sequence: the results and the Leaderboard
     // button want to appear at the same moment, and neither should wait on the other.
     const [{ data }, seriesRow] = await Promise.all([
-      supabase
-        .from('players')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('stack', { ascending: false }),
+      supabase.from('players').select('*').eq('session_id', sessionId).order('seat_order'),
       getSeriesForSession(sessionId).catch(() => null)
     ]);
 
-    if (data) players = data as Player[];
+    // Ranked by NET, not by final stack: a rebuy makes the two disagree, and the
+    // number in the right-hand column is the net — so ordering by stack put someone
+    // who bought in twice and finished down 810 above a player down 400. PostgREST
+    // cannot order by an expression, hence the sort here (seat_order above is only
+    // to make the pre-sort order deterministic; ties break by name).
+    if (data) players = [...(data as Player[])].sort(byNet);
     series = seriesRow;
     loading = false;
 
