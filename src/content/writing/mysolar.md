@@ -1,7 +1,7 @@
 ---
 title: "Co-op: mySolar"
 year: 2024
-date: 2024-08-01
+date: 2024-04-30
 tags: [work]
 summary: "CRM management, custom HTML/CSS email templates, and learning the ins and outs of residential solar."
 ---

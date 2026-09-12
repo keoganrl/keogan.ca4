@@ -1,7 +1,7 @@
 ---
 title: "Co-op: Institute for Quantum Computing"
 year: 2025
-date: 2025-08-01
+date: 2025-08-30
 tags: [work, quantum]
 summary: "Simulating millimetre-wave resonators for superconducting quantum circuits at IQC."
 ---

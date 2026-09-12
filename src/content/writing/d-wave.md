@@ -1,7 +1,7 @@
 ---
 title: "Co-op: D-Wave"
 year: 2026
-date: 2026-01-01
+date: 2026-08-30
 tags: [work, quantum]
 summary: "Eight months on the IC design team for the world's first commercial quantum annealer, in Vancouver."
 ---

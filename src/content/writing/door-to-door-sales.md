@@ -1,7 +1,7 @@
 ---
 title: "Co-opish: Door to Door Sales"
 year: 2023
-date: 2023-08-01
+date: 2023-08-30
 tags: [work]
 summary: "A summer of pest control, 140 closed accounts, and a trip to Cuba."
 ---

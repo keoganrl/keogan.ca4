@@ -1,7 +1,7 @@
 ---
 title: "Best Buy"
 year: 2022
-date: 2022-06-01
+date: 2022-08-30
 tags: [work]
 summary: "Getting hired at 14 on Black Friday, and finding out work can actually be fun."
 ---
