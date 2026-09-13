@@ -5,6 +5,14 @@
       "schedule": "0 12 * * *"
     }
   ],
+  "functions": {
+    "api/profile.js": {
+      "maxDuration": 60
+    },
+    "api/recap.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/chips/:series/leaderboard",

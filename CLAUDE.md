@@ -33,6 +33,12 @@ Current endpoints:
 - `api/recap.js` — called from the browser by the game-over screen; streams the
   session recap. The only endpoint reachable without a secret.
 
+Both generating endpoints pin `maxDuration` in vercel.json rather than taking the
+platform default, which has changed under this project more than once. A profile run
+carrying five players takes ~25s and the whole table takes longer; a function killed
+mid-generation stores nothing and leaves no row, so it looks like the drift gate
+deciding nobody moved.
+
 Shared, not endpoints (a leading underscore keeps them off the `/api/*` routes —
 this is load-bearing: `api/profile.test.js` was briefly deployed as a live
 function at `/api/profile.test` returning 500, which is why the test files are
@@ -147,7 +153,23 @@ out. Reads stay open either way.
 Dependencies OUTSIDE this repo, same as the guestbook flow:
 - **Vercel env vars:** `ANTHROPIC_API_KEY`, `PROFILE_SECRET` (Production scope).
 - **Supabase webhook:** `sessions` UPDATE → `https://keogan.ca/api/profile`, with
-  header `x-webhook-secret` matching `PROFILE_SECRET`.
+  header `x-webhook-secret` matching `PROFILE_SECRET`. It must be on **`public.sessions`**.
+  `auth.sessions` exists too, the dashboard's schema picker will attach the trigger to
+  it without complaint, and nothing in this app ever writes that table — so the webhook
+  simply never fires and no profile is ever written. That is exactly how it shipped, and
+  the symptom is indistinguishable from "nobody drifted": recaps keep working (they are
+  browser-called and touch none of this), the leaderboard fills in normally, and only the
+  profiles tab stays empty. The trigger is the first thing to check:
+
+      select c.relname, n.nspname, t.tgname, pg_get_triggerdef(t.oid)
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where not t.tgisinternal and c.relname = 'sessions';
+
+  Its pg_net timeout wants to be 30000, not the dashboard's default 5000: a full-table
+  run takes ~25s and the request is sent either way, but at 5000 every successful run
+  logs a timeout in `net._http_response` and that log stops being worth reading.
 - **Migrations:** `supabase/player-profiles.sql`, `supabase/session-recaps.sql`.
 - **Optional:** `SUPABASE_SERVICE_ROLE_KEY` (Production, SECRET — never `PUBLIC_`).
 
