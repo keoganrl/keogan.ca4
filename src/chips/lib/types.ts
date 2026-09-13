@@ -39,6 +39,10 @@ export interface Session {
 	auto_escalate: boolean;
 	button_player_id: string | null;
 	current_actor_id: string | null;
+	// Blinds are posted for the next hand but the cards are not out yet. Set by every
+	// deal that follows a hand (endHand, voidHand, resetHand), cleared when the dealer
+	// or host taps Deal. Nobody can act while it is true.
+	awaiting_deal: boolean;
 	current_bet: number;
 	pot: number;
 	street: string;

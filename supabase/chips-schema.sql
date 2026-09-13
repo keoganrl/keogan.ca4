@@ -71,6 +71,14 @@ create table sessions (
   auto_escalate boolean not null default true,
   button_player_id uuid,
   current_actor_id uuid,
+  -- The blinds for the next hand are posted, but the cards are not out yet: the
+  -- ledger advances the moment a hand is settled (see endHand), so the dealer/SB/BB
+  -- badges point at the hand about to be played rather than the one that just ended.
+  -- Cleared when the dealer or host taps Deal, which is what starts the action.
+  --
+  -- Added 2026-09: existing databases need
+  --   alter table sessions add column awaiting_deal boolean not null default false;
+  awaiting_deal boolean not null default false,
   current_bet int not null default 0,
   pot int not null default 0,
   street text not null default 'preflop'

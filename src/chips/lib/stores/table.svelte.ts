@@ -21,6 +21,7 @@ import {
 	isRunOut,
 	advanceStreet as advanceStreetService,
 	startGame as startGameService,
+	startDeal as startDealService,
 	advanceBlindLevel as advanceBlindLevelService,
 	setBlindLevel as setBlindLevelService,
 	cashEscalationActive,
@@ -329,6 +330,12 @@ export function createTableStore(sessionId: string, identityId: string) {
 			})),
 			newPot
 		);
+
+		// Last pot settled: the hand is over, so close it out and set the next one up
+		// immediately rather than leaving the table looking at the finished hand's
+		// dealer and blinds until somebody taps through. performEndHand leaves it
+		// awaiting the deal — see startDeal.
+		if (!remainingPots.length) await performEndHand();
 	}
 
 	// A client acting on a stale snapshot can advanceTurn onto a player who has already
@@ -380,6 +387,44 @@ export function createTableStore(sessionId: string, identityId: string) {
 	const canConfirmNextStreet = $derived(
 		streetComplete && !!me && !!session && (me.is_host || me.id === session.button_player_id)
 	);
+
+	// The hand is set up but not dealt: the button has moved, the blinds are posted and
+	// the badges name the hand about to be played, and the table is waiting for the cards
+	// to hit the felt. Nobody can act until the dealer (or the host) says they have.
+	// current_actor_id guards the lobby: before the first deal there is no hand to wait on.
+	const awaitingDeal = $derived(!!session?.awaiting_deal && session.current_actor_id !== null);
+	const dealer = $derived(
+		session?.button_player_id
+			? (players.find((p) => p.id === session!.button_player_id) ?? null)
+			: null
+	);
+	// Same pair as the street confirm: the dealer taps it, and the host can always
+	// stand in for a dealer whose phone is asleep.
+	const canDeal = $derived(
+		awaitingDeal && !!me && !!session && (me.is_host || me.id === session.button_player_id)
+	);
+
+	async function startDeal() {
+		if (!session || !session.awaiting_deal) return;
+
+		// Somebody bought back in (or sat down) after the hand was set up. They had no
+		// chips when the blinds were posted, so the button and the blinds were worked out
+		// without them and they are sitting there dealt out of a hand they were in time
+		// for. Re-deal onto the same button with them counted — that is exactly what
+		// resetHand does, and it is why the blinds are refundable up to this tap.
+		const missedTheSetup = players.some(
+			(p) =>
+				p.is_active &&
+				p.folded &&
+				p.stack > 0 &&
+				p.hand_total_bet === 0 &&
+				p.acted_on_street === null
+		);
+		if (missedTheSetup) await resetHandService(session, players);
+
+		session = { ...session, awaiting_deal: false };
+		await startDealService(sessionId);
+	}
 
 	// All-in run-out: no betting left on any street, so the one confirm jumps straight
 	// to showdown (advanceStreet applies the same check server-side).
@@ -938,6 +983,15 @@ export function createTableStore(sessionId: string, identityId: string) {
 		get canConfirmNextStreet() {
 			return canConfirmNextStreet;
 		},
+		get awaitingDeal() {
+			return awaitingDeal;
+		},
+		get canDeal() {
+			return canDeal;
+		},
+		get dealer() {
+			return dealer;
+		},
 		get nextStreetAction() {
 			return nextStreetAction;
 		},
@@ -971,6 +1025,7 @@ export function createTableStore(sessionId: string, identityId: string) {
 		buildDebugReport,
 		resetAwards,
 		confirmNextStreet: () => runExclusive(confirmNextStreet, undefined),
+		startDeal: () => runExclusive(startDeal, undefined),
 		passTurn: () => runExclusive(passTurn, undefined),
 		fold: () => runExclusive(fold, undefined),
 		call: () => runExclusive(call, undefined),

@@ -518,7 +518,7 @@ export async function endHand(
 		acted_on_street: null,
 		hand_total_bet: 0
 	}));
-	await postBlinds(nextSession, freshPlayers, true, basePlayers);
+	await postBlinds(nextSession, freshPlayers, true, basePlayers, true);
 	return freshRows ? basePlayers : null;
 }
 
@@ -578,7 +578,7 @@ async function redealHand(
 		acted_on_street: null,
 		hand_total_bet: 0
 	}));
-	await postBlinds(nextSession, freshPlayers, true, allPlayers);
+	await postBlinds(nextSession, freshPlayers, true, allPlayers, true);
 	return freshRows ? allPlayers : null;
 }
 
@@ -854,7 +854,12 @@ export async function postBlinds(
 	session: Session,
 	activePlayers: Player[],
 	logBlinds = true,
-	allPlayers: Player[] = activePlayers
+	allPlayers: Player[] = activePlayers,
+	// Leave the hand waiting on the deal: the blinds are in and the badges have moved,
+	// but nobody may act until the dealer taps Deal. Every deal that FOLLOWS a hand
+	// passes true; the ones that happen inside a hand (a seat reorder) pass through
+	// whatever the session already had, so they can neither start nor stop the wait.
+	awaitDeal = false
 ): Promise<void> {
 	// Busted players (no chips) are dealt out: they post no blinds, take no turn, and
 	// don't shift the blind positions. Callers mark them folded at deal time.
@@ -892,7 +897,8 @@ export async function postBlinds(
 			.update({
 				pot: session.pot + sbAmount + bbAmount,
 				current_bet: bbAmount,
-				current_actor_id: firstActorId
+				current_actor_id: firstActorId,
+				awaiting_deal: awaitDeal
 			})
 			.eq('id', session.id)
 	]);
@@ -920,7 +926,20 @@ export async function startGame(
 	allPlayers: Player[] = activePlayers
 ): Promise<void> {
 	await logEvent(session.id, 'deal');
-	await postBlinds(session, activePlayers, true, allPlayers);
+	// No deal gate on the first hand: "Start game" IS the tap that says the cards are out.
+	await postBlinds(session, activePlayers, true, allPlayers, false);
+}
+
+// The cards are out — action starts. Everything else about the hand (button, blinds,
+// pot, first actor) was already written when the previous hand was settled; this only
+// lifts the wait. Guarded on awaiting_deal so the host and the dealer both tapping it
+// is one write, not two, and so it can never restart a hand that is already underway.
+export async function startDeal(sessionId: string): Promise<void> {
+	await supabase
+		.from('sessions')
+		.update({ awaiting_deal: false })
+		.eq('id', sessionId)
+		.eq('awaiting_deal', true);
 }
 
 // Cash games with an escalation schedule climb one rung of the doubling ladder
@@ -1086,7 +1105,13 @@ export async function reorderSeats(
 		hand_total_bet: 0,
 		folded: bustedAfterRefund(p)
 	}));
-	await postBlinds({ ...session, pot: 0, current_bet: 0 }, freshPlayers, false);
+	await postBlinds(
+		{ ...session, pot: 0, current_bet: 0 },
+		freshPlayers,
+		false,
+		freshPlayers,
+		session.awaiting_deal
+	);
 }
 
 // Host correction for a chip-conservation mismatch: credits (or debits) a player's

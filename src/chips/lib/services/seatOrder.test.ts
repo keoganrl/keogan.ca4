@@ -57,7 +57,9 @@ const {
 	kickPlayer,
 	blindSeats,
 	postBlinds,
-	endHand
+	endHand,
+	startGame,
+	startDeal
 } = await import('./table');
 
 function player(id: string, seat: number, over: Partial<Player> = {}): Player {
@@ -96,6 +98,7 @@ function session(over: Partial<Session> = {}): Session {
 		auto_escalate: false,
 		button_player_id: null,
 		current_actor_id: 'a',
+		awaiting_deal: false,
 		current_bet: 0,
 		pot: 0,
 		street: 'preflop',
@@ -399,5 +402,33 @@ describe('endHand after somebody leaves mid-hand', () => {
 			['post_sb', 'a'],
 			['post_bb', 'b']
 		]);
+	});
+});
+
+// The hand is set up the moment the last one is settled — button moved, blinds posted —
+// so the dealer/SB/BB badges name the hand about to be played rather than the one that
+// just ended. What is NOT true yet is that the cards are out, and that is the flag.
+describe('the deal gate', () => {
+	function lastSessionWrite(key: string) {
+		return [...writes].reverse().find((w) => w.table === 'sessions' && key in w.values)?.values[
+			key
+		];
+	}
+
+	it('leaves a settled hand waiting on the deal', async () => {
+		rows.players = [a, b, c, d];
+		await endHand(session({ button_player_id: 'a' }), [a, b, c, d], null, 0);
+		expect(lastSessionWrite('awaiting_deal')).toBe(true);
+	});
+
+	it('does not gate the first hand — Start game is that tap', async () => {
+		rows.players = [a, b, c, d];
+		await startGame(session({ button_player_id: 'a' }), [a, b, c, d]);
+		expect(lastSessionWrite('awaiting_deal')).toBe(false);
+	});
+
+	it('starts the action when the dealer says the cards are out', async () => {
+		await startDeal('sess');
+		expect(writes.at(-1)).toEqual({ table: 'sessions', values: { awaiting_deal: false } });
 	});
 });

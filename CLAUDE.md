@@ -356,6 +356,22 @@ are actually pinned down.
 - **Dead button**: someone who busts or leaves mid-hand keeps the button on their
   seat until the next deal, so the blinds do not shift under a hand in progress.
   Everything that orders play goes through `buttonIndexIn` for this.
+- **A settled hand sets the next one up immediately, and then waits on the deal.**
+  The moment the last pot is awarded (or the fold-win pot is), `endHand` runs on its
+  own: button moves, blinds post, and `sessions.awaiting_deal` goes true. Nobody can
+  act while it is true — the dealer (or the host, as with the street confirm) taps
+  Deal once the cards are out, everyone else sees "waiting for X to deal". The point
+  is the badges: leaving the table parked on the finished hand meant the dealer, SB
+  and BB pills still named the players from the hand that just ended, which is
+  exactly when somebody needs to know whose deal it is. `voidHand` and `resetHand`
+  land in the same state; `startGame` does not, because "Start game" IS that tap.
+  Two things follow from the setup happening early:
+  - A rebuy or a join during the wait would otherwise sit out a hand it was in time
+    for — the blinds were worked out without their chips. `startDeal` re-deals onto
+    the same button (`resetHand`) when it finds somebody dealt out who has chips, so
+    the blinds stay refundable right up to the Deal tap.
+  - The old `showdown` "Next hand" button is gone; the host menu's is the recovery
+    path if that automatic `endHand` ever fails.
 
 ## Invariants worth not breaking
 

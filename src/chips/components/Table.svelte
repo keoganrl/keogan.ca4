@@ -914,50 +914,55 @@
           {#if s.me?.is_host}
             <div class="host-controls">
               <p class="host-label">Host controls</p>
-              {#if (s.session?.pot ?? 0) > 0}
-                {#if !showVoidConfirm}
+              <!-- No "Next hand" while the table is waiting on the deal: the next hand is
+                   already set up, and the chips in the pot are its blinds, not an
+                   unclaimed pot. The Deal button on the table is the only thing left. -->
+              {#if !s.awaitingDeal}
+                {#if (s.session?.pot ?? 0) > 0}
+                  {#if !showVoidConfirm}
+                    <button
+                      class="cbtn cbtn-block"
+                      onclick={() => {
+                        showRebuy = false;
+                        showGive = false;
+                        showLeaveConfirm = false;
+                        showVoidConfirm = true;
+                      }}
+                    >
+                      Next hand
+                    </button>
+                  {:else}
+                    <div class="menu-sub">
+                      <p class="menu-note">
+                        There are still {s.session?.pot} chips in the pot that no one claimed.
+                        Starting the next hand returns each player's bets and deals again.
+                      </p>
+                      <button
+                        class="cbtn cbtn-primary cbtn-block"
+                        onclick={async () => {
+                          await s.voidHand();
+                          closeMenu();
+                        }}
+                      >
+                        Return bets &amp; deal
+                      </button>
+                      <button
+                        class="cbtn cbtn-small cbtn-block"
+                        onclick={() => (showVoidConfirm = false)}>Cancel</button
+                      >
+                    </div>
+                  {/if}
+                {:else}
                   <button
                     class="cbtn cbtn-block"
                     onclick={() => {
-                      showRebuy = false;
-                      showGive = false;
-                      showLeaveConfirm = false;
-                      showVoidConfirm = true;
+                      s.endHand();
+                      closeMenu();
                     }}
                   >
                     Next hand
                   </button>
-                {:else}
-                  <div class="menu-sub">
-                    <p class="menu-note">
-                      There are still {s.session?.pot} chips in the pot that no one claimed.
-                      Starting the next hand returns each player's bets and deals again.
-                    </p>
-                    <button
-                      class="cbtn cbtn-primary cbtn-block"
-                      onclick={async () => {
-                        await s.voidHand();
-                        closeMenu();
-                      }}
-                    >
-                      Return bets &amp; deal
-                    </button>
-                    <button
-                      class="cbtn cbtn-small cbtn-block"
-                      onclick={() => (showVoidConfirm = false)}>Cancel</button
-                    >
-                  </div>
                 {/if}
-              {:else}
-                <button
-                  class="cbtn cbtn-block"
-                  onclick={() => {
-                    s.endHand();
-                    closeMenu();
-                  }}
-                >
-                  Next hand
-                </button>
               {/if}
               {#if s.session?.current_actor_id}
                 {#if !showResetConfirm}
@@ -1188,7 +1193,15 @@
     </header>
 
     <!-- Turn indicator banner (hidden while the table waits on the next street) -->
-    {#if s.streetComplete}
+    {#if s.awaitingDeal}
+      {#if !!s.me && s.me.id === s.session?.button_player_id}
+        <div class="banner banner-turn"><p>your deal</p></div>
+      {:else}
+        <div class="banner banner-wait">
+          <p>waiting for <strong>{s.dealer?.display_name ?? 'the dealer'}</strong> to deal</p>
+        </div>
+      {/if}
+    {:else if s.streetComplete}
       <div class="banner banner-done"><p>betting complete</p></div>
     {:else if s.currentActor}
       {#if s.currentActor.identity_id === $identityId}
@@ -1261,7 +1274,9 @@
       {/if}
       {#each displayPlayers as player (player.id)}
         {@const isButton = player.id === s.session?.button_player_id}
-        {@const isCurrentActor = player.id === s.session?.current_actor_id}
+        <!-- No "it's your turn" arrow before the cards are out, even though the first
+             actor is already set: the blinds are posted for a hand nobody can act in yet. -->
+        {@const isCurrentActor = player.id === s.session?.current_actor_id && !s.awaitingDeal}
         {@const isSB = player.id === sbBadgeId}
         {@const isBB = player.id === bbBadgeId}
         {@const isFocused = focusedPlayerId === player.id}
@@ -1376,7 +1391,7 @@
              not acted. Folding early is the one thing that stays: it takes nothing away
              from anybody, so it needs no confirmation — but out of turn it's a quiet
              outline rather than a full-width red target, since nothing there is urgent. -->
-        {#if s.session?.current_actor_id && !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
+        {#if s.session?.current_actor_id && !s.awaitingDeal && !s.me.folded && s.me.stack > 0 && s.session?.street !== 'showdown' && !foldWin && !s.streetComplete}
           <div class="btn-row">
             <button
               class="act act-fold"
@@ -1407,8 +1422,28 @@
           </div>
         {/if}
 
+        <!-- Cards not out yet: the hand is set up (button moved, blinds in) and the whole
+             table is waiting on the dealer. Posting a blind can itself be an all-in, which
+             can make a just-dealt street look complete, so this comes first and wins. -->
+        {#if s.awaitingDeal}
+          {#if s.canDeal}
+            <button
+              class="cbtn cbtn-primary cbtn-block"
+              onclick={() => s.startDeal()}
+              disabled={s.actionPending}
+            >
+              Deal
+            </button>
+            <p class="cnote center">blinds are posted — tap once the cards are out</p>
+          {:else}
+            <p class="cnote center">
+              Waiting for {s.dealer?.display_name ?? 'the dealer'} to deal…
+            </p>
+          {/if}
+        {/if}
+
         <!-- Betting round done: host or dealer confirms once the cards are dealt IRL -->
-        {#if s.streetComplete}
+        {#if s.streetComplete && !s.awaitingDeal}
           <!-- Board preview: card slots for the street about to come. The flop
                deals three fresh cards; the turn and river add one, so only the
                new (rightmost) slot is highlighted then. An all-in run-out deals
@@ -1458,7 +1493,7 @@
                 }}
                 disabled={s.actionPending}
               >
-                {foldWin.display_name} wins — deal next hand
+                {foldWin.display_name} wins the pot
               </button>
             </div>
           {:else}
@@ -1509,17 +1544,12 @@
                 {/if}
               </div>
             {:else}
-              <!-- All pots awarded — host starts next hand -->
-              <button
-                class="cbtn cbtn-primary cbtn-block"
-                onclick={() => {
-                  s.endHand();
-                  closeMenu();
-                }}
-                disabled={s.actionPending}
-              >
-                Next hand
-              </button>
+              <!-- Every pot awarded, so the hand is over: awardBestHand has already closed
+                   it out and set the next one up (it is what moves the dealer and blind
+                   badges off the hand that just ended). This is only the moment before
+                   that write echoes back. If it ever fails, Next hand in the host menu is
+                   still the way through. -->
+              <p class="cnote center">settling up…</p>
             {/if}
           {:else}
             <p class="cnote center">Waiting for host…</p>
