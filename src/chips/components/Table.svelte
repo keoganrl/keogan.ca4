@@ -1434,7 +1434,6 @@
             >
               Deal
             </button>
-            <p class="cnote center">blinds are posted — tap once the cards are out</p>
           {:else}
             <p class="cnote center">
               Waiting for {s.dealer?.display_name ?? 'the dealer'} to deal…
