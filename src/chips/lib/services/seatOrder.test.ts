@@ -4,13 +4,14 @@ import type { Player, Session } from '../types';
 // Rows the mocked client hands back for `select('*')`. Writes are recorded so the tests
 // can assert on what actually hit the database (the button move is a `sessions` update).
 const rows: { players: Player[] } = { players: [] };
-const writes: { table: string; values: Record<string, unknown> }[] = [];
+const writes: { table: string; values: Record<string, unknown>; ids?: string[] }[] = [];
 
 vi.mock('../supabase', () => {
 	const from = (table: string) => {
 		const b: Record<string, unknown> & {
 			_update?: Record<string, unknown>;
 			_insert?: boolean;
+			_ids?: string[];
 		} = {};
 		b.select = () => b;
 		b.single = () => b;
@@ -19,7 +20,10 @@ vi.mock('../supabase', () => {
 		b.gt = () => b;
 		b.is = () => b;
 		b.or = () => b;
-		b.in = () => b;
+		b.in = (_col: string, ids: string[]) => {
+			b._ids = ids;
+			return b;
+		};
 		b.order = () => b;
 		b.limit = () => b;
 		b.insert = (values: Record<string, unknown>) => {
@@ -33,7 +37,7 @@ vi.mock('../supabase', () => {
 		};
 		b.then = (resolve: (v: unknown) => unknown) => {
 			if (b._update) {
-				writes.push({ table, values: b._update });
+				writes.push({ table, values: b._update, ...(b._ids ? { ids: b._ids } : {}) });
 				return Promise.resolve({ data: [{ id: 'x' }], error: null }).then(resolve);
 			}
 			if (b._insert) return Promise.resolve({ data: null, error: null }).then(resolve);
@@ -59,7 +63,8 @@ const {
 	postBlinds,
 	endHand,
 	startGame,
-	startDeal
+	startDeal,
+	sitOut
 } = await import('./table');
 
 function player(id: string, seat: number, over: Partial<Player> = {}): Player {
@@ -430,5 +435,99 @@ describe('the deal gate', () => {
 	it('starts the action when the dealer says the cards are out', async () => {
 		await startDeal('sess');
 		expect(writes.at(-1)).toEqual({ table: 'sessions', values: { awaiting_deal: false } });
+	});
+});
+
+// Stepping away keeps the seat and the stack but deals the player out, the same way a
+// busted player is dealt out: no blinds, no turn, the button passes over them.
+describe('sitting out', () => {
+	const blindPosts = () =>
+		writes
+			.filter((w) => w.table === 'events' && String(w.values.type).startsWith('post_'))
+			.map((w) => [w.values.type, w.values.player_id]);
+
+	it('deals an away player out of the next hand, folded', async () => {
+		const away = player('b', 1, { sitting_out: true });
+		rows.players = [a, away, c, d];
+		await endHand(session({ button_player_id: 'd' }), [a, away, c, d], null, 0);
+
+		const dealtOut = writes.find((w) => w.table === 'players' && w.values.folded === true);
+		const dealtIn = writes.find((w) => w.table === 'players' && w.values.folded === false);
+		expect(dealtOut?.ids).toEqual(['b']);
+		expect(dealtIn?.ids).toEqual(['a', 'c', 'd']);
+	});
+
+	it('skips the away seat for the button and the blinds', async () => {
+		const away = player('b', 1, { sitting_out: true });
+		rows.players = [a, away, c, d];
+		await endHand(session({ button_player_id: 'a' }), [a, away, c, d], null, 0);
+
+		const buttonWrite = writes.find(
+			(w) => w.table === 'sessions' && 'button_player_id' in w.values
+		);
+		// a → (b away) → c.  Button c ⇒ SB d, BB a.
+		expect(buttonWrite?.values.button_player_id).toBe('c');
+		expect(blindPosts()).toEqual([
+			['post_sb', 'd'],
+			['post_bb', 'a']
+		]);
+	});
+
+	it('parks the table on the deal when nobody else is left to play', async () => {
+		rows.players = [a, player('b', 1, { sitting_out: true })];
+		await endHand(session({ button_player_id: 'a' }), rows.players, null, 0);
+
+		expect(blindPosts()).toEqual([]);
+		const gate = [...writes]
+			.reverse()
+			.find((w) => w.table === 'sessions' && 'awaiting_deal' in w.values);
+		expect(gate?.values.awaiting_deal).toBe(true);
+	});
+
+	it('folds a player who steps away mid-hand and passes the action on', async () => {
+		const s = session({ current_actor_id: 'b', street: 'flop' });
+		await sitOut(b, s, [a, b, c, d]);
+
+		expect(writes.some((w) => w.values.sitting_out === true)).toBe(true);
+		expect(writes.some((w) => w.table === 'events' && w.values.type === 'fold')).toBe(true);
+		expect(writes.at(-1)).toMatchObject({
+			table: 'sessions',
+			values: { current_actor_id: 'c' }
+		});
+	});
+
+	it('leaves the turn alone when somebody else is holding it', async () => {
+		await sitOut(c, session({ current_actor_id: 'a', street: 'flop' }), [a, b, c, d]);
+		expect(writes.some((w) => w.table === 'events' && w.values.type === 'fold')).toBe(true);
+		expect(writes.some((w) => 'current_actor_id' in w.values)).toBe(false);
+	});
+
+	it('folds nothing while the next hand is still waiting on the deal', async () => {
+		await sitOut(b, session({ current_actor_id: 'a', awaiting_deal: true }), [a, b, c, d]);
+		expect(writes.some((w) => w.table === 'events')).toBe(false);
+	});
+
+	it('does not fold an all-in player, who has a pot still to be awarded', async () => {
+		const allIn = player('c', 2, { stack: 0, hand_total_bet: 100 });
+		await sitOut(allIn, session({ current_actor_id: 'a', street: 'turn' }), [a, b, allIn, d]);
+		expect(writes.some((w) => w.table === 'events')).toBe(false);
+	});
+
+	it('does not fold anyone at showdown', async () => {
+		await sitOut(b, session({ current_actor_id: 'a', street: 'showdown' }), [a, b, c, d]);
+		expect(writes.some((w) => w.table === 'events')).toBe(false);
+	});
+
+	it('is dealt out of the first hand too', async () => {
+		const away = player('b', 1, { sitting_out: true });
+		rows.players = [a, away, c, d];
+		await startGame(session({ button_player_id: 'a' }), [a, away, c, d]);
+
+		expect(writes.find((w) => w.values.folded === true)?.ids).toEqual(['b']);
+		// Button a, b away ⇒ SB c, BB d.
+		expect(blindPosts()).toEqual([
+			['post_sb', 'c'],
+			['post_bb', 'd']
+		]);
 	});
 });

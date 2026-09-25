@@ -1,0 +1,13 @@
+-- Stepping away from the table without leaving it. A player who is sitting out keeps
+-- their seat and their stack but is dealt out of every hand, exactly like a busted
+-- player, until they tap "I'm back". Before this the only options were holding the
+-- whole table up or leaving outright.
+--
+-- Nothing is logged for it: stats already reconstruct who was in a hand from the
+-- ledger, and someone sitting out has no events in the hands they miss. A step-away
+-- in the middle of a hand writes an ordinary fold.
+--
+-- Run this BEFORE deploying the code that reads it. The client only names the column
+-- when somebody actually steps away, so until then the new code runs fine without it;
+-- the first "Step away" tap against a database without the column would fail.
+alter table players add column if not exists sitting_out boolean not null default false;

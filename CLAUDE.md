@@ -356,6 +356,11 @@ are actually pinned down.
 - **Dead button**: someone who busts or leaves mid-hand keeps the button on their
   seat until the next deal, so the blinds do not shift under a hand in progress.
   Everything that orders play goes through `buttonIndexIn` for this.
+- **Sitting out** (`players.sitting_out`) is dealt out exactly like a busted player.
+  `dealtIn` / `dealtOutAfterRefund` in `table.ts` are the one definition; everything that
+  deals goes through them, and `endHand` splits its folded/unfolded writes by id list so
+  the column never appears in a query filter. It writes no ledger event on purpose —
+  `player_stats` would read a new event type as hand participation. See README.md.
 - **A settled hand sets the next one up immediately, and then waits on the deal.**
   The moment the last pot is awarded (or the fold-win pot is), `endHand` runs on its
   own: button moves, blinds post, and `sessions.awaiting_deal` goes true. Nobody can

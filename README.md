@@ -181,6 +181,27 @@ two rows), check that chips balance
 find the hand where they stopped balancing. Paste one block at a time into
 the Supabase SQL editor.
 
+### Stepping away
+
+"Step away" in the menu keeps your seat and your stack but deals you out of every hand,
+the same way a busted player is dealt out (no blinds, no turn, the button passes over
+you), until you tap "I'm back". The host can do the same for somebody who wandered off
+without saying, from their row ("Sit out" / "Sit in"), so the table never has to wait
+on an empty chair and nobody has to cash out and rejoin to take a break.
+
+- In a live hand with decisions left, stepping away folds you (with a confirm). An
+  all-in player, or anyone at showdown, is not folded: their hand plays out.
+- While the next hand is set up and waiting on the deal, it is re-dealt on the spot
+  without you, so a blind you had already posted comes back.
+- Coming back mid-hand deals you into the next hand. Coming back while a hand is waiting
+  on the deal is picked up by the Deal tap, exactly like a late rebuy.
+- If everybody else with chips steps away, the table parks on the deal until somebody
+  is back; the session does not end, since their chips are still at the table.
+- Nothing is logged for it. Stats reconstruct who was in a hand from that hand's events,
+  and someone sitting out has none.
+
+Needs `supabase/2026-09-25-sitting-out.sql` run before deploying.
+
 ### The button when somebody leaves
 
 Standing up mid-hand folds you first: the fold is written and logged, and if the turn

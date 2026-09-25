@@ -198,10 +198,12 @@ export function firstPostflopActor(
 	);
 }
 
-// A player is dealt into a hand only if they have chips to play with.
-const hasChips = (p: Player) => p.stack > 0;
-// Would the player still be broke after this hand's bets are refunded to them?
-const bustedAfterRefund = (p: Player) => p.stack + p.hand_total_bet === 0;
+// A player is dealt into a hand only if they have chips to play with and are at the
+// table. Someone who has stepped away (sitting_out) is dealt out exactly like a busted
+// player: no blinds, no turn, and the button passes over them.
+const dealtIn = (p: Player) => p.stack > 0 && !p.sitting_out;
+// Would the player be dealt out of the next hand once this hand's bets are refunded?
+const dealtOutAfterRefund = (p: Player) => p.stack + p.hand_total_bet === 0 || !!p.sitting_out;
 
 async function rotateButton(
 	session: Session,
@@ -473,39 +475,60 @@ export async function endHand(
 	const activePlayers = basePlayers.filter((p) => p.is_active);
 	if (!activePlayers.length) return freshRows ? basePlayers : null;
 
-	// Busted players (stack 0 after awards) are dealt out of the next hand: they start
-	// folded — so they're skipped by turn order and street logic — and the button skips them.
+	// Busted players (stack 0 after awards) and anyone sitting out are dealt out of the
+	// next hand: they start folded — so they're skipped by turn order and street logic —
+	// and the button skips them.
 	//
 	// basePlayers, not activePlayers, is what locates the button: whoever held it may have
 	// left or been kicked during the hand, and their row is the only place their seat is
 	// recorded. Passing the active rows alone loses that seat and the rotation falls back
 	// to seat 0, which is the classic "everyone's blinds moved after somebody left".
-	const withChips = activePlayers.filter(hasChips);
-	const nextButtonId = withChips.length
-		? nextButtonPlayerId(session, withChips, basePlayers)
+	const dealing = activePlayers.filter(dealtIn);
+	const nextButtonId = dealing.length
+		? nextButtonPlayerId(session, dealing, basePlayers)
 		: nextButtonPlayerId(session, activePlayers, basePlayers);
 
+	// Split by explicit id lists rather than by a filter on the row: the fresh read above
+	// is already committed truth, and sitting_out may not exist as a column yet (see
+	// types.ts), so it must never appear in a query string.
+	const dealingIds = new Set(dealing.map((p) => p.id));
+	const outIds = basePlayers.filter((p) => !dealingIds.has(p.id)).map((p) => p.id);
 	await Promise.all([
 		supabase
 			.from('sessions')
 			.update({ button_player_id: nextButtonId, street: 'preflop', pot: 0, current_bet: 0 })
 			.eq('id', session.id),
-		supabase
-			.from('players')
-			.update({ folded: false, current_round_bet: 0, acted_on_street: null, hand_total_bet: 0 })
-			.eq('session_id', session.id)
-			.eq('is_active', true)
-			.gt('stack', 0),
-		// Everyone else — busted actives AND inactive rows (left / kicked / disconnected)
-		// — is dealt out with their hand state fully cleared. Inactive rows MUST be
-		// included: computePots sums hand_total_bet across every row it's given, so a
-		// leaver's uncleared bet would re-enter the pot math at every later showdown,
-		// paying their chips out again each hand.
-		supabase
-			.from('players')
-			.update({ folded: true, current_round_bet: 0, acted_on_street: null, hand_total_bet: 0 })
-			.eq('session_id', session.id)
-			.or('is_active.eq.false,stack.eq.0')
+		...(dealingIds.size
+			? [
+					supabase
+						.from('players')
+						.update({
+							folded: false,
+							current_round_bet: 0,
+							acted_on_street: null,
+							hand_total_bet: 0
+						})
+						.in('id', [...dealingIds])
+				]
+			: []),
+		// Everyone else — busted actives, anyone sitting out, AND inactive rows (left /
+		// kicked / disconnected) — is dealt out with their hand state fully cleared.
+		// Inactive rows MUST be included: computePots sums hand_total_bet across every row
+		// it's given, so a leaver's uncleared bet would re-enter the pot math at every later
+		// showdown, paying their chips out again each hand.
+		...(outIds.length
+			? [
+					supabase
+						.from('players')
+						.update({
+							folded: true,
+							current_round_bet: 0,
+							acted_on_street: null,
+							hand_total_bet: 0
+						})
+						.in('id', outIds)
+				]
+			: [])
 	]);
 
 	await logEvent(session.id, 'deal');
@@ -513,7 +536,7 @@ export async function endHand(
 	const nextSession = { ...session, button_player_id: nextButtonId, pot: 0 };
 	const freshPlayers = activePlayers.map((p) => ({
 		...p,
-		folded: !hasChips(p),
+		folded: !dealtIn(p),
 		current_round_bet: 0,
 		acted_on_street: null,
 		hand_total_bet: 0
@@ -524,8 +547,8 @@ export async function endHand(
 
 // Shared re-deal core: returns every chip each player put in this hand (hand_total_bet)
 // to their stack, resets the hand state, points the button at `buttonId`, and re-posts
-// blinds. Players left with zero chips after the refund start the new hand folded (dealt
-// out). No hand record is written — there was no winner.
+// blinds. Players left with zero chips after the refund, and anyone sitting out, start the
+// new hand folded (dealt out). No hand record is written — there was no winner.
 // Returns the freshly read rows it worked from (pre-refund), or null if the read failed
 // — see endHand for why the caller wants them.
 async function redealHand(
@@ -554,7 +577,7 @@ async function redealHand(
 				.from('players')
 				.update({
 					stack: p.stack + p.hand_total_bet,
-					folded: !p.is_active || bustedAfterRefund(p),
+					folded: !p.is_active || dealtOutAfterRefund(p),
 					current_round_bet: 0,
 					acted_on_street: null,
 					hand_total_bet: 0
@@ -573,7 +596,7 @@ async function redealHand(
 	const freshPlayers = activePlayers.map((p) => ({
 		...p,
 		stack: p.stack + p.hand_total_bet,
-		folded: bustedAfterRefund(p),
+		folded: dealtOutAfterRefund(p),
 		current_round_bet: 0,
 		acted_on_street: null,
 		hand_total_bet: 0
@@ -589,7 +612,7 @@ export async function voidHand(session: Session, players: Player[]): Promise<Pla
 	if (!activePlayers.length) return null;
 
 	// `players` (every row, departures included) is what places a dead button — see endHand.
-	const withChips = activePlayers.filter((p) => !bustedAfterRefund(p));
+	const withChips = activePlayers.filter((p) => !dealtOutAfterRefund(p));
 	const nextButtonId = withChips.length
 		? nextButtonPlayerId(session, withChips, players)
 		: nextButtonPlayerId(session, activePlayers, players);
@@ -839,6 +862,62 @@ export async function leaveTable(
 	}
 }
 
+// In a live hand with decisions still to make — what stepping away would fold. Exported
+// so the menu can say "this folds your hand" exactly when it does.
+export function stillToAct(player: Player, session: Session): boolean {
+	return (
+		session.current_actor_id !== null &&
+		!session.awaiting_deal &&
+		session.street !== 'showdown' &&
+		!player.folded &&
+		player.stack > 0
+	);
+}
+
+/**
+ * Steps a player away from the table without giving up their seat: they keep their
+ * stack and are dealt out of every hand until they come back, so nobody has to wait on
+ * them and they do not have to cash out and rejoin. The player themselves or the host
+ * (for someone who wandered off without saying) can do it.
+ *
+ * Mid-hand it is a fold (see stillToAct), for the same reasons leaveTable folds: the turn cannot be left
+ * pointing at somebody who is not there, and the ledger has to show they did not take
+ * the hand to showdown. While the table is waiting on the deal the cards are not out,
+ * so nothing is folded here — the caller re-deals without them instead, which hands
+ * back any blind they had already posted.
+ *
+ * No ledger line: stats read who was in a hand off the hand's own events, and someone
+ * sitting out has none.
+ */
+export async function sitOut(
+	player: Player,
+	session: Session,
+	allPlayers: Player[]
+): Promise<void> {
+	await supabase.from('players').update({ sitting_out: true }).eq('id', player.id);
+
+	// Only fold someone who could still be asked to act. An all-in player, or anyone at
+	// showdown, has no decisions left, and folding them would throw away their claim on a
+	// pot the host is about to award; their hand plays out without them.
+	if (!stillToAct(player, session)) return;
+	await markFolded(player.id, session);
+	// Hand the action on only if they were holding it — see kickPlayer for what goes wrong
+	// when a fold advances from somebody else's turn.
+	if (session.current_actor_id === player.id) {
+		const withFolded = allPlayers
+			.filter((p) => p.is_active)
+			.map((p) => (p.id === player.id ? { ...p, folded: true } : p));
+		await advanceTurn(session, withFolded);
+	}
+}
+
+// Back at the table. They stay folded for whatever hand is running and are dealt into
+// the next one; if the next one is already set up and waiting on the deal, the Deal tap
+// re-deals it with them counted (startDeal in the table store), same as a late rebuy.
+export async function sitIn(playerId: string): Promise<void> {
+	await supabase.from('players').update({ sitting_out: false }).eq('id', playerId);
+}
+
 // Posts blinds and sets the first preflop actor. Used by startGame, endHand, and reorderSeats.
 // session.button_player_id must be the current (or new) button. session.pot must be 0.
 // activePlayers must have current_round_bet at 0 and acted_on_street already cleared to null.
@@ -861,10 +940,20 @@ export async function postBlinds(
 	// whatever the session already had, so they can neither start nor stop the wait.
 	awaitDeal = false
 ): Promise<void> {
-	// Busted players (no chips) are dealt out: they post no blinds, take no turn, and
-	// don't shift the blind positions. Callers mark them folded at deal time.
-	const playersIn = activePlayers.filter(hasChips);
-	if (playersIn.length < 2) return;
+	// Busted players (no chips) and anyone sitting out are dealt out: they post no blinds,
+	// take no turn, and don't shift the blind positions. Callers mark them folded at deal time.
+	const playersIn = activePlayers.filter(dealtIn);
+	if (playersIn.length < 2) {
+		// Everybody else with chips has stepped away, so there is no hand to set up. Still
+		// park the table on the deal, so it waits on them instead of sitting on the last
+		// hand's actor; the Deal tap re-deals once somebody is back (see startDeal in the
+		// table store). When the rest are busted rather than away, the caller ends the
+		// session right after this and the flag is moot.
+		if (awaitDeal) {
+			await supabase.from('sessions').update({ awaiting_deal: true }).eq('id', session.id);
+		}
+		return;
+	}
 
 	const { sb: sbPlayer, bb: bbPlayer } = blindSeats(playersIn, session, allPlayers);
 	if (!sbPlayer || !bbPlayer) return;
@@ -926,6 +1015,16 @@ export async function startGame(
 	allPlayers: Player[] = activePlayers
 ): Promise<void> {
 	await logEvent(session.id, 'deal');
+	// Lobby rows are unfolded, so anyone who stepped away before the first hand has to be
+	// dealt out here or the street would wait on a turn they will never take. (Every later
+	// deal goes through endHand or redealHand, which fold them already.)
+	const away = activePlayers.filter((p) => p.sitting_out);
+	if (away.length) {
+		await supabase
+			.from('players')
+			.update({ folded: true })
+			.in('id', away.map((p) => p.id));
+	}
 	// No deal gate on the first hand: "Start game" IS the tap that says the cards are out.
 	await postBlinds(session, activePlayers, true, allPlayers, false);
 }
@@ -1085,7 +1184,7 @@ export async function reorderSeats(
 					current_round_bet: 0,
 					acted_on_street: null,
 					hand_total_bet: 0,
-					folded: bustedAfterRefund(p)
+					folded: dealtOutAfterRefund(p)
 				})
 				.eq('id', p.id)
 		),
@@ -1103,7 +1202,7 @@ export async function reorderSeats(
 		current_round_bet: 0,
 		acted_on_street: null as string | null,
 		hand_total_bet: 0,
-		folded: bustedAfterRefund(p)
+		folded: dealtOutAfterRefund(p)
 	}));
 	await postBlinds(
 		{ ...session, pot: 0, current_bet: 0 },

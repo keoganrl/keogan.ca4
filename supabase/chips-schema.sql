@@ -120,7 +120,11 @@ create table players (
   acted_on_street text,
   hand_total_bet int not null default 0,
   last_heartbeat_at timestamptz not null default now(),
-  seat_order int not null default 0
+  seat_order int not null default 0,
+  -- stepped away: keeps the seat and stack, dealt out of every hand until back.
+  -- Added 2026-09; existing databases:
+  --   alter table players add column sitting_out boolean not null default false;
+  sitting_out boolean not null default false
 );
 
 -- One seat per person per game. joinSession checks for an existing seat and then

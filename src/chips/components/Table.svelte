@@ -10,7 +10,7 @@
   import { renderSVG } from 'uqr';
   import { groupEventsByHand, describeEvent, streetLabel } from '../lib/utils/ledger';
   import { resolveAward } from '../lib/utils/pots';
-  import { blindSeats } from '../lib/services/table';
+  import { blindSeats, stillToAct } from '../lib/services/table';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -30,6 +30,7 @@
   // not an amount picker.
   const rebuyAmount = $derived(Math.floor((store?.session?.starting_stack ?? 1000) / 2));
   let showLeaveConfirm = $state(false);
+  let showAwayConfirm = $state(false);
   let showVoidConfirm = $state(false);
   let showResetConfirm = $state(false);
   let showEndConfirm = $state(false);
@@ -149,9 +150,12 @@
     ...(store?.players ?? []).filter((p) => !p.is_active)
   ]);
 
-  // Players dealt into the current hand — busted players sit out, so the dealer/sb/bb badge
-  // positions must be computed without them (blinds skip empty stacks).
-  const seatsInHand = $derived(activeBySeat.filter((p) => p.stack > 0 || p.hand_total_bet > 0));
+  // Players dealt into the current hand — busted players and anyone who has stepped away
+  // sit out, so the dealer/sb/bb badge positions must be computed without them (blinds skip
+  // them). Chips already in this hand keep a seat counted until the next deal.
+  const seatsInHand = $derived(
+    activeBySeat.filter((p) => (p.stack > 0 && !p.sitting_out) || p.hand_total_bet > 0)
+  );
 
   // SB/BB badge holders, computed once per state change instead of per player row.
   // Answered by the same helper the deal uses, so the badges cannot describe a different
@@ -578,6 +582,7 @@
     showRebuy = false;
     showGive = false;
     showLeaveConfirm = false;
+    showAwayConfirm = false;
     showVoidConfirm = false;
     showResetConfirm = false;
     showEndConfirm = false;
@@ -876,6 +881,56 @@
                   ?.display_name ?? '…'}
               </button>
               <button class="cbtn cbtn-small cbtn-block" onclick={() => (showGive = false)}
+                >Cancel</button
+              >
+            </div>
+          {/if}
+
+          <!-- Step away: keep the seat and the stack, get dealt out until back. Only a
+               live hand needs a confirm, because only then does it fold your cards. -->
+          {#if s.me?.sitting_out}
+            <button
+              class="cbtn cbtn-primary cbtn-block"
+              onclick={() => {
+                s.sitIn(s.me!.id);
+                closeMenu();
+              }}
+            >
+              I'm back
+            </button>
+          {:else if !showAwayConfirm}
+            <button
+              class="cbtn cbtn-block"
+              onclick={() => {
+                if (!s.session || !stillToAct(s.me!, s.session)) {
+                  s.sitOut(s.me!.id);
+                  closeMenu();
+                  return;
+                }
+                showRebuy = false;
+                showGive = false;
+                showLeaveConfirm = false;
+                showAwayConfirm = true;
+              }}
+            >
+              Step away
+            </button>
+          {:else}
+            <div class="menu-sub">
+              <p class="menu-note">
+                Step away now? This folds your hand. You keep your seat and your chips, and
+                you're dealt back in the hand after you tap "I'm back".
+              </p>
+              <button
+                class="cbtn cbtn-primary cbtn-block"
+                onclick={async () => {
+                  await s.sitOut(s.me!.id);
+                  closeMenu();
+                }}
+              >
+                Fold &amp; step away
+              </button>
+              <button class="cbtn cbtn-small cbtn-block" onclick={() => (showAwayConfirm = false)}
                 >Cancel</button
               >
             </div>
@@ -1318,6 +1373,7 @@
               <!-- Folded without ever acting or betting = dealt out at join time
                    (mid-hand joiners start folded); every real fold sets acted_on_street. -->
               {#if !player.is_active}<span class="pill">out</span
+                >{:else if player.sitting_out}<span class="pill">away</span
                 >{:else if isBusted}<span class="pill">busted</span
                 >{:else if player.folded && player.acted_on_street === null && player.hand_total_bet === 0}<span
                   class="pill">next hand</span
@@ -1358,6 +1414,20 @@
                   }}
                 >
                   Make dealer
+                </button>
+              {/if}
+              <!-- For somebody who walked off without stepping away themselves. -->
+              {#if isKickable}
+                <button
+                  class="cbtn cbtn-small"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    if (player.sitting_out) s.sitIn(player.id);
+                    else s.sitOut(player.id);
+                    focusedPlayerId = null;
+                  }}
+                >
+                  {player.sitting_out ? 'Sit in' : 'Sit out'}
                 </button>
               {/if}
               {#if isKickable}
@@ -1425,8 +1495,25 @@
         <!-- Cards not out yet: the hand is set up (button moved, blinds in) and the whole
              table is waiting on the dealer. Posting a blind can itself be an all-in, which
              can make a just-dealt street look complete, so this comes first and wins. -->
+        {#if s.me.sitting_out}
+          <p class="cnote center">
+            You're away: dealt out until you're back, with your seat and chips kept.
+          </p>
+          <button
+            class="cbtn cbtn-primary cbtn-block"
+            onclick={() => s.sitIn(s.me!.id)}
+            disabled={s.actionPending}
+          >
+            I'm back
+          </button>
+        {/if}
+
         {#if s.awaitingDeal}
-          {#if s.canDeal}
+          {#if !s.canPlayHand}
+            <p class="cnote center">
+              Everyone else has stepped away. Waiting for somebody to come back…
+            </p>
+          {:else if s.canDeal}
             <button
               class="cbtn cbtn-primary cbtn-block"
               onclick={() => s.startDeal()}

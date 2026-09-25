@@ -13,6 +13,8 @@ import {
 	adjustChips as adjustChipsService,
 	kickPlayer as kickPlayerService,
 	leaveTable as leaveTableService,
+	sitOut as sitOutService,
+	sitIn as sitInService,
 	advanceTurn as advanceTurnService,
 	foldHand as foldHandService,
 	callBet as callBetService,
@@ -404,23 +406,36 @@ export function createTableStore(sessionId: string, identityId: string) {
 		awaitingDeal && !!me && !!session && (me.is_host || me.id === session.button_player_id)
 	);
 
+	// Enough people at the table to play a hand. False only when everybody else with chips
+	// has stepped away: the table then parks on the deal until somebody is back.
+	const canPlayHand = $derived(
+		players.filter((p) => p.is_active && p.stack > 0 && !p.sitting_out).length >= 2
+	);
+
 	async function startDeal() {
-		if (!session || !session.awaiting_deal) return;
+		if (!session || !session.awaiting_deal || !canPlayHand) return;
 
 		// Somebody bought back in (or sat down) after the hand was set up. They had no
 		// chips when the blinds were posted, so the button and the blinds were worked out
 		// without them and they are sitting there dealt out of a hand they were in time
 		// for. Re-deal onto the same button with them counted — that is exactly what
 		// resetHand does, and it is why the blinds are refundable up to this tap.
+		//
+		// The reverse also re-deals: somebody who was set up into the hand has stepped away
+		// since. Stepping away re-deals on the spot (performSitOut), so this only catches a
+		// write that lost a race, but a blind posted by someone who is not there is exactly
+		// the thing nobody would notice until the chips were gone.
 		const missedTheSetup = players.some(
 			(p) =>
 				p.is_active &&
+				!p.sitting_out &&
 				p.folded &&
 				p.stack > 0 &&
 				p.hand_total_bet === 0 &&
 				p.acted_on_street === null
 		);
-		if (missedTheSetup) await resetHandService(session, players);
+		const awayButDealtIn = players.some((p) => p.is_active && p.sitting_out && !p.folded);
+		if (missedTheSetup || awayButDealtIn) await resetHandService(session, players);
 
 		session = { ...session, awaiting_deal: false };
 		await startDealService(sessionId);
@@ -778,6 +793,29 @@ export function createTableStore(sessionId: string, identityId: string) {
 		await leaveTableService(me, session, players);
 	}
 
+	// Step away (yourself, or the host for somebody who wandered off). Mid-hand the service
+	// folds them; while the next hand is waiting on the deal it is re-dealt without them
+	// right away, so their blind comes back and the badges stop naming someone who is
+	// not there.
+	async function performSitOut(playerId: string) {
+		if (!session) return;
+		const target = players.find((p) => p.id === playerId);
+		if (!target || !target.is_active || target.sitting_out) return;
+		const mySession = session;
+		players = players.map((p) => (p.id === playerId ? { ...p, sitting_out: true } : p));
+		await sitOutService(target, mySession, players);
+		if (mySession.awaiting_deal && mySession.current_actor_id !== null && !target.folded) {
+			await resetHandService(mySession, players);
+		}
+	}
+
+	async function performSitIn(playerId: string) {
+		const target = players.find((p) => p.id === playerId);
+		if (!target || !target.sitting_out) return;
+		players = players.map((p) => (p.id === playerId ? { ...p, sitting_out: false } : p));
+		await sitInService(playerId);
+	}
+
 	async function performKickPlayer(playerId: string) {
 		if (!session) return;
 		const target = players.find((p) => p.id === playerId);
@@ -989,6 +1027,9 @@ export function createTableStore(sessionId: string, identityId: string) {
 		get canDeal() {
 			return canDeal;
 		},
+		get canPlayHand() {
+			return canPlayHand;
+		},
 		get dealer() {
 			return dealer;
 		},
@@ -1037,6 +1078,8 @@ export function createTableStore(sessionId: string, identityId: string) {
 		claimHost: performClaimHost,
 		endSession: () => runExclusive(performEndSession, undefined),
 		leaveTable: performLeaveTable,
+		sitOut: (playerId: string) => runExclusive(() => performSitOut(playerId), undefined),
+		sitIn: (playerId: string) => runExclusive(() => performSitIn(playerId), undefined),
 		startGame: performStartGame,
 		setBlindLevel: performSetBlindLevel,
 		kickPlayer: performKickPlayer,

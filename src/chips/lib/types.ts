@@ -73,6 +73,11 @@ export interface Player {
 	hand_total_bet: number;
 	last_heartbeat_at: string;
 	seat_order: number;
+	// Stepped away from the table: keeps their seat and stack, but is dealt out of every
+	// hand (like a busted player) until they come back. Optional because databases that
+	// predate the column (supabase/2026-09-25-sitting-out.sql) hand back undefined, which
+	// reads as "at the table".
+	sitting_out?: boolean;
 }
 
 export type GameEventType =
