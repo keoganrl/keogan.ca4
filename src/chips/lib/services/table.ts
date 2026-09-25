@@ -880,11 +880,16 @@ export function stillToAct(player: Player, session: Session): boolean {
  * them and they do not have to cash out and rejoin. The player themselves or the host
  * (for someone who wandered off without saying) can do it.
  *
- * Mid-hand it is a fold (see stillToAct), for the same reasons leaveTable folds: the turn cannot be left
- * pointing at somebody who is not there, and the ledger has to show they did not take
- * the hand to showdown. While the table is waiting on the deal the cards are not out,
- * so nothing is folded here — the caller re-deals without them instead, which hands
- * back any blind they had already posted.
+ * Mid-hand, what happens to the hand in play depends on who asked:
+ *   - `fold` false (the player stepping away themselves): nothing. They finish the hand
+ *     they are in, and the flag only takes effect at the next deal, which is what deals
+ *     them out. Nobody gives up a pot with chips in it because they tapped a menu item.
+ *   - `fold` true (the host, for somebody who has walked off): they fold if they still
+ *     have a decision to make (see stillToAct), for the same reasons leaveTable folds.
+ *     The table is stuck waiting on their turn otherwise, which is the whole problem.
+ * While the table is waiting on the deal the cards are not out, so nothing is folded
+ * either way — the caller re-deals without them instead, which hands back any blind
+ * they had already posted.
  *
  * No ledger line: stats read who was in a hand off the hand's own events, and someone
  * sitting out has none.
@@ -892,9 +897,11 @@ export function stillToAct(player: Player, session: Session): boolean {
 export async function sitOut(
 	player: Player,
 	session: Session,
-	allPlayers: Player[]
+	allPlayers: Player[],
+	fold: boolean
 ): Promise<void> {
 	await supabase.from('players').update({ sitting_out: true }).eq('id', player.id);
+	if (!fold) return;
 
 	// Only fold someone who could still be asked to act. An all-in player, or anyone at
 	// showdown, has no decisions left, and folding them would throw away their claim on a

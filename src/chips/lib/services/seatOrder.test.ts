@@ -484,9 +484,16 @@ describe('sitting out', () => {
 		expect(gate?.values.awaiting_deal).toBe(true);
 	});
 
-	it('folds a player who steps away mid-hand and passes the action on', async () => {
+	it('lets a player who steps away themselves finish the hand they are in', async () => {
+		await sitOut(b, session({ current_actor_id: 'b', street: 'flop' }), [a, b, c, d], false);
+		expect(writes.some((w) => w.values.sitting_out === true)).toBe(true);
+		expect(writes.some((w) => w.table === 'events')).toBe(false);
+		expect(writes.some((w) => 'current_actor_id' in w.values)).toBe(false);
+	});
+
+	it('folds a player the host sits out mid-hand and passes the action on', async () => {
 		const s = session({ current_actor_id: 'b', street: 'flop' });
-		await sitOut(b, s, [a, b, c, d]);
+		await sitOut(b, s, [a, b, c, d], true);
 
 		expect(writes.some((w) => w.values.sitting_out === true)).toBe(true);
 		expect(writes.some((w) => w.table === 'events' && w.values.type === 'fold')).toBe(true);
@@ -497,24 +504,29 @@ describe('sitting out', () => {
 	});
 
 	it('leaves the turn alone when somebody else is holding it', async () => {
-		await sitOut(c, session({ current_actor_id: 'a', street: 'flop' }), [a, b, c, d]);
+		await sitOut(c, session({ current_actor_id: 'a', street: 'flop' }), [a, b, c, d], true);
 		expect(writes.some((w) => w.table === 'events' && w.values.type === 'fold')).toBe(true);
 		expect(writes.some((w) => 'current_actor_id' in w.values)).toBe(false);
 	});
 
 	it('folds nothing while the next hand is still waiting on the deal', async () => {
-		await sitOut(b, session({ current_actor_id: 'a', awaiting_deal: true }), [a, b, c, d]);
+		await sitOut(b, session({ current_actor_id: 'a', awaiting_deal: true }), [a, b, c, d], true);
 		expect(writes.some((w) => w.table === 'events')).toBe(false);
 	});
 
 	it('does not fold an all-in player, who has a pot still to be awarded', async () => {
 		const allIn = player('c', 2, { stack: 0, hand_total_bet: 100 });
-		await sitOut(allIn, session({ current_actor_id: 'a', street: 'turn' }), [a, b, allIn, d]);
+		await sitOut(
+			allIn,
+			session({ current_actor_id: 'a', street: 'turn' }),
+			[a, b, allIn, d],
+			true
+		);
 		expect(writes.some((w) => w.table === 'events')).toBe(false);
 	});
 
 	it('does not fold anyone at showdown', async () => {
-		await sitOut(b, session({ current_actor_id: 'a', street: 'showdown' }), [a, b, c, d]);
+		await sitOut(b, session({ current_actor_id: 'a', street: 'showdown' }), [a, b, c, d], true);
 		expect(writes.some((w) => w.table === 'events')).toBe(false);
 	});
 

@@ -793,17 +793,18 @@ export function createTableStore(sessionId: string, identityId: string) {
 		await leaveTableService(me, session, players);
 	}
 
-	// Step away (yourself, or the host for somebody who wandered off). Mid-hand the service
-	// folds them; while the next hand is waiting on the deal it is re-dealt without them
-	// right away, so their blind comes back and the badges stop naming someone who is
-	// not there.
+	// Step away (yourself, or the host for somebody who wandered off). Mid-hand, stepping
+	// yourself away waits for the hand to finish; the host sitting somebody else out folds
+	// them, since the table is stuck on their turn otherwise (see sitOut). While the next
+	// hand is waiting on the deal it is re-dealt without them right away, so their blind
+	// comes back and the badges stop naming someone who is not there.
 	async function performSitOut(playerId: string) {
 		if (!session) return;
 		const target = players.find((p) => p.id === playerId);
 		if (!target || !target.is_active || target.sitting_out) return;
 		const mySession = session;
 		players = players.map((p) => (p.id === playerId ? { ...p, sitting_out: true } : p));
-		await sitOutService(target, mySession, players);
+		await sitOutService(target, mySession, players, playerId !== me?.id);
 		if (mySession.awaiting_deal && mySession.current_actor_id !== null && !target.folded) {
 			await resetHandService(mySession, players);
 		}

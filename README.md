@@ -189,8 +189,11 @@ you), until you tap "I'm back". The host can do the same for somebody who wander
 without saying, from their row ("Sit out" / "Sit in"), so the table never has to wait
 on an empty chair and nobody has to cash out and rejoin to take a break.
 
-- In a live hand with decisions left, stepping away folds you (with a confirm). An
-  all-in player, or anyone at showdown, is not folded: their hand plays out.
+- Stepping yourself away never folds. Mid-hand the button reads "Step away after this
+  hand": you play the hand out, chips in the pot and all, and are dealt out from the next.
+- The host sitting somebody else out mid-hand DOES fold them, if they still have a
+  decision to make — that is the walked-off-and-the-table-is-stuck case. An all-in
+  player, or anyone at showdown, is never folded: their hand plays out.
 - While the next hand is set up and waiting on the deal, it is re-dealt on the spot
   without you, so a blind you had already posted comes back.
 - Coming back mid-hand deals you into the next hand. Coming back while a hand is waiting

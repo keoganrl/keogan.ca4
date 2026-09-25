@@ -30,7 +30,6 @@
   // not an amount picker.
   const rebuyAmount = $derived(Math.floor((store?.session?.starting_stack ?? 1000) / 2));
   let showLeaveConfirm = $state(false);
-  let showAwayConfirm = $state(false);
   let showVoidConfirm = $state(false);
   let showResetConfirm = $state(false);
   let showEndConfirm = $state(false);
@@ -582,7 +581,6 @@
     showRebuy = false;
     showGive = false;
     showLeaveConfirm = false;
-    showAwayConfirm = false;
     showVoidConfirm = false;
     showResetConfirm = false;
     showEndConfirm = false;
@@ -886,8 +884,8 @@
             </div>
           {/if}
 
-          <!-- Step away: keep the seat and the stack, get dealt out until back. Only a
-               live hand needs a confirm, because only then does it fold your cards. -->
+          <!-- Step away: keep the seat and the stack, get dealt out until back. Never
+               folds: in a live hand you play it out and are dealt out from the next. -->
           {#if s.me?.sitting_out}
             <button
               class="cbtn cbtn-primary cbtn-block"
@@ -898,42 +896,18 @@
             >
               I'm back
             </button>
-          {:else if !showAwayConfirm}
+          {:else}
             <button
               class="cbtn cbtn-block"
               onclick={() => {
-                if (!s.session || !stillToAct(s.me!, s.session)) {
-                  s.sitOut(s.me!.id);
-                  closeMenu();
-                  return;
-                }
-                showRebuy = false;
-                showGive = false;
-                showLeaveConfirm = false;
-                showAwayConfirm = true;
+                s.sitOut(s.me!.id);
+                closeMenu();
               }}
             >
-              Step away
+              {s.session && stillToAct(s.me!, s.session)
+                ? 'Step away after this hand'
+                : 'Step away'}
             </button>
-          {:else}
-            <div class="menu-sub">
-              <p class="menu-note">
-                Step away now? This folds your hand. You keep your seat and your chips, and
-                you're dealt back in the hand after you tap "I'm back".
-              </p>
-              <button
-                class="cbtn cbtn-primary cbtn-block"
-                onclick={async () => {
-                  await s.sitOut(s.me!.id);
-                  closeMenu();
-                }}
-              >
-                Fold &amp; step away
-              </button>
-              <button class="cbtn cbtn-small cbtn-block" onclick={() => (showAwayConfirm = false)}
-                >Cancel</button
-              >
-            </div>
           {/if}
 
           <!-- Leave -->
@@ -1373,6 +1347,8 @@
               <!-- Folded without ever acting or betting = dealt out at join time
                    (mid-hand joiners start folded); every real fold sets acted_on_street. -->
               {#if !player.is_active}<span class="pill">out</span
+                >{:else if player.sitting_out && !player.folded && !s.awaitingDeal && s.session?.current_actor_id}<span
+                  class="pill">away next hand</span
                 >{:else if player.sitting_out}<span class="pill">away</span
                 >{:else if isBusted}<span class="pill">busted</span
                 >{:else if player.folded && player.acted_on_street === null && player.hand_total_bet === 0}<span
@@ -1497,7 +1473,9 @@
              can make a just-dealt street look complete, so this comes first and wins. -->
         {#if s.me.sitting_out}
           <p class="cnote center">
-            You're away: dealt out until you're back, with your seat and chips kept.
+            {!s.me.folded && s.session?.current_actor_id && !s.awaitingDeal
+              ? "You're stepping away after this hand."
+              : "You're away: dealt out until you're back, with your seat and chips kept."}
           </p>
           <button
             class="cbtn cbtn-primary cbtn-block"
