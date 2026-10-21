@@ -288,9 +288,12 @@ snapshot until the next `refresh_player_stats()` and then vanish with nothing ma
 the change, which is why the wipe refreshes it explicitly.
 
 `series` rows are kept forever once ended — three small columns, and
-`/chips/leaderboard` lists them as the directory. `player_profiles` survives a wipe
-too: profiles are per-identity, so the next series opens with everyone's existing
-blurb and the drift check rewrites them off the new series' hands.
+`/chips/leaderboard` lists them as the directory. `player_profiles` rows survive a
+wipe but their text does not: phase two nulls `profile`, `coaching` and
+`stats_snapshot` for the series' players, so each new series starts blank and is
+written from its own hands alone. Carrying the old blurb over meant the first rewrite
+was handed it as `current_profile` and wrote towards it (confirmation bias). The text
+lives on in the archive and the raw dump.
 
 ## Dark mode (/chips only)
 

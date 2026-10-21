@@ -323,6 +323,36 @@ async function wipe() {
     console.warn(`  ! refresh_player_stats failed (${refresh.status}). Run it by hand.`);
   }
 
+  // Profiles do not carry into the next series. player_profiles is per-identity and
+  // nothing above touches it, so without this the next series' first rewrite is
+  // handed last season's blurb as `current_profile` and writes towards it. Cleared,
+  // not deleted: the row stays, its text goes, and selectForRewrite treats a null
+  // profile as "write one" the first time that player finishes a session. The text is
+  // already in the archive and the raw dump.
+  //
+  // By explicit identity list (this series' players, off the verified archive), and
+  // the rows that come back are checked against it. A PATCH rather than a DELETE also
+  // means it runs on the publishable key before lock-down, which grants update but
+  // not delete.
+  const identities = [...new Set(archiveDoc.stats.map((s) => s.identity_id))];
+  const cleared = await db(`player_profiles?identity_id=in.(${identities.join(',')})`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ profile: null, coaching: null, stats_snapshot: null }),
+  });
+  const clearedRows = cleared.ok ? await cleared.json() : null;
+  if (!clearedRows) {
+    console.warn(`  ! Clearing profiles failed (${cleared.status}). Run by hand:`);
+    console.warn(
+      `      update player_profiles set profile = null, coaching = null, stats_snapshot = null\n` +
+        `       where identity_id in (${identities.map((id) => `'${id}'`).join(', ')});`
+    );
+  } else if (clearedRows.some((p) => !identities.includes(p.identity_id))) {
+    die('Cleared a profile outside this series. Restore from the raw dump.');
+  } else {
+    console.log(`  ✓ ${clearedRows.length} profiles cleared for the next series.`);
+  }
+
   console.log(`  ✓ ${series.name} deleted. ${totalAfter} sessions remain in total.`);
   console.log(`  ✓ The frozen board still renders from ${archivePath}.\n`);
 }

@@ -39,7 +39,7 @@
         supabase.from('lifetime_stats').select('*').eq('series_id', series.id),
         supabase.from('session_results').select('*').eq('series_id', series.id),
         // player_profiles and player_stats are keyed by identity and carry no
-        // series of their own — a person's playing style is not per-series. They
+        // series column (ending a series clears the profile text instead). They
         // are scoped by intersecting against the identities on this board below,
         // which lifetime_stats has already narrowed to this series' players.
         supabase.from('player_profiles').select('identity_id, profile, coaching, generated_at'),

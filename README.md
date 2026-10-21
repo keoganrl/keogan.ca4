@@ -145,7 +145,8 @@ npm run end-series -- DW-2026-07 --confirm --confirm-name=DW-2026-07   # phase t
 5. **Only then, phase two.** It re-checks all of the above — the series is ended, the
    archive parses and holds standings, the raw dump exists, and the archive names the
    same sessions the database still has — then deletes by explicit id list, verifies
-   that nothing outside the series moved, and refreshes `player_stats`.
+   that nothing outside the series moved, refreshes `player_stats`, and clears the
+   series' players' profiles and coaching so the next series writes them from scratch.
 
 **Steps 4 and 5 are not interchangeable.** `players`, `rebuys`, `hands`, `events` and
 `session_recaps` all cascade from `sessions`, so phase two takes every ledger row in
