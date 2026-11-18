@@ -21,7 +21,7 @@ create table if not exists player_profiles (
   coaching       text,
 
   -- The figures the two texts above were written from: {vpip_pct, pfr_pct,
-  -- wtsd_pct, af}. Compared against player_stats to decide staleness.
+  -- wtsd_pct, af, hands}. Compared against player_stats to decide staleness.
   stats_snapshot jsonb,
 
   -- Which session's ending produced this text. Handy when a profile reads oddly

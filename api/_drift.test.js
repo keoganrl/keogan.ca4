@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { needsRewrite, selectForRewrite, snapshotOf, THRESHOLDS } from './_drift.js';
 
-const snap = (over = {}) => ({ vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, af: 1.2, ...over });
+const snap = (over = {}) => ({ vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, af: 1.2, hands: 100, ...over });
 
 describe('needsRewrite', () => {
 	it('rewrites when there is no snapshot to compare against', () => {
@@ -13,13 +13,13 @@ describe('needsRewrite', () => {
 	});
 
 	it('ignores drift that stays inside the threshold', () => {
-		expect(needsRewrite(snap({ vpip_pct: 50 }), snap())).toBe(false);
-		expect(needsRewrite(snap({ af: 1.5 }), snap())).toBe(false);
+		expect(needsRewrite(snap({ vpip_pct: 48 }), snap())).toBe(false);
+		expect(needsRewrite(snap({ af: 1.4 }), snap())).toBe(false);
 	});
 
 	it('rewrites once a figure moves past it', () => {
-		expect(needsRewrite(snap({ vpip_pct: 50.1 }), snap())).toBe(true);
-		expect(needsRewrite(snap({ af: 1.51 }), snap())).toBe(true);
+		expect(needsRewrite(snap({ vpip_pct: 48.1 }), snap())).toBe(true);
+		expect(needsRewrite(snap({ af: 1.41 }), snap())).toBe(true);
 	});
 
 	it('reads movement in either direction', () => {
@@ -31,6 +31,17 @@ describe('needsRewrite', () => {
 	it('treats gaining a figure as news, and two absences as none', () => {
 		expect(needsRewrite(snap({ af: 0.9 }), snap({ af: null }))).toBe(true);
 		expect(needsRewrite(snap({ af: null }), snap({ af: null }))).toBe(false);
+	});
+
+	it('rewrites once the sample has grown by half, even if nothing moved', () => {
+		expect(needsRewrite(snap({ hands: 149 }), snap())).toBe(false);
+		expect(needsRewrite(snap({ hands: 150 }), snap())).toBe(true);
+	});
+
+	// Snapshots written before hands were stored must not all fire at once.
+	it('ignores growth when the old snapshot has no hand count', () => {
+		expect(needsRewrite(snap({ hands: 500 }), snap({ hands: undefined }))).toBe(false);
+		expect(needsRewrite(snap({ hands: 500 }), snap({ hands: null }))).toBe(false);
 	});
 
 	it('watches every threshold, not just the first', () => {
@@ -89,8 +100,8 @@ describe('selectForRewrite', () => {
 });
 
 describe('snapshotOf', () => {
-	it('keeps exactly the compared fields, normalising absent ones to null', () => {
+	it('keeps the compared fields and the hand count, normalising absent ones to null', () => {
 		const s = snapshotOf({ identity_id: 'a', vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, hands: 300 });
-		expect(s).toEqual({ vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, af: null });
+		expect(s).toEqual({ vpip_pct: 45, pfr_pct: 20, wtsd_pct: 40, af: null, hands: 300 });
 	});
 });

@@ -8,14 +8,22 @@
 // How far a figure has to move before the text describing it is out of date.
 // Percentage points for the three rates, raw units for aggression factor (which
 // runs roughly 0.1–2.5 here, so 0.3 is a visible shift in how someone plays).
-// Guesses, deliberately legible: too tight and profiles never move, too loose and
-// they churn. Tune once there is a season of data to look at.
+// Started at 5 / 5 / 5 / 0.3 and profiles felt stale for whole sessions at a time:
+// these are running averages over a series, so each session moves them less than
+// the last. Tightened after a season of play.
 export const THRESHOLDS = {
-	vpip_pct: 5,
-	pfr_pct: 5,
-	wtsd_pct: 5,
-	af: 0.3
+	vpip_pct: 3,
+	pfr_pct: 3,
+	wtsd_pct: 3,
+	af: 0.2
 };
+
+// The other reason to rewrite: the sample has grown by half since the text was
+// written. Averages can sit still while the evidence behind them doubles, and a
+// profile written off 40 hands should not still be the one shown at 400. Being
+// relative, it fires every session or two early in a series and spaces itself out
+// as the hand count climbs, which is the right shape for how much a profile can learn.
+export const HANDS_GROWTH = 1.5;
 
 function moved(before, after, limit) {
 	// Null is "no figure yet", not zero. Gaining a figure you did not have is new
@@ -38,6 +46,10 @@ function moved(before, after, limit) {
  */
 export function needsRewrite(current, previous) {
 	if (!previous) return true;
+	// A snapshot from before hands were stored has no baseline, and is left to the
+	// thresholds rather than read as growth: otherwise the deploy that started storing
+	// it would rewrite every profile on its player's next session.
+	if (previous.hands > 0 && current.hands >= previous.hands * HANDS_GROWTH) return true;
 	return Object.entries(THRESHOLDS).some(([key, limit]) =>
 		moved(previous[key], current[key], limit)
 	);
@@ -72,5 +84,6 @@ export function selectForRewrite({ stats, profiles, participantIds }) {
 export function snapshotOf(stat) {
 	const snap = {};
 	for (const key of Object.keys(THRESHOLDS)) snap[key] = stat[key] ?? null;
+	snap.hands = stat.hands ?? null;
 	return snap;
 }
