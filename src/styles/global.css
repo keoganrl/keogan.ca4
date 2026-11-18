@@ -637,7 +637,19 @@ body.has-cover {
 }
 
 .has-cover .back:not(.back-bottom) { z-index: 3; }
-.has-cover .back:not(.back-bottom) a { color: #fdfbf7; }
+/* Translucent pill so the link reads over any part of the photo. The negative
+   margins cancel the padding, so the text stays exactly where it was. */
+.has-cover .back:not(.back-bottom) a {
+  display: inline-block;
+  color: #fdfbf7;
+  padding: 0.3rem 0.8rem 0.35rem;
+  margin: -0.3rem -0.8rem -0.35rem;
+  border-radius: 2rem;
+  background: rgba(20, 18, 15, 0.38);
+  border: 1px solid rgba(253, 251, 247, 0.18);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
 
 @media (max-width: 767px) {
   .cover {
@@ -662,5 +674,12 @@ body.has-cover {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .has-cover .back:not(.back-bottom) a:hover { color: #fff; }
+  .has-cover .back:not(.back-bottom) a {
+    transition: transform 1s ease, color 0.15s ease, background-color 1s ease;
+  }
+  .has-cover .back:not(.back-bottom) a:hover {
+    color: #fff;
+    background: rgba(20, 18, 15, 0.55);
+    transition: transform 0.27s ease, color 0.15s ease, background-color 0.1s ease;
+  }
 }
