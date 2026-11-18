@@ -18,6 +18,10 @@ const {
   bodyClass,
 } = Astro.props;
 
+// Cover pages draw under the phone's status bar (viewport-fit=cover) so the
+// photo runs to the very top of the screen instead of under a cream strip.
+const edgeToEdge = bodyClass?.split(' ').includes('has-cover') ?? false;
+
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined;
 ---
@@ -26,7 +30,7 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content={`width=device-width, initial-scale=1.0${edgeToEdge ? ', viewport-fit=cover' : ''}`} />
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />

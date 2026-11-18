@@ -570,6 +570,18 @@ body.has-cover {
   overflow-x: clip;
 }
 
+/* Cover pages set viewport-fit=cover, so the page starts under the status bar
+   (and under the notch in landscape). Keep text and the back link out of those
+   areas; env() is 0 everywhere else, so this changes nothing on desktop. */
+body.has-cover {
+  padding-left: max(1.75rem, env(safe-area-inset-left));
+  padding-right: max(1.75rem, env(safe-area-inset-right));
+}
+.has-cover .back:not(.back-bottom) {
+  top: calc(4rem + env(safe-area-inset-top, 0px));
+  left: max(1.75rem, env(safe-area-inset-left));
+}
+
 .cover {
   position: relative;
   width: 100vw;
@@ -615,7 +627,7 @@ body.has-cover {
   right: 0;
   max-width: 480px;
   margin-inline: auto;
-  padding: 0 1.75rem;
+  padding: 0 max(1.75rem, env(safe-area-inset-right)) 0 max(1.75rem, env(safe-area-inset-left));
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.3);
 }
 
@@ -660,7 +672,18 @@ body.has-cover {
 }
 
 @media (min-width: 768px) {
-  .cover-inner { max-width: 720px; padding: 0 2.5rem; }
+  .cover-inner {
+    max-width: 720px;
+    padding: 0 max(2.5rem, env(safe-area-inset-right)) 0 max(2.5rem, env(safe-area-inset-left));
+  }
+  body.has-cover {
+    padding-left: max(2.5rem, env(safe-area-inset-left));
+    padding-right: max(2.5rem, env(safe-area-inset-right));
+  }
+  .has-cover .back:not(.back-bottom) {
+    top: calc(3.25rem + env(safe-area-inset-top, 0px));
+    left: max(2.5rem, env(safe-area-inset-left));
+  }
 }
 
 @media (min-width: 1100px) {
@@ -669,7 +692,11 @@ body.has-cover {
   /* The back link is normally fixed in the left margin. Here it would scroll
      off the photo as cream-on-cream, so it rides with the cover instead and
      the bottom link comes back to do its job. */
-  .has-cover .back:not(.back-bottom) { position: absolute; }
+  .has-cover .back:not(.back-bottom) {
+    position: absolute;
+    top: 6.5rem;
+    left: calc(50% - 400px - 3rem);
+  }
   .has-cover .back-bottom:not([hidden]) { display: block; }
 }
 
