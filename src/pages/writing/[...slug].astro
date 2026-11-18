@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import Cover from '../../components/Cover.astro';
 import { readingInfo } from '../../lib/readingTime';
 
 export async function getStaticPaths() {
@@ -14,18 +15,22 @@ const { readingTime } = readingInfo(article.body ?? '');
 ---
 
 <BaseLayout
+  bodyClass={article.data.cover ? 'has-cover' : undefined}
+  ogImage={article.data.cover?.src}
   title={`${article.data.title} — Keogan Larade`}
   description={article.data.summary ?? `${article.data.title} — writing by Keogan Larade.`}
 >
   <p class="back" transition:name="back-link"><a href="/writing">← writing</a></p>
-  <h1 class="name" transition:name="page-heading">{article.data.title}</h1>
-  <p class="article-meta">
-    <span class="article-year">{article.data.year}</span>
-    <span>·</span>
-    <span class="article-readtime">{readingTime}</span>
-    {article.data.tags.length > 0 && <span>·</span>}
-    {article.data.tags.map(tag => <span class="article-tag">{tag}</span>)}
-  </p>
+  <Cover cover={article.data.cover}>
+    <h1 class="name" transition:name="page-heading">{article.data.title}</h1>
+    <p class="article-meta">
+      <span class="article-year">{article.data.year}</span>
+      <span>·</span>
+      <span class="article-readtime">{readingTime}</span>
+      {article.data.tags.length > 0 && <span>·</span>}
+      {article.data.tags.map(tag => <span class="article-tag">{tag}</span>)}
+    </p>
+  </Cover>
   <div class="article-body">
     <Content />
   </div>

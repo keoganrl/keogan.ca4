@@ -1,0 +1,21 @@
+---
+// Full-bleed cover photo with the page heading laid over it. Opt-in per entry
+// via `cover:` in front matter; without one the heading renders exactly as
+// before. Styles live in global.css under "Cover header", since the slotted
+// heading is the page's markup and the page also needs `has-cover` on <body>.
+interface Props {
+  cover?: { src: string; alt: string; position?: string; mobilePosition?: string };
+}
+const { cover } = Astro.props;
+const style = cover && [
+  cover.position && `--cover-pos: ${cover.position}`,
+  cover.mobilePosition && `--cover-pos-sm: ${cover.mobilePosition}`,
+].filter(Boolean).join('; ');
+---
+
+{cover ? (
+  <header class="cover" style={style || undefined}>
+    <img src={cover.src} alt={cover.alt} fetchpriority="high" decoding="async" />
+    <div class="cover-inner"><slot /></div>
+  </header>
+) : <slot />}

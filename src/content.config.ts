@@ -1,6 +1,15 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 
+// Optional full-bleed cover photo with the title over it (src/components/Cover.astro).
+// position / mobilePosition are CSS object-position values for the crop.
+const cover = z.object({
+  src: z.string(),
+  alt: z.string(),
+  position: z.string().optional(),
+  mobilePosition: z.string().optional(),
+}).optional();
+
 const writing = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/writing' }),
   schema: z.object({
@@ -9,6 +18,7 @@ const writing = defineCollection({
     date: z.coerce.date(),
     tags: z.array(z.string()),
     summary: z.string().optional(),
+    cover,
   }),
 });
 
@@ -26,6 +36,7 @@ const projects = defineCollection({
     href: z.string().optional(),
     // A collaborator credited beside the title, as a separate link.
     collaborator: z.object({ name: z.string(), url: z.string().url() }).optional(),
+    cover,
   }),
 });
 
