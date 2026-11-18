@@ -489,8 +489,8 @@
     display: flex;
     flex-wrap: nowrap;
     gap: 0.5rem;
-    margin: 0 -1.75rem var(--tab-gap);
-    padding-inline: 1.75rem;
+    margin: 0 calc(-1 * var(--gutter)) var(--tab-gap);
+    padding-inline: var(--gutter);
     overflow-x: auto;
     /* A horizontal scroller at the edge of an iOS viewport otherwise hands the gesture
        to the browser's back-swipe halfway through a drag. */

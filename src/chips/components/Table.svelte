@@ -1757,7 +1757,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.25rem 0.85rem;
+    padding: 1rem var(--gutter-table) 0.85rem;
     border-bottom: 1px solid var(--hairline);
   }
 
@@ -2027,7 +2027,7 @@
   .players {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem 1.25rem 1rem;
+    padding: 0.5rem var(--gutter-table) 1rem;
   }
 
   .reorder-hint {
@@ -2124,7 +2124,7 @@
   /* --- Action bar --- */
   .action-bar {
     border-top: 1px solid var(--hairline);
-    padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+    padding: 1rem var(--gutter-table) calc(1rem + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 0.85rem;

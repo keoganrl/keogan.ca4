@@ -115,6 +115,10 @@
   /* Tell the browser which way round we are, so form controls, the caret and the
      scrollbars follow. Overridden below rather than left as `light dark`: the app
      picks its own surface, and letting the UA pick a second one gets them out of step. */
+  /* Side gutters: --gutter for the reading-column pages, --gutter-table for the
+     live table's header, list and action bar. Narrower in dark mode, below. */
+  --gutter: 1.75rem;
+  --gutter-table: 1.25rem;
   color-scheme: light;
 }
 
@@ -164,6 +168,11 @@
     --shadow-strong: rgba(0, 0, 0, 0.55);
     --shadow-soft: rgba(0, 0, 0, 0.45);
     --backdrop: rgba(0, 0, 0, 0.6);
+    /* On trial with the black paper. An OLED screen shows black as switched-off
+       pixels, so the page has no visible edge and the phone's bezel does the
+       framing a white margin does in light mode. Content can sit further out. */
+    --gutter: 1.1rem;
+    --gutter-table: 0.85rem;
     color-scheme: dark;
   }
 }
@@ -202,7 +211,7 @@ body.chips textarea {
 .chips-page {
   max-width: 480px;
   margin-inline: auto;
-  padding: 7rem 1.75rem 2.5rem;
+  padding: 7rem var(--gutter) 2.5rem;
   /* Title lands at 7rem like every other page, so the gap below the back link
      (pinned at top: 4rem) matches the rest of the site. */
   padding-top: max(7rem, calc(env(safe-area-inset-top) + 4.5rem));
@@ -227,7 +236,7 @@ body.chips textarea {
 .chips-back {
   position: absolute;
   top: 4rem;
-  left: 1.75rem;
+  left: var(--gutter);
   font-size: 0.9rem;
   margin: 0;
 }
