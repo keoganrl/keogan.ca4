@@ -331,8 +331,9 @@ takes a token.
   the rail stretches to it). It replaced a script that measured on every resize and
   reproduces it to the pixel at 1100, 1440 and 1920 wide.
 - **The canoe photo is a button** that crossfades to a graphite drawing on hover, focus
-  or tap (`.flip` in `index.astro`). The `2026` beside the name is hardcoded on
-  purpose: it dates this version of the site.
+  or tap (`.flip` in `index.astro`). The `2026` (foot of the viewport on desktop,
+  under the social icons on mobile) is hardcoded on purpose: it dates this version
+  of the site.
 - `:focus-visible` and `prefers-reduced-motion` are handled once, at the top and the
   foot of `global.css`. /chips has its own, per component.
 

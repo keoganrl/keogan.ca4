@@ -7,8 +7,8 @@ import drawing from '../assets/images/GenesisCoupeDrawing.jpeg';
 import linkedin from '../assets/images/linkedin.png';
 import mail from '../assets/images/mail.png';
 
-// The edition mark beside the name. Hardcoded: it dates this version of the
-// site, so it changes when the site does, not when the calendar does.
+// The edition mark at the foot of the page. Hardcoded: it dates this version of
+// the site, so it changes when the site does, not when the calendar does.
 const YEAR = '2026';
 
 // One set of image props for both layouts, so the desktop and mobile copies
@@ -76,7 +76,7 @@ const portraitProps = {
     </aside>
     <main class="home-main">
       <div class="home-content">
-        <h1 class="name home-name">Keogan Larade<span class="name-year" aria-hidden="true">{YEAR}</span></h1>
+        <h1 class="name home-name">Keogan Larade</h1>
         <p class="blurb">
           Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
         </p>
@@ -89,11 +89,12 @@ const portraitProps = {
         </div>
       </div>
     </main>
+    <p class="site-year home-year" aria-hidden="true">{YEAR}</p>
   </div>
 
   <div class="home-mobile">
     <div class="home-fold">
-      <h1 class="name">Keogan Larade<span class="name-year" aria-hidden="true">{YEAR}</span></h1>
+      <h1 class="name">Keogan Larade</h1>
       <p class="blurb">
         Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
       </p>
@@ -120,6 +121,7 @@ const portraitProps = {
       <a href="mailto:keog@nlara.de">
         <Image class="footer-logo" src={mail} width={72} sizes="32px" alt="Email" />
       </a>
+      <span class="site-year footer-year" aria-hidden="true">{YEAR}</span>
     </footer>
   </div>
 </BaseLayout>
@@ -128,17 +130,24 @@ const portraitProps = {
   .home-desktop { display: none; }
 
   /* ---- 2026 ----------------------------------------------------------------
-     An edition mark on the name's baseline, in the faint grey. Sized against
-     the name, so it scales with it at every breakpoint. */
-  .name-year {
+     An edition mark in the faint grey. Desktop: centred at the foot of the
+     viewport, out of the grid's flow so the split above does not move.
+     Mobile: its own line under the social icons, at the very end of the page. */
+  .site-year {
     font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif;
-    font-weight: 400;
-    font-size: 0.42em;
+    font-size: 0.85rem;
     letter-spacing: 0.06em;
     font-variant-numeric: tabular-nums;
     color: var(--faint);
-    margin-left: 0.6em;
-    white-space: nowrap;
+    margin: 0;
+  }
+  .footer-year {
+    flex-basis: 100%;
+    text-align: center;
+  }
+  .home-mobile > .footer {
+    flex-wrap: wrap;
+    row-gap: 0.75rem;
   }
 
   /* ---- Canoe → drawing -----------------------------------------------------
@@ -254,6 +263,15 @@ const portraitProps = {
       min-height: 100vh;
       /* 6vh each way, with the row lifted 1.5vh off true centre. */
       padding-block: 4.5vh 7.5vh;
+      position: relative;
+    }
+
+    .home-year {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 1.75rem;
+      text-align: center;
     }
 
     .home-rail {
