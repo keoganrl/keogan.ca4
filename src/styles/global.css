@@ -50,14 +50,56 @@
   src: url('/fonts/charter/charter_bold_italic.woff2') format('woff2');
 }
 
+/* ---- Colour tokens ---------------------------------------------------------
+   Same names and values as src/styles/chips.css, so the two read as one site.
+   Never write a colour literal below the cover section: use a token and the
+   new thing is dark-correct for free. The cover's literals are deliberate,
+   since they sit on a photo and are the same in both modes. */
+:root {
+  --paper: #fdfbf7;
+  --ink: #2a2a2a;
+  --ink-soft: #3a3a3a;
+  --muted: #6a6a6a;
+  --faint: #888;
+  --whisper: #aaa;
+  --hairline: #eee;
+  --rule: #ccc;
+  /* The icon PNGs are dark grey glyphs on transparent. */
+  --icon-filter: none;
+  /* Side gutter of the phone-width column (tablet and up use 2.5rem). */
+  --gutter: 1.75rem;
+  color-scheme: light;
+}
+
+/* Dark mode, on phones only. Follows the OS setting with no toggle, like
+   /chips. Gated on a touch-only pointer rather than width so a narrow desktop
+   window never goes dark: desktop has no dark mode at all.
+   OLED black: the page has no visible edge, so the bezel does the framing a
+   cream margin does in light mode and content sits further out (28px -> 18px). */
+@media (prefers-color-scheme: dark) and (hover: none) and (pointer: coarse) {
+  :root {
+    --paper: #000000;
+    --ink: #e8e4dc;
+    --ink-soft: #d5d0c7;
+    --muted: #a09a90;
+    --faint: #8a857c;
+    --whisper: #6a6560;
+    --hairline: #2c2a27;
+    --rule: #45423d;
+    --icon-filter: invert(1);
+    --gutter: 1.1rem;
+    color-scheme: dark;
+  }
+}
+
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: #fdfbf7;
-  color: #2a2a2a;
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
-  padding: 7rem 1.75rem 0.5rem;
+  padding: 7rem var(--gutter) 0.5rem;
   max-width: 480px;
   margin-inline: auto;
   font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif;
@@ -132,7 +174,7 @@ select {
 .blurb {
   font-size: 1.1rem;
   line-height: 1.7;
-  color: #3a3a3a;
+  color: var(--ink-soft);
   margin: 0 0 4.5rem;
 }
 
@@ -170,7 +212,7 @@ select {
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: 1.2rem;
   font-weight: 400;
-  color: #2a2a2a;
+  color: var(--ink);
   margin: 0 0 1.25rem;
 }
 
@@ -198,6 +240,7 @@ select {
   object-fit: contain;
   border-radius: 4px;
   opacity: 0.75;
+  filter: var(--icon-filter);
   transform: translateY(-0.1rem);
 }
 
@@ -215,12 +258,13 @@ select {
   height: 1.8em;
   object-fit: contain;
   opacity: 0.75;
+  filter: var(--icon-filter);
   display: block;
 }
 
 .directory a,
 .footer a {
-  color: #3a3a3a;
+  color: var(--ink-soft);
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color 0.2s ease;
@@ -242,17 +286,17 @@ select {
   font-family: inherit;
   font-size: 0.85rem;
   background: none;
-  border: 1px solid #ccc;
+  border: 1px solid var(--rule);
   border-radius: 2rem;
   padding: 0.2rem 0.75rem;
   cursor: pointer;
-  color: #6a6a6a;
+  color: var(--muted);
   transition: border-color 0.15s, color 0.15s;
 }
 
 .tag.active {
-  border-color: #2a2a2a;
-  color: #2a2a2a;
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 .article-list {
@@ -271,14 +315,14 @@ select {
   gap: 1rem;
   padding: 0.55rem 0;
   border-bottom: 1px solid transparent;
-  color: #2a2a2a;
+  color: var(--ink);
   text-decoration: none;
   transition: border-color 0.15s;
 }
 
 .article-year {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--faint);
   flex-shrink: 0;
   width: 2.5rem;
 }
@@ -296,21 +340,21 @@ select {
   gap: 0.5rem;
   margin: 0 0 1rem;
   font-size: 0.85rem;
-  color: #888;
+  color: var(--faint);
 }
 
 .article-tag {
-  border: 1px solid #ccc;
+  border: 1px solid var(--rule);
   border-radius: 2rem;
   padding: 0.1rem 0.6rem;
   font-size: 0.8rem;
-  color: #888;
+  color: var(--faint);
 }
 
 .article-body {
   font-size: 1.05rem;
   line-height: 1.75;
-  color: #3a3a3a;
+  color: var(--ink-soft);
   margin-bottom: 4rem;
 }
 
@@ -318,21 +362,21 @@ select {
 .article-body img { width: 100%; height: auto; display: block; border-radius: 4px; margin: 1.5rem 0; }
 .article-body figure { margin: 1.5rem 0; }
 .article-body figure img { margin: 0; }
-.article-body figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: #888; }
+.article-body figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: var(--faint); }
 .article-body h2 { font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif; font-weight: 700; font-size: 1.3em; margin: 2rem 0 0.35rem; }
 .article-body h3 { font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif; font-weight: 700; font-size: 1.1em; margin: 1.5rem 0 0.25rem; }
-.article-body a { color: inherit; text-decoration: underline; text-decoration-color: #ccc; }
+.article-body a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); }
 
 .back {
   position: absolute;
   top: 4rem;
-  left: 1.75rem;
+  left: var(--gutter);
   font-size: 0.9rem;
   margin: 0;
 }
 
 .back a {
-  color: #888;
+  color: var(--faint);
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color 0.15s, color 0.15s;
@@ -344,9 +388,9 @@ select {
 }
 
 .project-link a {
-  color: #3a3a3a;
+  color: var(--ink-soft);
   text-decoration: none;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--rule);
   transition: border-color 0.15s;
 }
 
@@ -369,7 +413,7 @@ select {
   margin-bottom: 1rem;
 }
 
-.guestbook-field label { font-size: 0.85rem; color: #888; }
+.guestbook-field label { font-size: 0.85rem; color: var(--faint); }
 
 .guestbook-field input,
 .guestbook-field textarea {
@@ -377,9 +421,9 @@ select {
   font-size: 1rem;
   background: none;
   border: none;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--rule);
   padding: 0.25rem 0;
-  color: #2a2a2a;
+  color: var(--ink);
   outline: none;
   width: 100%;
   resize: none;
@@ -387,7 +431,7 @@ select {
 }
 
 .guestbook-field input:focus,
-.guestbook-field textarea:focus { border-bottom-color: #2a2a2a; }
+.guestbook-field textarea:focus { border-bottom-color: var(--ink); }
 
 .guestbook-submit {
   font-family: inherit;
@@ -398,24 +442,24 @@ select {
   align-items: center;
   justify-content: center;
   background: none;
-  border: 1px solid #ccc;
+  border: 1px solid var(--rule);
   border-radius: 2rem;
   padding: 0.3rem 1rem;
   cursor: pointer;
-  color: #6a6a6a;
+  color: var(--muted);
   transition: border-color 0.15s, color 0.15s;
   margin-top: 0.5rem;
 }
 
 .guestbook-submit:disabled { opacity: 0.5; cursor: default; }
 
-.guestbook-status { font-size: 0.85rem; color: #888; margin: 0.75rem 0 0; }
+.guestbook-status { font-size: 0.85rem; color: var(--faint); margin: 0.75rem 0 0; }
 
 .guestbook-entries { list-style: none; padding: 0; margin: 0; }
 
 .guestbook-entry {
   padding: 1rem 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--hairline);
 }
 
 .guestbook-entry-header {
@@ -439,9 +483,9 @@ select {
   overflow-wrap: anywhere;
 }
 
-.guestbook-entry-name { font-size: 0.95rem; color: #2a2a2a; min-width: 0; }
-.guestbook-entry-date { font-size: 0.8rem; color: #aaa; }
-.guestbook-entry-message { font-size: 1rem; line-height: 1.6; color: #3a3a3a; margin: 0; }
+.guestbook-entry-name { font-size: 0.95rem; color: var(--ink); min-width: 0; }
+.guestbook-entry-date { font-size: 0.8rem; color: var(--whisper); }
+.guestbook-entry-message { font-size: 1rem; line-height: 1.6; color: var(--ink-soft); margin: 0; }
 
 /* Tablet & up — widen the reading column */
 @media (min-width: 768px) {
@@ -487,7 +531,7 @@ select {
   }
   .directory a:hover {
     transform: scale(1.07);
-    color: #2a2a2a;
+    color: var(--ink);
     border-bottom-color: transparent;
     transition: transform 0.27s ease, color 0.15s ease;
   }
@@ -518,7 +562,7 @@ select {
   }
   .back a:hover {
     transform: translateX(-3px);
-    color: #2a2a2a;
+    color: var(--ink);
     transition: transform 0.27s ease, color 0.15s ease;
   }
 
@@ -528,8 +572,8 @@ select {
     transition: border-color 1s ease, color 1s ease;
   }
   .tag:hover {
-    border-color: #888;
-    color: #2a2a2a;
+    border-color: var(--faint);
+    color: var(--ink);
     transition: border-color 0.1s ease, color 0.1s ease;
   }
 
@@ -537,7 +581,7 @@ select {
     transition: text-decoration-color 1s ease;
   }
   .article-body a:hover {
-    text-decoration-color: #888;
+    text-decoration-color: var(--faint);
     transition: text-decoration-color 0.1s ease;
   }
 
@@ -545,7 +589,7 @@ select {
     transition: border-color 1s ease;
   }
   .project-link a:hover {
-    border-bottom-color: #888;
+    border-bottom-color: var(--faint);
     transition: border-color 0.1s ease;
   }
 
@@ -553,8 +597,8 @@ select {
     transition: border-color 1s ease, color 1s ease;
   }
   .guestbook-submit:hover {
-    border-color: #888;
-    color: #2a2a2a;
+    border-color: var(--faint);
+    color: var(--ink);
     transition: border-color 0.1s ease, color 0.1s ease;
   }
 
@@ -574,12 +618,12 @@ body.has-cover {
    (and under the notch in landscape). Keep text and the back link out of those
    areas; env() is 0 everywhere else, so this changes nothing on desktop. */
 body.has-cover {
-  padding-left: max(1.75rem, env(safe-area-inset-left));
-  padding-right: max(1.75rem, env(safe-area-inset-right));
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
 }
 .has-cover .back:not(.back-bottom) {
   top: calc(4rem + env(safe-area-inset-top, 0px));
-  left: max(1.75rem, env(safe-area-inset-left));
+  left: max(var(--gutter), env(safe-area-inset-left));
 }
 
 .cover {
@@ -642,7 +686,7 @@ body.has-cover {
   right: 0;
   max-width: 480px;
   margin-inline: auto;
-  padding: 0 max(1.75rem, env(safe-area-inset-right)) 0 max(1.75rem, env(safe-area-inset-left));
+  padding: 0 max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.3);
 }
 

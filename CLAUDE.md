@@ -295,12 +295,17 @@ written from its own hands alone. Carrying the old blurb over meant the first re
 was handed it as `current_profile` and wrote towards it (confirmation bias). The text
 lives on in the archive and the raw dump.
 
-## Dark mode (/chips only)
+## Dark mode
+
+The main site (`global.css`) has its own dark mode, **phones only**: its token block
+is gated on `(prefers-color-scheme: dark) and (hover: none) and (pointer: coarse)`, so
+desktop never goes dark, even in a narrow window. Same token names and values as
+chips.css, OLED black, gutter 1.75rem -> 1.1rem. The cover header's literals are
+deliberate (they sit on a photo). Same rule as below: no colour literals.
 
 `/chips` follows the phone's light/dark setting and has no toggle, by design: the
-OS already has one, and a second switch is a second thing to be out of step. The
-rest of the site is unaffected — `ChipsLayout.astro` loads `src/styles/chips.css`
-and never `global.css`.
+OS already has one, and a second switch is a second thing to be out of step.
+`ChipsLayout.astro` loads `src/styles/chips.css` and never `global.css`.
 
 The whole implementation is one `@media (prefers-color-scheme: dark)` block in
 `chips.css` that redefines the `:root` tokens. **Nothing else is duplicated for

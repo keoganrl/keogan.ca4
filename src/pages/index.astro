@@ -177,7 +177,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       display: inline-flex;
       align-items: baseline;
       gap: 0.5rem;
-      color: #3a3a3a;
+      color: var(--ink-soft);
       text-decoration: none;
     }
 
@@ -216,7 +216,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     .home-divider {
       position: absolute;
       width: 2px;
-      background: #eee;
+      background: var(--hairline);
       border-radius: 2px;
       pointer-events: none;
       top: 0;
@@ -261,7 +261,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   @media (hover: hover) and (pointer: fine) {
     .home-directory a:hover .label {
       transform: translateX(5px);
-      color: #2a2a2a;
+      color: var(--ink);
       transition: transform 0.27s ease, color 0.15s ease;
     }
     .home-social a:hover img {
