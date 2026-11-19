@@ -31,6 +31,7 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content={`width=device-width, initial-scale=1.0${edgeToEdge ? ', viewport-fit=cover' : ''}`} />
+    {edgeToEdge && <meta name="theme-color" content="#403d3a" />}
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />

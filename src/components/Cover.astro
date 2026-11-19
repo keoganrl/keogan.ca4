@@ -13,9 +13,24 @@ const style = cover && [
 ].filter(Boolean).join('; ');
 ---
 
+{cover && <div class="cover-tint" aria-hidden="true"></div>}
 {cover ? (
   <header class="cover" style={style || undefined}>
     <img src={cover.src} alt={cover.alt} fetchpriority="high" decoding="async" />
     <div class="cover-inner"><slot /></div>
   </header>
 ) : <slot />}
+
+<script>
+  // iOS Safari paints the strip behind the status bar to match a fixed element
+  // touching the top of the screen (it ignores theme-color). .cover-tint is that
+  // element, dark like the top of the photo. Once the photo scrolls away it is
+  // hidden, so the strip goes back to cream over the text.
+  function watchCover() {
+    const tint = document.querySelector<HTMLElement>('.cover-tint');
+    const cover = document.querySelector('.cover');
+    if (!tint || !cover) return;
+    new IntersectionObserver(([e]) => { tint.hidden = !e.isIntersecting; }).observe(cover);
+  }
+  document.addEventListener('astro:page-load', watchCover);
+</script>

@@ -617,6 +617,21 @@ body.has-cover {
   background: linear-gradient(to top, rgba(20, 18, 15, 0.82) 0%, rgba(20, 18, 15, 0.35) 38%, rgba(20, 18, 15, 0) 65%);
 }
 
+/* Fixed strip at the very top for iOS Safari to sample when it colours the
+   status bar area; the same colour as the top of the photo under its fade.
+   Cover.astro hides it once the photo has scrolled out of view. */
+.cover-tint {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 4;
+  background: #403d3a;
+  pointer-events: none;
+}
+.cover-tint[hidden] { display: none; }
+
 /* Mirrors the body's max-width and side padding at each breakpoint, so the
    title lines up with the text column below it. */
 .cover-inner {
