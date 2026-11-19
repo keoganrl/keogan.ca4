@@ -3,7 +3,6 @@ import { Image, Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import canoe from '../assets/images/canoe.jpg';
 import portrait from '../assets/images/portrait.jpg';
-import drawing from '../assets/images/GenesisCoupeDrawing.jpeg';
 import linkedin from '../assets/images/linkedin.png';
 import mail from '../assets/images/mail.png';
 
@@ -20,14 +19,6 @@ const canoeProps = {
   widths: [560, 1080, 1600],
   sizes: '(min-width: 1100px) min(560px, 40vw), 66vw',
   loading: 'eager',
-} as const;
-const drawingProps = {
-  src: drawing,
-  alt: 'Graphite drawing of a Genesis Coupe',
-  formats: ['avif', 'webp'],
-  widths: [560, 1080],
-  sizes: '(min-width: 1100px) min(560px, 40vw), 66vw',
-  loading: 'lazy',
 } as const;
 const portraitProps = {
   src: portrait,
@@ -81,10 +72,7 @@ const portraitProps = {
           Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
         </p>
         <div class="images home-images">
-          <button class="left flip" type="button" aria-pressed="false" aria-label="Swap the canoe photo for one of my graphite drawings">
-            <Picture {...canoeProps} alt="" />
-            <Picture {...drawingProps} alt="" class="flip-drawing" />
-          </button>
+          <div class="left"><Picture {...canoeProps} /></div>
           <div class="right"><Picture {...portraitProps} /></div>
         </div>
       </div>
@@ -99,10 +87,7 @@ const portraitProps = {
         Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
       </p>
       <div class="images">
-        <button class="left flip" type="button" aria-pressed="false" aria-label="Swap the canoe photo for one of my graphite drawings">
-          <Picture {...canoeProps} alt="" />
-          <Picture {...drawingProps} alt="" class="flip-drawing" />
-        </button>
+        <div class="left"><Picture {...canoeProps} /></div>
         <div class="right"><Picture {...portraitProps} /></div>
       </div>
       <section class="directory">
@@ -148,52 +133,6 @@ const portraitProps = {
   .home-mobile > .footer {
     flex-wrap: wrap;
     row-gap: 0.75rem;
-  }
-
-  /* ---- Canoe → drawing -----------------------------------------------------
-     The canoe photo is a button: hover (fine pointers), keyboard focus or a tap
-     crossfades it into a graphite drawing. The drawing is lazy, so it costs
-     nothing until the photo is near the viewport, which on this page is
-     immediately; it is ~40 KB. */
-  .flip {
-    /* Button reset, without touching the flex/radius/overflow that .images
-       gives its children. */
-    appearance: none;
-    background: none;
-    border: 0;
-    margin: 0;
-    padding: 0;
-    font: inherit;
-    color: inherit;
-    display: block;
-    position: relative;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .flip :global(picture) { display: contents; }
-  .flip :global(.flip-drawing) {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    filter: grayscale(1);
-    object-position: 50% 58%;
-    transition: opacity 1s ease;
-  }
-  .flip[aria-pressed='true'] :global(.flip-drawing),
-  .flip:focus-visible :global(.flip-drawing) {
-    opacity: 1;
-    transition: opacity 0.45s ease;
-  }
-  /* :focus-visible's outline would be clipped by .images' overflow, so the
-     ring is drawn inside the frame instead. */
-  .flip:focus-visible { outline: none; }
-  .flip:focus-visible::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    box-shadow: inset 0 0 0 2px var(--ink);
-    pointer-events: none;
   }
 
   /* ---- Mobile / tablet: fit items 1–5 to the viewport ----------------------
@@ -389,19 +328,5 @@ const portraitProps = {
       transform: scale(1.2);
       transition: transform 0.27s ease;
     }
-    .flip:hover :global(.flip-drawing) {
-      opacity: 1;
-      transition: opacity 0.45s ease;
-    }
   }
 </style>
-
-<script>
-  // Tap (or Enter/Space) pins the drawing; hover alone never changes state.
-  document.querySelectorAll<HTMLButtonElement>('.flip').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const on = btn.getAttribute('aria-pressed') !== 'true';
-      btn.setAttribute('aria-pressed', String(on));
-    });
-  });
-</script>
