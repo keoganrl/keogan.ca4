@@ -118,6 +118,18 @@ that is not a whole number of cents per chip ($15 is 1.5¢) rounds each figure t
 cent, so $0.375 shows as $0.38. The leaderboard stays in chips: a series can mix
 stakes, and summing their dollars would mean nothing.
 
+The game-over screen of a money game ends with **Settle up**: who e-transfers whom,
+in two versions (`src/chips/lib/utils/settle.ts`):
+
+- **Exact** — the fewest transfers that settle everyone to the cent. A subset DP finds
+  the most disjoint zero-sum groups of players, which is what sets the minimum (a group
+  of k settles in k - 1). Tested against brute force.
+- **Rough** — fewer transfers by letting up to 8% of the money that changes hands
+  (`ROUGH_TOLERANCE`) land in the wrong pocket, then rounding to whole dollars when
+  that still fits. In practice it drops small wins and losses outright, sharing the
+  shortfall proportionally across whoever is in the same group, and the screen names
+  everyone it leaves short or ahead and by how much.
+
 ### Sessions nobody ended
 
 The leaderboard only counts sessions with `status = 'ended'`, and for a long time the

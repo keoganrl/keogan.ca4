@@ -7,6 +7,7 @@
   import { openRecapRelay, subscribeToRecap } from '../lib/utils/recapRelay';
   import { getSeriesForSession } from '../lib/services/series';
   import { seriesLeaderboardHref } from '../lib/nav';
+  import { balancesFromResults, settleExact, settleRough } from '../lib/utils/settle';
   import type { Player } from '../lib/types';
 
   let sessionId = $state('');
@@ -30,6 +31,25 @@
   // column still loads the results (in chips, which is what every such game was).
   let perChip = $state<number | null>(null);
   const m = (chips: number) => formatAmount(chips, perChip);
+  const dollars = (cents: number) => formatAmount(cents, 0.01);
+
+  // Who e-transfers whom. Money games only: a chip game has nothing to send. Both
+  // versions are worked out up front (a few milliseconds even at a full table) so the
+  // tab labels can say how many transfers each one takes.
+  const settle = $derived.by(() => {
+    if (perChip === null || players.length < 2) return null;
+    const { balances, gap } = balancesFromResults(players, perChip);
+    return { exact: settleExact(balances), rough: settleRough(balances), gap };
+  });
+  let settleView = $state<'exact' | 'rough'>('exact');
+  const shownSettle = $derived(settle ? settle[settleView] : null);
+  const nameOf = (id: string) => players.find((p) => p.id === id)?.display_name ?? '?';
+  const plural = (n: number) => `${n} e-transfer${n === 1 ? '' : 's'}`;
+  // "Ada $1.20 short, Ben $1.20 ahead": who the rough version leaves off, and which way.
+  const offText = (off: { id: string; cents: number }[]) =>
+    off
+      .map((o) => `${nameOf(o.id)} ${dollars(Math.abs(o.cents))} ${o.cents < 0 ? 'short' : 'ahead'}`)
+      .join(', ');
 
   async function streamRecap(id: string) {
     try {
@@ -192,6 +212,65 @@
       {/each}
     </ul>
 
+    {#if settle && shownSettle}
+      {@const saved = settle.exact.transfers.length - settle.rough.transfers.length}
+      <section class="settle" aria-label="Settle up">
+        <h2 class="clabel">Settle up</h2>
+        <div class="choices">
+          <button
+            class="cchoice grow"
+            class:active={settleView === 'exact'}
+            onclick={() => (settleView = 'exact')}
+            >Exact · {settle.exact.transfers.length}</button
+          >
+          <button
+            class="cchoice grow"
+            class:active={settleView === 'rough'}
+            onclick={() => (settleView = 'rough')}
+            >Rough · {settle.rough.transfers.length}</button
+          >
+        </div>
+
+        {#if shownSettle.transfers.length === 0}
+          <p class="cnote settle-note">Nobody owes anybody.</p>
+        {:else}
+          <ul class="transfers">
+            {#each shownSettle.transfers as t, i (i)}
+              <li class="transfer">
+                <span class="transfer-who">
+                  {nameOf(t.from)} <span class="arrow" aria-label="sends">→</span>
+                  {nameOf(t.to)}
+                </span>
+                <span class="transfer-amt">{dollars(t.cents)}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        <p class="cnote settle-note">
+          {#if settleView === 'exact'}
+            The fewest e-transfers that settle everyone to the cent.
+          {:else if saved > 0}
+            {plural(saved)} fewer than exact, for {dollars(settle.rough.misallocated)} in the
+            wrong pocket:
+            {offText(settle.rough.off)}.
+          {:else if settle.rough.misallocated > 0}
+            Can't be done in fewer, so this is exact rounded to whole dollars:
+            {offText(settle.rough.off)}.
+          {:else}
+            Can't be done in fewer. Same as exact.
+          {/if}
+        </p>
+        {#if settle.gap !== 0}
+          <p class="cnote settle-note">
+            The table finished {dollars(Math.abs(settle.gap))}
+            {settle.gap > 0 ? 'over' : 'short'}, so {settle.gap > 0 ? 'winners' : 'losers'} were
+            trimmed evenly to make it balance.
+          </p>
+        {/if}
+      </section>
+    {/if}
+
     <div class="actions">
       <a class="cbtn" href="/chips">Home</a>
       {#if series}
@@ -277,6 +356,52 @@
     font-size: 1.15rem;
     font-weight: 700;
     flex-shrink: 0;
+  }
+
+  .settle {
+    margin: -1rem 0 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .settle h2 {
+    margin: 0;
+  }
+
+  .choices {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .grow { flex: 1; }
+
+  .transfers {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .transfer {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .arrow {
+    color: var(--faint);
+    margin: 0 0.25rem;
+  }
+
+  .transfer-amt {
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .settle-note {
+    margin: 0;
+    font-size: 0.8rem;
   }
 
   .actions {
