@@ -81,7 +81,7 @@ Three pieces of writing, all Claude Opus 5, all from `api/_prompts.js`:
 fires it compares each player's current figures against `player_profiles.stats_snapshot`
 — the numbers their existing text was written from — in plain JavaScript, and
 returns without calling the model if nobody has moved past the thresholds in
-`api/_drift.js` or grown their hand count by half since their text was written. When someone has, ONE call carries the whole table (every
+`api/_drift.js` or doubled their hand count since their text was written. When someone has, ONE call carries the whole table (every
 player's stats and every current profile) with only the drifted players named for
 rewriting: the funniest lines are comparisons, and those need the whole table in
 view.

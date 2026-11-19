@@ -18,12 +18,12 @@ export const THRESHOLDS = {
 	af: 0.2
 };
 
-// The other reason to rewrite: the sample has grown by half since the text was
+// The other reason to rewrite: the sample has doubled since the text was
 // written. Averages can sit still while the evidence behind them doubles, and a
 // profile written off 40 hands should not still be the one shown at 400. Being
 // relative, it fires every session or two early in a series and spaces itself out
 // as the hand count climbs, which is the right shape for how much a profile can learn.
-export const HANDS_GROWTH = 1.5;
+export const HANDS_GROWTH = 2;
 
 function moved(before, after, limit) {
 	// Null is "no figure yet", not zero. Gaining a figure you did not have is new

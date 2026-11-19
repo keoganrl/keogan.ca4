@@ -33,9 +33,9 @@ describe('needsRewrite', () => {
 		expect(needsRewrite(snap({ af: null }), snap({ af: null }))).toBe(false);
 	});
 
-	it('rewrites once the sample has grown by half, even if nothing moved', () => {
-		expect(needsRewrite(snap({ hands: 149 }), snap())).toBe(false);
-		expect(needsRewrite(snap({ hands: 150 }), snap())).toBe(true);
+	it('rewrites once the sample has doubled, even if nothing moved', () => {
+		expect(needsRewrite(snap({ hands: 199 }), snap())).toBe(false);
+		expect(needsRewrite(snap({ hands: 200 }), snap())).toBe(true);
 	});
 
 	// Snapshots written before hands were stored must not all fire at once.

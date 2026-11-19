@@ -410,7 +410,7 @@ what is actually live.
 The interesting part is what *doesn't* happen. Most sessions cost nothing:
 `api/profile.js` compares each player's figures against the snapshot their existing
 text was written from and returns without calling the model unless someone has
-moved past a threshold, or played half again as many hands as their text was
+moved past a threshold, or played twice as many hands as their text was
 written from. A profile that rewrote itself every session would carry no
 weight, so the ones that do change mean something. When a call is warranted, the
 whole table goes in one request with only the drifted players named for rewriting,
