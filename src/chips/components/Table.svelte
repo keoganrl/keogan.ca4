@@ -5,7 +5,13 @@
   import { initIdentity, identityId } from '../lib/stores/identity';
   import { turnAlert, setTurnAlert } from '../lib/stores/turnAlert';
   import { createTableStore, type TableStore } from '../lib/stores/table.svelte';
-  import { netResult, netColor } from '../lib/utils/format';
+  import {
+    netResult,
+    netColor,
+    chipValue,
+    formatAmount,
+    amountLabel
+  } from '../lib/utils/format';
   import { snapToStep } from '../lib/utils/bet';
   import { renderSVG } from 'uqr';
   import { groupEventsByHand, describeEvent, streetLabel } from '../lib/utils/ledger';
@@ -29,6 +35,11 @@
   // Rebuys are a fixed size — half the buy-in — so the menu is one confirm tap,
   // not an amount picker.
   const rebuyAmount = $derived(Math.floor((store?.session?.starting_stack ?? 1000) / 2));
+  // Dollars per chip when the host chose to play for money, null for a chip game.
+  // Every amount on this screen goes through m() so it reads as chips or as $ alike;
+  // the amounts themselves (sliders, presets, what gets written) are always chips.
+  const perChip = $derived(chipValue(store?.session));
+  const m = (chips: number) => formatAmount(chips, perChip);
   let showLeaveConfirm = $state(false);
   let showVoidConfirm = $state(false);
   let showResetConfirm = $state(false);
@@ -304,7 +315,7 @@
     const sb = store?.session?.small_blind ?? null;
     const bb = store?.session?.big_blind ?? null;
     if (bb !== null && prevBigBlind !== null && bb !== prevBigBlind) {
-      blindsToast = `blinds ${bb > prevBigBlind ? 'up' : 'down'} — now ${sb}/${bb}`;
+      blindsToast = `blinds ${bb > prevBigBlind ? 'up' : 'down'} — now ${m(sb ?? 0)}/${m(bb)}`;
       if (blindsToastTimer) clearTimeout(blindsToastTimer);
       blindsToastTimer = setTimeout(() => (blindsToast = null), 3500);
     }
@@ -798,7 +809,7 @@
           {:else}
             <div class="menu-sub">
               <button class="cbtn cbtn-primary cbtn-block" onclick={handleDoRebuy}>
-                Rebuy {rebuyAmount} chips
+                Rebuy {amountLabel(rebuyAmount, perChip)}
               </button>
               <button class="cbtn cbtn-small cbtn-block" onclick={() => (showRebuy = false)}
                 >Cancel</button
@@ -835,7 +846,7 @@
                   </button>
                 {/each}
               </div>
-              <p class="clabel">Amount — your stack is {s.me?.stack ?? 0}</p>
+              <p class="clabel">Amount — your stack is {m(s.me?.stack ?? 0)}</p>
               <div class="choices">
                 {#each [25, 50, 100, 250] as amount (amount)}
                   <button
@@ -844,7 +855,7 @@
                     onclick={() => (giveAmount = amount)}
                     disabled={amount > (s.me?.stack ?? 0)}
                   >
-                    {amount}
+                    {m(amount)}
                   </button>
                 {/each}
               </div>
@@ -875,7 +886,7 @@
                 onclick={handleGiveChips}
                 disabled={!giveTargetId || giveAmount <= 0 || giveAmount > (s.me?.stack ?? 0)}
               >
-                Give {giveAmount} to {giveTargets.find((p) => p.id === giveTargetId)
+                Give {m(giveAmount)} to {giveTargets.find((p) => p.id === giveTargetId)
                   ?.display_name ?? '…'}
               </button>
               <button class="cbtn cbtn-small cbtn-block" onclick={() => (showGive = false)}
@@ -963,7 +974,7 @@
                   {:else}
                     <div class="menu-sub">
                       <p class="menu-note">
-                        There are still {s.session?.pot} chips in the pot that no one claimed.
+                        There are still {amountLabel(s.session?.pot ?? 0, perChip)} in the pot that no one claimed.
                         Starting the next hand returns each player's bets and deals again.
                       </p>
                       <button
@@ -1104,7 +1115,7 @@
                     {@const targetName = event.target_player_id
                       ? s.players.find((p) => p.id === event.target_player_id)?.display_name
                       : undefined}
-                    <p class="ledger-line">{describeEvent(event, name, targetName)}</p>
+                    <p class="ledger-line">{describeEvent(event, name, targetName, m)}</p>
                   {/if}
                 {/each}
               </div>
@@ -1143,7 +1154,7 @@
                 }}
               >
                 <span class="sched-level">level {level.level}</span>
-                <span class="sched-blinds">{level.small_blind}/{level.big_blind}</span>
+                <span class="sched-blinds">{m(level.small_blind)}/{m(level.big_blind)}</span>
                 <span class="sched-mins"
                   >{level.duration_minutes > 0 ? `${level.duration_minutes}m` : ''}</span
                 >
@@ -1151,7 +1162,7 @@
             {:else}
               <div class="sched-row" class:current={isCurrent}>
                 <span class="sched-level">level {level.level}</span>
-                <span class="sched-blinds">{level.small_blind}/{level.big_blind}</span>
+                <span class="sched-blinds">{m(level.small_blind)}/{m(level.big_blind)}</span>
                 <span class="sched-mins"
                   >{level.duration_minutes > 0 ? `${level.duration_minutes}m` : ''}</span
                 >
@@ -1192,10 +1203,12 @@
               showSchedulePanel = true;
             }}
           >
-            blinds {s.session?.small_blind}/{s.session?.big_blind} ›
+            blinds {m(s.session?.small_blind ?? 0)}/{m(s.session?.big_blind ?? 0)} ›
           </button>
         {:else}
-          <p class="head-blinds">blinds {s.session?.small_blind}/{s.session?.big_blind}</p>
+          <p class="head-blinds">
+            blinds {m(s.session?.small_blind ?? 0)}/{m(s.session?.big_blind ?? 0)}
+          </p>
         {/if}
         {#if s.session?.current_actor_id}
           <p class="head-street">{s.session.street}</p>
@@ -1205,12 +1218,12 @@
         {#if (s.session?.current_bet ?? 0) > 0}
           <div class="head-stat">
             <p class="head-stat-label">bet</p>
-            <p class="head-stat-num">{s.session?.current_bet}</p>
+            <p class="head-stat-num">{m(s.session?.current_bet ?? 0)}</p>
           </div>
         {/if}
         <div class="head-stat">
           <p class="head-stat-label">pot</p>
-          <p class="head-stat-num">{s.session?.pot ?? 0}</p>
+          <p class="head-stat-num">{m(s.session?.pot ?? 0)}</p>
         </div>
         <button class="cstep" onclick={() => (showRankings = true)} aria-label="Hand rankings"
           >?</button
@@ -1272,7 +1285,7 @@
     {#if s.me?.is_host && s.chipImbalance !== 0}
       <div transition:fade={{ duration: 300 }} class="banner banner-imbalance">
         <p>
-          table is <strong>{Math.abs(s.chipImbalance)}</strong> chips
+          table is <strong>{amountLabel(Math.abs(s.chipImbalance), perChip)}</strong>
           {s.chipImbalance > 0 ? 'short' : 'over'} — check Activity, then tap who to
           {s.chipImbalance > 0 ? 'credit' : 'debit'}
         </p>
@@ -1361,7 +1374,7 @@
               {#if player.identity_id === $identityId}<span class="pill-plain pill">you</span>{/if}
             </div>
             <p class="player-net {netColor(player.stack, player.total_buyin)}">
-              {netResult(player.stack, player.total_buyin)} net
+              {netResult(player.stack, player.total_buyin, perChip)} net
             </p>
           </div>
           <div class="player-stack">
@@ -1369,12 +1382,12 @@
               <p class="stack-busted">busted</p>
             {:else if player.stack === 0 && !player.folded && player.is_active}
               <p class="stack-allin">
-                all in{player.current_round_bet > 0 ? ` · ${player.current_round_bet}` : ''}
+                all in{player.current_round_bet > 0 ? ` · ${m(player.current_round_bet)}` : ''}
               </p>
             {:else}
-              <p class="stack-num">{player.stack}</p>
+              <p class="stack-num">{m(player.stack)}</p>
               {#if player.current_round_bet > 0}
-                <p class="stack-in">in {player.current_round_bet}</p>
+                <p class="stack-in">in {m(player.current_round_bet)}</p>
               {/if}
             {/if}
           </div>
@@ -1452,7 +1465,7 @@
                 <!-- Calling for everything you have is an all-in, not a call for more
                      chips than you hold: name it that way and show the real number. -->
                 <button class="act act-check" onclick={handleCall} disabled={s.actionPending}>
-                  {callAmount >= s.me.stack ? `All in ${s.me.stack}` : `Call ${callAmount}`}
+                  {callAmount >= s.me.stack ? `All in ${m(s.me.stack)}` : `Call ${m(callAmount)}`}
                 </button>
               {:else}
                 <button class="act act-check" onclick={handleCheck} disabled={s.actionPending}
@@ -1547,7 +1560,7 @@
           {#if s.me?.is_host}
             <div class="award">
               <p class="award-label">everyone folded</p>
-              <p class="award-amount">{s.session?.pot} chips</p>
+              <p class="award-amount">{amountLabel(s.session?.pot ?? 0, perChip)}</p>
               <button
                 class="cbtn cbtn-primary cbtn-block"
                 onclick={async () => {
@@ -1581,7 +1594,7 @@
                       : 'best hand of the remaining players?'}
                   </p>
                 </div>
-                <p class="award-amount">{unawarded} chips</p>
+                <p class="award-amount">{amountLabel(unawarded, perChip)}</p>
                 <p class="clabel">tap the winner — or several for a tie</p>
                 <div class="btn-row wrap">
                   {#each s.players.filter((p) => nextPot.eligibleIds.includes(p.id)) as player (player.id)}
@@ -1602,8 +1615,8 @@
                     disabled={s.actionPending}
                   >
                     {awardPreview.names.length === 1
-                      ? `Award ${awardPreview.total} to ${awardPreview.names[0]}`
-                      : `Split ${awardPreview.total} — ${awardPreview.names.join(' & ')}`}
+                      ? `Award ${m(awardPreview.total)} to ${awardPreview.names[0]}`
+                      : `Split ${m(awardPreview.total)} — ${awardPreview.names.join(' & ')}`}
                   </button>
                 {/if}
               </div>
@@ -1705,8 +1718,8 @@
               {s.actionPending
                 ? 'Sending…'
                 : (s.session?.current_bet ?? 0) > 0
-                  ? `Raise to ${(s.me?.current_round_bet ?? 0) + betAmount}`
-                  : `Bet ${betAmount}`}
+                  ? `Raise to ${m((s.me?.current_round_bet ?? 0) + betAmount)}`
+                  : `Bet ${m(betAmount)}`}
             </button>
           </div>
         {/if}

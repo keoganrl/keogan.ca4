@@ -1,5 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { byNet, netResult, netColor } from './format';
+import { byNet, netResult, netColor, chipValue, formatAmount, amountLabel } from './format';
+import { describeEvent } from './ledger';
+import type { GameEvent } from '../types';
+
+describe('money formatting', () => {
+  const session = (money_buyin: number | string | null) => ({ money_buyin, starting_stack: 1000 });
+
+  it('is off unless a positive buy-in is set', () => {
+    expect(chipValue(session(null))).toBeNull();
+    expect(chipValue(session(0))).toBeNull();
+    expect(chipValue({ starting_stack: 1000 })).toBeNull();
+    expect(chipValue(null)).toBeNull();
+  });
+
+  it('reads numeric columns that arrive as strings', () => {
+    expect(chipValue(session('20.00'))).toBeCloseTo(0.02);
+  });
+
+  it('shows bare chips when playing for chips', () => {
+    expect(formatAmount(250, null)).toBe('250');
+    expect(amountLabel(500, null)).toBe('500 chips');
+    expect(netResult(1200, 1000)).toBe('+200');
+  });
+
+  it('shows dollars, dropping cents only on whole amounts', () => {
+    const v = chipValue(session(20));
+    expect(formatAmount(1000, v)).toBe('$20');
+    expect(formatAmount(5, v)).toBe('$0.10');
+    expect(formatAmount(1234, v)).toBe('$24.68');
+    expect(formatAmount(0, v)).toBe('$0');
+    expect(amountLabel(500, v)).toBe('$10');
+    expect(formatAmount(100000, v)).toBe('$2,000');
+  });
+
+  it('signs net results', () => {
+    const v = chipValue(session(20));
+    expect(netResult(1260, 1000, v)).toBe('+$5.20');
+    expect(netResult(750, 1000, v)).toBe('-$5');
+    expect(netResult(1000, 1000, v)).toBe('+$0');
+  });
+
+  it('formats log lines in money', () => {
+    const v = chipValue(session(20));
+    const fmt = (n: number) => formatAmount(n, v);
+    const raise = { type: 'raise', amount: 40 } as GameEvent;
+    expect(describeEvent(raise, 'Vani', undefined, fmt)).toBe('Vani raises to $0.80');
+    expect(describeEvent(raise, 'Vani')).toBe('Vani raises to 40');
+    const debit = { type: 'adjust', amount: -50 } as GameEvent;
+    expect(describeEvent(debit, 'Vani', undefined, fmt)).toBe(
+      'Vani was debited $1 (host correction)'
+    );
+  });
+});
 
 const p = (display_name: string, stack: number, total_buyin: number) => ({
   display_name,

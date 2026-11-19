@@ -292,6 +292,19 @@ describe('the happy path', () => {
     const content = calls.model[0].messages[0].content;
     expect(content).toContain('Ada');
     expect(content).toContain('calls a lot');
+    expect(content).toContain('"net": 200');
+    expect(content).not.toContain('dollars');
+  });
+
+  it('hands over dollars when the session was played for money', async () => {
+    // Ada bought in 100 chips and finished 300; at $20 per 1000 chips that is $2 → $6.
+    state.session = { ...state.session, money_buyin: '20.00', starting_stack: 1000 };
+    await handler(req(), res());
+    const content = calls.model[0].messages[0].content;
+    expect(content).toContain('dollars');
+    expect(content).toContain('"bought_in": "$2"');
+    expect(content).toContain('"finished": "$6"');
+    expect(content).toContain('"net": "$4"');
   });
 });
 

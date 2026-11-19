@@ -52,6 +52,12 @@ export interface Session {
 	// anyone's generated profile, and deletion after five days. Everything that keys
 	// off single-vs-series play reads this one field.
 	series_id: string | null;
+	// What the whole starting_stack is worth in dollars when the host chose to play
+	// for money, or null/undefined when playing for chips. Display only: every amount
+	// is still stored and played in chips, and shown at money_buyin / starting_stack
+	// dollars per chip (see chipValue in utils/format.ts). Optional because databases
+	// that predate supabase/2026-11-19-money.sql hand back undefined.
+	money_buyin?: number | string | null;
 	created_at: string;
 }
 

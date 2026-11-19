@@ -56,13 +56,26 @@ export function streetLabel(street: string | null): string {
  * An action that emptied the player's stack picks up an "— all in" tail rather than a
  * line of its own, so the ledger stays one line per thing that happened at the table.
  */
-export function describeEvent(event: GameEvent, name: string, targetName?: string): string {
-	const line = describeAction(event, name, targetName);
+export function describeEvent(
+	event: GameEvent,
+	name: string,
+	targetName?: string,
+	fmt: (chips: number) => string = String
+): string {
+	const line = describeAction(event, name, targetName, fmt);
 	return line && event.all_in ? `${line} — all in` : line;
 }
 
-function describeAction(event: GameEvent, name: string, targetName?: string): string {
-	const amt = event.amount ?? 0;
+function describeAction(
+	event: GameEvent,
+	name: string,
+	targetName: string | undefined,
+	fmt: (chips: number) => string
+): string {
+	const raw = event.amount ?? 0;
+	// Formatted once here (bare chips, or $ when playing for money) so no line can
+	// forget to. The adjust line is the only one that reads the sign off the raw number.
+	const amt = fmt(raw);
 	switch (event.type) {
 		case 'post_sb':
 			return `${name} posts small blind (${amt})`;
@@ -85,9 +98,9 @@ function describeAction(event: GameEvent, name: string, targetName?: string): st
 		case 'give':
 			return `${name} gives ${amt} to ${targetName ?? 'someone'}`;
 		case 'adjust':
-			return amt >= 0
+			return raw >= 0
 				? `${name} was credited ${amt} (host correction)`
-				: `${name} was debited ${-amt} (host correction)`;
+				: `${name} was debited ${fmt(-raw)} (host correction)`;
 		case 'join':
 			return `${name} joined`;
 		case 'leave':

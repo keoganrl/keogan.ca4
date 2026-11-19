@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { go } from '../lib/nav';
   import { supabase } from '../lib/supabase';
-  import { byNet, netResult, netColor } from '../lib/utils/format';
+  import { byNet, netResult, netColor, chipValue, formatAmount } from '../lib/utils/format';
   import { pollForRecap } from '../lib/utils/recapPolling';
   import { openRecapRelay, subscribeToRecap } from '../lib/utils/recapRelay';
   import { getSeriesForSession } from '../lib/services/series';
@@ -24,6 +24,12 @@
   // The recap is written either way — a one-off session is still a session, and the
   // paragraph is about the game that just finished rather than about any standings.
   let series = $state<{ id: string; name: string } | null>(null);
+
+  // Dollars per chip if this was a money game, null for chips. Read from the session
+  // row; `select('*')` rather than naming money_buyin so a database that predates the
+  // column still loads the results (in chips, which is what every such game was).
+  let perChip = $state<number | null>(null);
+  const m = (chips: number) => formatAmount(chips, perChip);
 
   async function streamRecap(id: string) {
     try {
@@ -126,10 +132,12 @@
 
     // Fetched together rather than in sequence: the results and the Leaderboard
     // button want to appear at the same moment, and neither should wait on the other.
-    const [{ data }, seriesRow] = await Promise.all([
+    const [{ data }, seriesRow, { data: sessionRow }] = await Promise.all([
       supabase.from('players').select('*').eq('session_id', sessionId).order('seat_order'),
-      getSeriesForSession(sessionId).catch(() => null)
+      getSeriesForSession(sessionId).catch(() => null),
+      supabase.from('sessions').select('*').eq('id', sessionId).maybeSingle()
     ]);
+    perChip = chipValue(sessionRow);
 
     // Ranked by NET, not by final stack: a rebuy makes the two disagree, and the
     // number in the right-hand column is the net — so ordering by stack put someone
@@ -175,10 +183,10 @@
           <span class="rank">{i + 1}</span>
           <span class="who">
             <span class="who-name">{player.display_name}</span>
-            <span class="who-detail">bought in {player.total_buyin} · finished {player.stack}</span>
+            <span class="who-detail">bought in {m(player.total_buyin)} · finished {m(player.stack)}</span>
           </span>
           <span class="net {netColor(player.stack, player.total_buyin)}">
-            {netResult(player.stack, player.total_buyin)}
+            {netResult(player.stack, player.total_buyin, perChip)}
           </span>
         </li>
       {/each}

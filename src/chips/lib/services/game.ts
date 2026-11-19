@@ -44,7 +44,8 @@ export async function startSession(
 	gameMode: GameMode = 'cash',
 	blindSchedule: BlindLevel[] = [],
 	autoEscalate = true,
-	seriesId: string | null = null
+	seriesId: string | null = null,
+	moneyBuyIn: number | null = null
 ): Promise<void> {
 	const blindLevelStartedAt =
 		gameMode === 'tournament' && blindSchedule.length > 0 ? new Date().toISOString() : null;
@@ -65,7 +66,12 @@ export async function startSession(
 		// series game as a single one would leave it off the leaderboard and delete
 		// it five days later. If the host could pick a series, the column exists —
 		// the setup screen only offers series it read from the series table.
-		...(seriesId ? { series_id: seriesId } : {})
+		...(seriesId ? { series_id: seriesId } : {}),
+		// Same reasoning: only named when the host switched money on, so a chip game
+		// never needs supabase/2026-11-19-money.sql, and never dropped by the retry,
+		// because a money game that silently started in chips would misprice every
+		// number on everyone's screen.
+		...(moneyBuyIn ? { money_buyin: moneyBuyIn } : {})
 	};
 
 	let { error: sessionError } = await supabase
@@ -81,7 +87,13 @@ export async function startSession(
 			.update(settings)
 			.eq('id', sessionId));
 	}
-	if (sessionError) throw new Error('Failed to update session');
+	if (sessionError) {
+		throw new Error(
+			moneyBuyIn
+				? 'Failed to start a money game. Has supabase/2026-11-19-money.sql been run?'
+				: 'Failed to update session'
+		);
+	}
 
 	const { data: playerData, error: playerError } = await supabase
 		.from('players')

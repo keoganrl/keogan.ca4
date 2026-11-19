@@ -97,6 +97,11 @@ create table sessions (
   --   alter table sessions add column series_id uuid references series(id) on delete set null;
   --   create index sessions_series_idx on sessions (series_id);
   series_id uuid references series(id) on delete set null,
+  -- Dollars the whole starting_stack is worth when playing for money; NULL when
+  -- playing for chips. Display only (see supabase/2026-11-19-money.sql).
+  --
+  -- Added 2026-11: existing databases need supabase/2026-11-19-money.sql
+  money_buyin numeric(10, 2) check (money_buyin is null or money_buyin > 0),
   created_at timestamptz not null default now()
 );
 

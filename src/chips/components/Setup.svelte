@@ -9,6 +9,7 @@
     generateCashEscalationSchedule,
     type CashSessionLength
   } from '../lib/utils/blindSchedule';
+  import { chipValue, formatAmount } from '../lib/utils/format';
   import type { Series } from '../lib/types';
 
   // Every game is a 1000-chip cash game — no per-game stack choice.
@@ -39,6 +40,33 @@
   // What 'DW' would become if they made it now. Shown live under the input so the
   // month half is never a surprise — the players pick the prefix, the calendar
   // picks the rest.
+  // Playing for money: off by default. On, the host names what the whole 1000-chip
+  // buy-in is worth and every number in the game is shown in dollars at that rate.
+  // Play itself is untouched: the stack is still 1000 chips and the blinds are still
+  // picked from it, so the stake changes what the numbers SAY, never what they are.
+  const MONEY_PRESETS = [5, 10, 20, 50] as const;
+  const MAX_MONEY = 10000;
+  let playForMoney = $state(false);
+  let moneyBuyIn = $state<number>(20);
+  // The custom field keeps its own string so a half-typed "1." is not fought over.
+  let customMoney = $state('');
+  const moneyValid = $derived(
+    Number.isFinite(moneyBuyIn) && moneyBuyIn > 0 && moneyBuyIn <= MAX_MONEY
+  );
+  const perChip = $derived(
+    playForMoney && moneyValid
+      ? chipValue({ money_buyin: moneyBuyIn, starting_stack: BUY_IN })
+      : null
+  );
+  const fmt = (chips: number) => formatAmount(chips, perChip);
+
+  function setCustomMoney(raw: string) {
+    customMoney = raw;
+    const cleaned = raw.replace(/[$,\s]/g, '');
+    // Whole cents at most: anything finer cannot be paid at a table.
+    moneyBuyIn = cleaned === '' ? NaN : Math.round(Number(cleaned) * 100) / 100;
+  }
+
   const previewName = $derived(isValidPrefix(prefix) ? buildSeriesName(prefix) : '');
 
   // Escalation defaults OPPOSITE ways depending on mode: on for a single session
@@ -102,7 +130,7 @@
   // host picking a series game sees the number that matters to a poker table.
   function blindsFor(mins: CashSessionLength): string {
     const [level] = generateCashEscalationSchedule(BUY_IN, mins);
-    return `${level.small_blind}/${level.big_blind}`;
+    return `${fmt(level.small_blind)}/${fmt(level.big_blind)}`;
   }
 
   onMount(async () => {
@@ -132,6 +160,12 @@
       return;
     }
 
+    if (playForMoney && !moneyValid) {
+      errorMsg = `Enter a buy-in between $0.01 and $${MAX_MONEY.toLocaleString('en-CA')}.`;
+      loading = false;
+      return;
+    }
+
     await saveIdentity(name.trim());
 
     try {
@@ -145,7 +179,8 @@
         'cash',
         schedule,
         autoEscalate,
-        mode === 'series' ? selectedSeriesId : null
+        mode === 'series' ? selectedSeriesId : null,
+        playForMoney ? moneyBuyIn : null
       );
       go(`/table?session=${sessionId}`);
     } catch (e) {
@@ -236,6 +271,55 @@
             + New series
           </button>
         {/if}
+      </div>
+    {/if}
+  </div>
+
+  <!-- Money or chips. Above the blinds because it changes how every number reads,
+       including the starting blinds on the buttons below. -->
+  <div class="group">
+    <label class="cswitch">
+      <input type="checkbox" bind:checked={playForMoney} />
+      <span class="track" aria-hidden="true"></span>
+      Play for money
+    </label>
+
+    {#if playForMoney}
+      <div class="subgroup">
+        <span class="clabel">Buy-in</span>
+        <div class="choices">
+          {#each MONEY_PRESETS as amount (amount)}
+            <button
+              class="cchoice grow"
+              class:active={moneyBuyIn === amount && customMoney === ''}
+              onclick={() => {
+                moneyBuyIn = amount;
+                customMoney = '';
+              }}>${amount}</button
+            >
+          {/each}
+          <label class="money-field">
+            <span aria-hidden="true">$</span>
+            <input
+              class="cinput"
+              value={customMoney}
+              oninput={(e) => setCustomMoney(e.currentTarget.value)}
+              placeholder="other"
+              inputmode="decimal"
+              autocomplete="off"
+              aria-label="Custom buy-in in dollars"
+            />
+          </label>
+        </div>
+        <p class="cnote type-note">
+          {#if perChip !== null}
+            Everyone buys in for {fmt(BUY_IN)}. Blinds start at {fmt(startingSmallBlind)}/{fmt(
+              startingBigBlind
+            )}.
+          {:else}
+            Enter a dollar amount.
+          {/if}
+        </p>
       </div>
     {/if}
   </div>
@@ -335,6 +419,22 @@
   }
   .prefix-input::placeholder {
     letter-spacing: 0.3em;
+  }
+
+  /* Sits at the end of the preset row and takes whatever width the buttons leave. */
+  .money-field {
+    flex: 1;
+    min-width: 5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    color: var(--ink-soft);
+  }
+  .money-field input {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    text-align: center;
   }
 
   .ghost {

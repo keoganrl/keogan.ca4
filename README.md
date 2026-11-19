@@ -43,6 +43,10 @@ which creates tables unguarded and is an install script rather than a migration.
    which is what the five-day purge in `api/keep-alive.js` looks for. A fresh
    install gets all of this from `chips-schema.sql` and should skip this file.
 
+7. `supabase/2026-11-19-money.sql` — `sessions.money_buyin`, for playing for money.
+   Chip games never touch it, so the code can ship first; the first money game
+   against a database without it fails to start, with a message naming this file.
+
 Optional, and only after setting `SUPABASE_SERVICE_ROLE_KEY` in Vercel:
 `supabase/lock-down-generated-text.sql` makes the profile and recap tables
 read-only to the browser. See CLAUDE.md.
@@ -100,6 +104,19 @@ them at the source means a scheduled delete cannot move anybody's numbers.
 The five-day purge lives in `api/keep-alive.js` and ships **switched off**: without
 `PURGE_ENABLED=1` it logs exactly what it would delete and stops. Leave it that way
 for a week of cron runs, read the ids, then enable it.
+
+### Playing for money
+
+The setup screen has a **Play for money** switch. On, the host picks what the
+1000-chip buy-in is worth ($5 / $10 / $20 / $50 or any amount), and every figure in
+that game reads in dollars at that rate: stacks, pot, blinds, bets, give/rebuy, the
+activity log, the game-over screen and the recap.
+
+It is display only. Play still happens in whole chips, so blinds, min-raises, the
+ledger and chip conservation are untouched, and `player_stats` never sees it. A stake
+that is not a whole number of cents per chip ($15 is 1.5¢) rounds each figure to the
+cent, so $0.375 shows as $0.38. The leaderboard stays in chips: a series can mix
+stakes, and summing their dollars would mean nothing.
 
 ### Sessions nobody ended
 

@@ -52,7 +52,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [session] = await json(`sessions?select=id,status,series_id&id=eq.${sessionId}`);
+    // select=* rather than naming money_buyin, so a database that predates
+    // supabase/2026-11-19-money.sql still answers (and every game there was in chips).
+    const [session] = await json(`sessions?select=*&id=eq.${sessionId}`);
     if (!session) return res.status(404).json({ error: 'no such session' });
     if (session.status !== 'ended') {
       return res.status(409).json({ error: 'session has not ended' });
@@ -123,16 +125,33 @@ export default async function handler(req, res) {
       json('player_profiles?select=identity_id,profile'),
     ]);
 
+    // A money game shows everyone dollars, so the recap has to say dollars too: a
+    // paragraph about "+260" read over a screen that says "+$5.20" sounds wrong. The
+    // figures are converted here, in the data, so the prompt itself stays the same one
+    // the prompt lab runs. Same formula as chipValue in src/chips/lib/utils/format.ts.
+    const money = Number(session.money_buyin ?? 0);
+    const perChip = money > 0 && session.starting_stack > 0 ? money / session.starting_stack : null;
+    const shown = (chips) => {
+      if (perChip === null) return chips;
+      const dollars = Math.round(Math.abs(chips) * perChip * 100) / 100;
+      const body = dollars % 1 === 0 ? `${dollars}` : dollars.toFixed(2);
+      return `${chips < 0 ? '-' : ''}$${body}`;
+    };
+
     const profileOf = new Map(profiles.map((p) => [p.identity_id, p.profile]));
     const played = players
+      .sort((a, b) => b.stack - b.total_buyin - (a.stack - a.total_buyin))
       .map((p) => ({
         name: p.display_name,
-        bought_in: p.total_buyin,
-        finished: p.stack,
-        net: p.stack - p.total_buyin,
+        bought_in: shown(p.total_buyin),
+        finished: shown(p.stack),
+        net: shown(p.stack - p.total_buyin),
         profile: profileOf.get(p.identity_id) ?? null,
-      }))
-      .sort((a, b) => b.net - a.net);
+      }));
+    const stakes =
+      perChip === null
+        ? ''
+        : ' They played for real money, so the amounts are dollars: say dollars, not chips.';
 
     const client = new Anthropic();
     let text = '';
@@ -153,7 +172,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: 'user',
-          content: `Results for the session that just finished, best to worst:\n\n${JSON.stringify(played, null, 2)}`,
+          content: `Results for the session that just finished, best to worst.${stakes}\n\n${JSON.stringify(played, null, 2)}`,
         },
       ],
     });
