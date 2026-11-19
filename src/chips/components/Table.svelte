@@ -1754,7 +1754,8 @@
     color: var(--ink);
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
+    corner-shape: var(--corner);
     box-shadow: 0 12px 40px var(--shadow-strong);
     padding: 1.5rem 2.75rem;
   }
@@ -1911,7 +1912,8 @@
     background: var(--rainbow);
     background-size: 200% 100%;
     color: #fff;
-    border-radius: 1rem;
+    border-radius: var(--radius-md);
+    corner-shape: var(--corner);
     padding: 0.8rem 1rem;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     animation:
@@ -2020,7 +2022,8 @@
   .banner-wait { color: var(--faint); }
   .banner-imbalance {
     border: 1px solid var(--down);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    corner-shape: var(--corner);
     padding: 0.6rem 0.75rem;
     display: flex;
     flex-direction: column;
@@ -2156,7 +2159,8 @@
     width: 1.6rem;
     height: 2.2rem;
     border: 1px solid var(--rule);
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
+    corner-shape: var(--corner);
   }
   .card-slot.dealt {
     background: var(--rule);
@@ -2262,7 +2266,8 @@
        break the scan. */
     background: #fff;
     border: 1px solid var(--hairline);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
+    corner-shape: var(--corner);
     padding: 0.75rem;
     width: 100%;
     max-width: 15rem;

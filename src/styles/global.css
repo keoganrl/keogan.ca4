@@ -71,6 +71,38 @@
   color-scheme: light;
 }
 
+/* ---- Corner radii ----------------------------------------------------------
+   Same names and values in global.css and chips.css, like the colour tokens.
+   Never write a radius literal: use a token, and pair it with
+   `corner-shape: var(--corner)`.
+
+   Radius follows the element's size, never the screen: xs for things a few
+   pixels across, sm for rows and banners, md for tiles and cards, lg for article
+   images and modals. Pills stay 2rem and round (true semicircles, like Apple's
+   capsules), circles stay 50%, inputs stay square.
+
+   Where `corner-shape: squircle` is supported, every token grows 1.8x. A squircle
+   at the same radius cuts much less deeply into the corner (along the diagonal it
+   reaches 2^-1/4 of the way vs 2^-1/2 for an arc), and 1.8x is what makes the two
+   look equally rounded (exact match ~1.84). So the round values here are the
+   design, and they are what iOS Safari shows until it ships corner-shape. */
+:root {
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --corner: round;
+}
+@supports (corner-shape: squircle) {
+  :root {
+    --radius-xs: calc(3px * 1.8);
+    --radius-sm: calc(6px * 1.8);
+    --radius-md: calc(10px * 1.8);
+    --radius-lg: calc(14px * 1.8);
+    --corner: squircle;
+  }
+}
+
 /* Dark mode, on phones only. Follows the OS setting with no toggle, like
    /chips. Gated on a touch-only pointer rather than width so a narrow desktop
    window never goes dark: desktop has no dark mode at all.
@@ -188,7 +220,8 @@ select {
 }
 
 .images > div {
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  corner-shape: var(--corner);
   overflow: hidden;
   min-height: 0;
   height: 100%;
@@ -359,7 +392,7 @@ select {
 }
 
 .article-body p { margin: 0 0 1.25rem; }
-.article-body img { width: 100%; height: auto; display: block; border-radius: 4px; margin: 1.5rem 0; }
+.article-body img { width: 100%; height: auto; display: block; border-radius: var(--radius-lg); corner-shape: var(--corner); margin: 1.5rem 0; }
 .article-body figure { margin: 1.5rem 0; }
 .article-body figure img { margin: 0; }
 .article-body figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: var(--faint); }

@@ -295,6 +295,22 @@ written from its own hands alone. Carrying the old blurb over meant the first re
 was handed it as `current_profile` and wrote towards it (confirmation bias). The text
 lives on in the archive and the raw dump.
 
+## Corner radii
+
+Four tokens, `--radius-xs/sm/md/lg` (3 / 6 / 10 / 14px), defined identically in
+`global.css` and `chips.css`, sized by the element and never by the screen.
+Every rounded rectangle uses one of them **plus `corner-shape: var(--corner)`**.
+Where `corner-shape: squircle` is supported, one `@supports` block scales every
+token by 1.8 and sets `--corner: squircle`: a squircle at the same radius looks
+much tighter, and 1.8x is what makes it read as equally rounded. The round values
+are the real design, since iOS Safari has no `corner-shape` yet and shows them.
+
+The only radius literals allowed: `2rem` pills (kept round, like Apple's capsules —
+never give a pill `var(--corner)`, a squircled pill gets flat shoulders), `50%`
+circles (same reason), `0` on inputs, and three decorations too small to matter
+(the 1px confetti, the 2px home divider, the 4px slash icon). A new rounded box
+takes a token.
+
 ## Dark mode
 
 The main site (`global.css`) has its own dark mode, **phones only**: its token block

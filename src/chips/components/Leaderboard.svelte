@@ -582,12 +582,14 @@
   .row-btn:focus-visible {
     outline: 2px solid var(--rule);
     outline-offset: 3px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
+    corner-shape: var(--corner);
   }
 
   .board-row.lit {
     background: var(--hairline);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    corner-shape: var(--corner);
   }
 
   /* The blurb is a subtitle for the selected tab, so it sits just under the tabs —
@@ -640,7 +642,8 @@
   .board-row.selected {
     background: var(--hairline);
     outline: 1px solid var(--rule);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
+    corner-shape: var(--corner);
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }

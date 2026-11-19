@@ -122,6 +122,38 @@
   color-scheme: light;
 }
 
+/* ---- Corner radii ----------------------------------------------------------
+   Same names and values in global.css and chips.css, like the colour tokens.
+   Never write a radius literal: use a token, and pair it with
+   `corner-shape: var(--corner)`.
+
+   Radius follows the element's size, never the screen: xs for things a few
+   pixels across, sm for rows and banners, md for tiles and cards, lg for article
+   images and modals. Pills stay 2rem and round (true semicircles, like Apple's
+   capsules), circles stay 50%, inputs stay square.
+
+   Where `corner-shape: squircle` is supported, every token grows 1.8x. A squircle
+   at the same radius cuts much less deeply into the corner (along the diagonal it
+   reaches 2^-1/4 of the way vs 2^-1/2 for an arc), and 1.8x is what makes the two
+   look equally rounded (exact match ~1.84). So the round values here are the
+   design, and they are what iOS Safari shows until it ships corner-shape. */
+:root {
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --corner: round;
+}
+@supports (corner-shape: squircle) {
+  :root {
+    --radius-xs: calc(3px * 1.8);
+    --radius-sm: calc(6px * 1.8);
+    --radius-md: calc(10px * 1.8);
+    --radius-lg: calc(14px * 1.8);
+    --corner: squircle;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Dark mode — the same room with the lamp off.                        */
 /*                                                                     */
@@ -522,7 +554,8 @@ body.chips input[type='range'] { accent-color: var(--ink); }
   overflow-y: auto;
   background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner);
   box-shadow: 0 12px 40px var(--shadow-strong);
   padding: 1.5rem;
   z-index: 50;
