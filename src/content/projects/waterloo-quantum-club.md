@@ -5,7 +5,7 @@ date: 2025-05-01
 tags: [quantum]
 summary: "Co-founded UW's first quantum computing club with four other students."
 cover:
-  src: /images/QuantumClub.jpg
+  src: ../../assets/images/QuantumClub.jpg
   alt: "Selfie from the front of an Intro to Quantum Computing lecture at the Waterloo Quantum Club"
   mobilePosition: 22% 50%
 ---

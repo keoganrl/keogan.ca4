@@ -1,5 +1,42 @@
 ---
+import { Image, Picture } from 'astro:assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import canoe from '../assets/images/canoe.jpg';
+import portrait from '../assets/images/portrait.jpg';
+import drawing from '../assets/images/GenesisCoupeDrawing.jpeg';
+import linkedin from '../assets/images/linkedin.png';
+import mail from '../assets/images/mail.png';
+
+// The edition mark beside the name. Hardcoded: it dates this version of the
+// site, so it changes when the site does, not when the calendar does.
+const YEAR = '2026';
+
+// One set of image props for both layouts, so the desktop and mobile copies
+// share a single srcset (and so a single download).
+const canoeProps = {
+  src: canoe,
+  alt: 'Canoe on still water',
+  formats: ['avif', 'webp'],
+  widths: [560, 1080, 1600],
+  sizes: '(min-width: 1100px) min(560px, 40vw), 66vw',
+  loading: 'eager',
+} as const;
+const drawingProps = {
+  src: drawing,
+  alt: 'Graphite drawing of a Genesis Coupe',
+  formats: ['avif', 'webp'],
+  widths: [560, 1080],
+  sizes: '(min-width: 1100px) min(560px, 40vw), 66vw',
+  loading: 'lazy',
+} as const;
+const portraitProps = {
+  src: portrait,
+  alt: 'Portrait of Keogan Larade',
+  formats: ['avif', 'webp'],
+  widths: [300, 600],
+  sizes: '(min-width: 1100px) 280px, 33vw',
+  loading: 'eager',
+} as const;
 ---
 
 <BaseLayout
@@ -30,23 +67,25 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </ul>
       <div class="home-social">
         <a href="https://www.linkedin.com/in/keoganlarade/" target="_blank" rel="noopener">
-          <img src="/images/linkedin.png" alt="LinkedIn" />
+          <Image src={linkedin} width={72} sizes="32px" alt="LinkedIn" />
         </a>
         <a href="mailto:keog@nlara.de">
-          <img src="/images/mail.png" alt="Email" />
+          <Image src={mail} width={72} sizes="32px" alt="Email" />
         </a>
       </div>
     </aside>
-    <div class="home-divider"></div>
     <main class="home-main">
       <div class="home-content">
-        <h1 class="name home-name" transition:name="page-heading">Keogan Larade</h1>
+        <h1 class="name home-name">Keogan Larade<span class="name-year" aria-hidden="true">{YEAR}</span></h1>
         <p class="blurb">
           Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
         </p>
         <div class="images home-images">
-          <div class="left"><img src="/images/canoe.jpg" alt="Canoe on still water" /></div>
-          <div class="right"><img src="/images/portrait.jpg" alt="Portrait of Keogan Larade" /></div>
+          <button class="left flip" type="button" aria-pressed="false" aria-label="Swap the canoe photo for one of my graphite drawings">
+            <Picture {...canoeProps} alt="" />
+            <Picture {...drawingProps} alt="" class="flip-drawing" />
+          </button>
+          <div class="right"><Picture {...portraitProps} /></div>
         </div>
       </div>
     </main>
@@ -54,13 +93,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
   <div class="home-mobile">
     <div class="home-fold">
-      <h1 class="name">Keogan Larade</h1>
+      <h1 class="name">Keogan Larade<span class="name-year" aria-hidden="true">{YEAR}</span></h1>
       <p class="blurb">
         Nanotech engineering at Waterloo, superconducting circuit design at D-Wave. Hobby pianist and graphite artist.
       </p>
       <div class="images">
-        <div class="left"><img src="/images/canoe.jpg" alt="Canoe on still water" /></div>
-        <div class="right"><img src="/images/portrait.jpg" alt="Portrait of Keogan Larade" /></div>
+        <button class="left flip" type="button" aria-pressed="false" aria-label="Swap the canoe photo for one of my graphite drawings">
+          <Picture {...canoeProps} alt="" />
+          <Picture {...drawingProps} alt="" class="flip-drawing" />
+        </button>
+        <div class="right"><Picture {...portraitProps} /></div>
       </div>
       <section class="directory">
         <h2>Directory</h2>
@@ -73,10 +115,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     </div>
     <footer class="footer">
       <a href="https://www.linkedin.com/in/keoganlarade/" target="_blank" rel="noopener">
-        <img class="footer-logo" src="/images/linkedin.png" alt="LinkedIn" />
+        <Image class="footer-logo" src={linkedin} width={72} sizes="32px" alt="LinkedIn" />
       </a>
       <a href="mailto:keog@nlara.de">
-        <img class="footer-logo" src="/images/mail.png" alt="Email" />
+        <Image class="footer-logo" src={mail} width={72} sizes="32px" alt="Email" />
       </a>
     </footer>
   </div>
@@ -84,6 +126,66 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
 <style>
   .home-desktop { display: none; }
+
+  /* ---- 2026 ----------------------------------------------------------------
+     An edition mark on the name's baseline, in the faint grey. Sized against
+     the name, so it scales with it at every breakpoint. */
+  .name-year {
+    font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif;
+    font-weight: 400;
+    font-size: 0.42em;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    color: var(--faint);
+    margin-left: 0.6em;
+    white-space: nowrap;
+  }
+
+  /* ---- Canoe → drawing -----------------------------------------------------
+     The canoe photo is a button: hover (fine pointers), keyboard focus or a tap
+     crossfades it into a graphite drawing. The drawing is lazy, so it costs
+     nothing until the photo is near the viewport, which on this page is
+     immediately; it is ~40 KB. */
+  .flip {
+    /* Button reset, without touching the flex/radius/overflow that .images
+       gives its children. */
+    appearance: none;
+    background: none;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    display: block;
+    position: relative;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .flip :global(picture) { display: contents; }
+  .flip :global(.flip-drawing) {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    filter: grayscale(1);
+    object-position: 50% 58%;
+    transition: opacity 1s ease;
+  }
+  .flip[aria-pressed='true'] :global(.flip-drawing),
+  .flip:focus-visible :global(.flip-drawing) {
+    opacity: 1;
+    transition: opacity 0.45s ease;
+  }
+  /* :focus-visible's outline would be clipped by .images' overflow, so the
+     ring is drawn inside the frame instead. */
+  .flip:focus-visible { outline: none; }
+  .flip:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 2px var(--ink);
+    pointer-events: none;
+  }
 
   /* ---- Mobile / tablet: fit items 1–5 to the viewport ----------------------
      The fold (name → blurb → images → directory) is one flex column as tall as
@@ -135,32 +237,51 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     .home-mobile > .footer { margin-top: clamp(6rem, 21svh, 13rem); }
   }
 
+  /* ---- Desktop: rail | content ---------------------------------------------
+     One grid row as tall as the content (name → photos), centred in the
+     viewport. The rail stretches to that row, so its directory starts at the
+     name and its icons end at the photos' bottom edge, and the divider is the
+     rail's right border extended by --split-pad above and below. Pure CSS: this
+     used to be measured in JavaScript on every resize. */
   @media (min-width: 1100px) {
     .home-mobile { display: none; }
 
     .home-desktop {
-      position: relative;
-      display: flex;
+      --split-pad: calc(22px + max(0px, 100vh - 700px) * 0.1);
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-content: center;
       min-height: 100vh;
+      /* 6vh each way, with the row lifted 1.5vh off true centre. */
+      padding-block: 4.5vh 7.5vh;
     }
 
     .home-rail {
-      flex-shrink: 0;
-      position: sticky;
-      top: 0;
-      height: 100vh;
+      position: relative;
       box-sizing: border-box;
-      padding: 0 clamp(1.5rem, 4vw, 4rem) 0 0;
+      width: calc(38.667vw - 227.33px);
+      padding: 14px clamp(1.5rem, 4vw, 4rem) 0 0;
       display: flex;
       flex-direction: column;
-      width: calc(38.667vw - 227.33px);
+      align-items: flex-end;
+    }
+
+    .home-rail::after {
+      content: '';
+      position: absolute;
+      top: calc(-1 * var(--split-pad));
+      bottom: calc(-1 * var(--split-pad));
+      left: 100%;
+      width: 2px;
+      background: var(--hairline);
+      border-radius: 2px;
+      pointer-events: none;
     }
 
     .home-directory {
       list-style: none;
       padding: 0;
       margin: 0;
-      align-self: flex-end;
       display: flex;
       flex-direction: column;
       gap: clamp(1rem, 1.4vh, 2rem);
@@ -193,7 +314,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     .home-social {
       margin-top: auto;
-      align-self: flex-end;
       display: flex;
       align-items: center;
       gap: 1rem;
@@ -209,36 +329,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       height: 1.8em;
       object-fit: contain;
       opacity: 0.75;
+      filter: var(--icon-filter);
       display: block;
       transition: transform 1s ease;
     }
 
-    .home-divider {
-      position: absolute;
-      width: 2px;
-      background: var(--hairline);
-      border-radius: 2px;
-      pointer-events: none;
-      top: 0;
-      left: 0;
-      height: 100vh;
-    }
-
     .home-main {
-      flex: 1;
       min-width: 0;
-      padding: 6vh clamp(1.5rem, 4vw, 4rem);
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: flex-start;
+      padding-inline: clamp(1.5rem, 4vw, 4rem);
     }
 
     .home-content {
       max-width: min(820px, 600px + 15vw);
       width: 100%;
-      transform: translateY(-1.5vh);
     }
 
     .home-name {
@@ -268,44 +371,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       transform: scale(1.2);
       transition: transform 0.27s ease;
     }
+    .flip:hover :global(.flip-drawing) {
+      opacity: 1;
+      transition: opacity 0.45s ease;
+    }
   }
 </style>
 
 <script>
-  function measureHomeSplit() {
-    const rail = document.querySelector<HTMLElement>('.home-rail');
-    const divider = document.querySelector<HTMLElement>('.home-divider');
-    const name = document.querySelector<HTMLElement>('.home-name');
-    const images = document.querySelector<HTMLElement>('.home-images');
-    if (!rail || !divider || !name || !images) return;
-    if (!window.matchMedia('(min-width: 1100px)').matches) return;
-
-    const INSET_TOP = 14;
-    const nameTop = name.getBoundingClientRect().top;
-    const imagesBottom = images.getBoundingClientRect().bottom;
-    const PAD = 22 + Math.max(0, window.innerHeight - 700) * 0.1;
-
-    rail.style.paddingTop = Math.max(0, nameTop + INSET_TOP) + 'px';
-    rail.style.paddingBottom = Math.max(0, window.innerHeight - imagesBottom) + 'px';
-
-    const top = nameTop - PAD;
-    const bottom = imagesBottom + PAD;
-    divider.style.top = top + 'px';
-    divider.style.height = Math.max(0, bottom - top) + 'px';
-    divider.style.left = rail.getBoundingClientRect().right + 'px';
-  }
-
-  function scheduleMeasure() {
-    requestAnimationFrame(measureHomeSplit);
-  }
-
-  scheduleMeasure();
-  document.addEventListener('astro:page-load', scheduleMeasure);
-  document.addEventListener('astro:after-swap', scheduleMeasure);
-
-  if (!(window as any).__homeMeasureBound) {
-    window.addEventListener('resize', scheduleMeasure);
-    window.addEventListener('load', scheduleMeasure);
-    (window as any).__homeMeasureBound = true;
-  }
+  // Tap (or Enter/Space) pins the drawing; hover alone never changes state.
+  document.querySelectorAll<HTMLButtonElement>('.flip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const on = btn.getAttribute('aria-pressed') !== 'true';
+      btn.setAttribute('aria-pressed', String(on));
+    });
+  });
 </script>

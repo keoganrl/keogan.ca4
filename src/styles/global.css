@@ -50,18 +50,46 @@
   src: url('/fonts/charter/charter_bold_italic.woff2') format('woff2');
 }
 
+/* Libre Baskerville, self-hosted for the same reason as Charter: it sets the
+   page heading everywhere, and loading it from Google Fonts meant a render-
+   blocking stylesheet on one domain and the font file on a second. Latin subset
+   (U+0000-00FF and common punctuation) from @fontsource; OFL licence in
+   /fonts/libre-baskerville/LICENSE.txt. No italic is shipped: the home page's
+   italic slash is synthesised, as it always was. Keep these two blocks
+   identical in global.css and chips.css. */
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/libre-baskerville/libre-baskerville-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/libre-baskerville/libre-baskerville-700.woff2') format('woff2');
+}
+
 /* ---- Colour tokens ---------------------------------------------------------
    Same names and values as src/styles/chips.css, so the two read as one site.
    Never write a colour literal below the cover section: use a token and the
    new thing is dark-correct for free. The cover's literals are deliberate,
-   since they sit on a photo and are the same in both modes. */
+   since they sit on a photo and are the same in both modes.
+
+   --faint and --whisper are held to contrast floors against --paper, and that
+   is the only reason they are the values they are: --faint carries real text
+   (dates, read times, tags, back links, labels) at 4.74:1, over the 4.5:1 that
+   small text needs; --whisper is 3.03:1 and is for marks and hairline-weight
+   decoration only, never for words. Darker is fine; lighter is not. */
 :root {
-  --paper: #fdfbf7;
+  --paper: #ffffff;
   --ink: #2a2a2a;
   --ink-soft: #3a3a3a;
   --muted: #6a6a6a;
-  --faint: #888;
-  --whisper: #aaa;
+  --faint: #737373;
+  --whisper: #949494;
   --hairline: #eee;
   --rule: #ccc;
   /* The icon PNGs are dark grey glyphs on transparent. */
@@ -103,28 +131,64 @@
   }
 }
 
-/* Dark mode, on phones only. Follows the OS setting with no toggle, like
-   /chips. Gated on a touch-only pointer rather than width so a narrow desktop
-   window never goes dark: desktop has no dark mode at all.
-   OLED black: the page has no visible edge, so the bezel does the framing a
-   cream margin does in light mode and content sits further out (28px -> 18px). */
-@media (prefers-color-scheme: dark) and (hover: none) and (pointer: coarse) {
+/* Dark mode follows the OS setting, with no toggle, like /chips. Neutral greys,
+   since the paper is white: warm greys were only ever there to match cream.
+   Every role clears the dark surface at or above its light-mode ratio. */
+@media (prefers-color-scheme: dark) {
   :root {
-    --paper: #000000;
-    --ink: #e8e4dc;
-    --ink-soft: #d5d0c7;
-    --muted: #a09a90;
-    --faint: #8a857c;
-    --whisper: #6a6560;
-    --hairline: #2c2a27;
-    --rule: #45423d;
+    /* Near-black rather than black on a monitor: light text on pure black
+       smears on LCDs, and a big panel of #000 has no edge to read against. */
+    --paper: #111111;
+    --ink: #e8e8e8;
+    --ink-soft: #d4d4d4;
+    --muted: #a3a3a3;
+    --faint: #8c8c8c;
+    --whisper: #6b6b6b;
+    --hairline: #262626;
+    --rule: #404040;
     --icon-filter: invert(1);
-    --gutter: 1.1rem;
     color-scheme: dark;
   }
 }
 
+/* Phones get OLED black. The page then has no visible edge, so the bezel does
+   the framing a margin does in light mode and content sits further out
+   (28px -> 18px). Gated on a touch-only pointer rather than width, so a narrow
+   desktop window stays #111 with the normal gutter. */
+@media (prefers-color-scheme: dark) and (hover: none) and (pointer: coarse) {
+  :root {
+    --paper: #000000;
+    --gutter: 1.1rem;
+  }
+}
+
 * { box-sizing: border-box; }
+
+/* ---- Page transitions -------------------------------------------------------
+   Native cross-document view transitions: the browser crossfades between pages
+   and morphs the heading and back link, with no router script. Each name must
+   be unique on a page, so the back link that repeats at the foot of cover pages
+   is left out. Browsers without support simply load the next page. */
+@view-transition { navigation: auto; }
+.name { view-transition-name: page-heading; }
+.back:not(.back-bottom) { view-transition-name: back-link; }
+
+/* ---- Line breaking ----------------------------------------------------------
+   Even out heading lines, and keep paragraphs from ending on one stranded word.
+   Both are ignored where unsupported. */
+h1, h2, h3, .name { text-wrap: balance; }
+p, li, figcaption, blockquote { text-wrap: pretty; }
+
+/* ---- Keyboard focus ---------------------------------------------------------
+   Only for keyboard and similar navigation; mouse clicks never draw it. The
+   outline follows each element's own radius, so pills stay capsules. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+/* The guestbook fields mark focus with their underline (see below). */
+.guestbook-field input:focus-visible,
+.guestbook-field textarea:focus-visible { outline: none; }
 
 body {
   margin: 0;
@@ -219,7 +283,7 @@ select {
   margin: 5rem 0;
 }
 
-.images > div {
+.images > * {
   border-radius: var(--radius-md);
   corner-shape: var(--corner);
   overflow: hidden;
@@ -398,7 +462,16 @@ select {
 .article-body figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: var(--faint); }
 .article-body h2 { font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif; font-weight: 700; font-size: 1.3em; margin: 2rem 0 0.35rem; }
 .article-body h3 { font-family: Charter, 'Charter BT', 'Iowan Old Style', Georgia, serif; font-weight: 700; font-size: 1.1em; margin: 1.5rem 0 0.25rem; }
-.article-body a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); }
+.article-body figure p { margin: 0; }
+/* Offset and a hairline weight keep the underline clear of descenders
+   (g, p, y), which the default runs straight through in Charter. */
+.article-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-decoration-thickness: 0.07em;
+  text-underline-offset: 0.24em;
+}
 
 .back {
   position: absolute;
@@ -517,7 +590,7 @@ select {
 }
 
 .guestbook-entry-name { font-size: 0.95rem; color: var(--ink); min-width: 0; }
-.guestbook-entry-date { font-size: 0.8rem; color: var(--whisper); }
+.guestbook-entry-date { font-size: 0.8rem; color: var(--faint); }
 .guestbook-entry-message { font-size: 1rem; line-height: 1.6; color: var(--ink-soft); margin: 0; }
 
 /* Tablet & up — widen the reading column */
@@ -801,4 +874,30 @@ body.has-cover {
     background: rgba(20, 18, 15, 0.55);
     transition: transform 0.27s ease, color 0.15s ease, background-color 0.1s ease;
   }
+}
+
+/* ---- Reduced motion ---------------------------------------------------------
+   Hover lifts, slides and the page-transition morph all collapse. The page
+   transition keeps a short crossfade, which is a change of state rather than
+   movement. Last in the file so it wins over every transition above. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  /* Every hover lift on this site is a link (or something inside one),
+     including the scoped ones in index.astro and projects/index.astro. */
+  a:hover,
+  a:hover * {
+    transform: none !important;
+  }
+  ::view-transition-group(*) { animation-duration: 0s; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation-duration: 0.2s !important; }
+  ::view-transition-old(page-heading),
+  ::view-transition-new(page-heading),
+  ::view-transition-old(back-link),
+  ::view-transition-new(back-link) { animation: none !important; }
 }

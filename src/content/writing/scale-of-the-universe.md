@@ -22,7 +22,7 @@ Knowing that our universe in its entirety can be represented using only these un
 
 It is common knowledge that everything that we can touch is made up of atoms, which are made up of protons, neutrons, and electrons. In the late 20th century, it was discovered that protons and neutrons can be broken down into smaller components, called quarks. Quarks are one of the many elementary particles in our universe. These elementary particles are arranged as the Standard Model, which groups them into quarks, leptons, and bosons. We don't interact with the majority of these particles; the important ones to our reality are the up and down quarks, the electron, and the photon. Protons are made up of 2 up quarks and 1 down quark, while neutrons are composed of 2 down quarks and 1 up quark.
 
-![The Standard Model of particle physics](/images/StModel.png)
+![The Standard Model of particle physics](../../assets/images/StModel.png)
 
 You may notice that the particle I said to be the smallest in the universe, the upsilon meson, is not in the Standard Model. As it turns out, the elementary particles found in the Standard Model don't have any measurable shape or size. They are effectively zero-dimensional. The concept of length only arises through *composite particles*, ie. combining two or more of these elementary particles together to form new particles such as protons or neutrons. When initially researching this, it appeared that protons were the smallest measurable thing in our universe, but that conclusion seemed flawed, since protons were made up of 3 quarks. What about a particle made up of 2 quarks?
 
@@ -32,7 +32,7 @@ You may notice that the particle I said to be the smallest in the universe, the 
 
 So now knowing what the largest and smallest items are, how do humans stack up? Where have we been placed in the universe, on the scale of length? This can be easily shown with a logarithmic scale.
 
-![Logarithmic scale of length, from upsilon meson to the observable universe](/images/Meter.png)
+![Logarithmic scale of length, from upsilon meson to the observable universe](../../assets/images/Meter.png)
 
 We're about 38% of the way across. I'm not sure why this information is so satisfying, but it's cool to know where we sit. How do we fare on the scale of mass?
 
@@ -40,13 +40,13 @@ We're about 38% of the way across. I'm not sure why this information is so satis
 
 The mass of the universe has been calculated to be approximately 10<sup>53</sup> kg. The smallest mass that we know of is the electron neutrino, which you can find in the Standard Model we looked at earlier. It has a mass of 10<sup>-37</sup> kg. Similarly to our conversation about the smallest measurable thing in the universe by length, there are particles which have zero mass, like the photon, but for the same reasons we didn't use photons or electrons (zero length particles) as our length limit, we won't use photons or other bosons (zero mass particles) as our mass limit. Between the mass of electron neutrinos and the universe, we're slightly closer to the neutrinos, at 43% of the way across.
 
-![Logarithmic scale of mass, from electron neutrino to the universe](/images/Kilogram.png)
+![Logarithmic scale of mass, from electron neutrino to the universe](../../assets/images/Kilogram.png)
 
 ## Time
 
 The universe has been around for 13.8 billion years, which is 4 × 10<sup>17</sup> seconds. The smallest amount of time could be described as the smallest process which can occur, according to our other limits. In this case it would be the time it takes for a photon travelling at the speed of light to cross our smallest distance: the diameter of an upsilon meson. This is around 3 zeptoseconds, or 3 × 10<sup>-24</sup> seconds. The human value for time is more difficult than for length or mass. It's not as clear what value should be used. I'll include three different values in the scale, so you can decide which one is most important to you.
 
-![Logarithmic scale of time, from zeptoseconds to the age of the universe](/images/Time.png)
+![Logarithmic scale of time, from zeptoseconds to the age of the universe](../../assets/images/Time.png)
 
 The first is one second, which corresponds to one human heartbeat. That's 58% of the way across. Next is one day (86,400 seconds), since we structure our lives around daily cycles. That's 70%. The final one is the average human lifespan of 73 years, which is 81% of the way across. If I got to choose one of these units to experience the largest amount of, I would pick time. I think it's beautiful that we're so far across this scale.
 
@@ -66,13 +66,13 @@ This, however, is still not the lowest bound. Humans have accomplished something
 
 For the sake of this discussion, we'll use the naturally occurring 1 K of the boomerang nebula as our lowest value, since the man-made value is constantly undergoing new records and is less meaningful in the context of the universe. The highest temperature the universe has ever experienced was shortly after its inception, when it reached 10<sup>32</sup> K. This temperature is so high that our laws of physics break down for anything hotter than this. At 310 K, humans are only 8% of the way across this scale.
 
-![Logarithmic scale of temperature, from Boomerang Nebula to the Big Bang](/images/Kelvin.png)
+![Logarithmic scale of temperature, from Boomerang Nebula to the Big Bang](../../assets/images/Kelvin.png)
 
 ## Amount of Substance
 
 This scale is pretty similar to the one for mass, since generally, the more particles you have, the more massive you are, but let's check it out anyways. Amount of substance is measured in moles, which is defined as 6.022 × 10<sup>23</sup> items. We'll use atoms as our items. The logical lower bound is 1 atom, which is 1 divided by Avogadro's constant, which comes out to 1.7 × 10<sup>-24</sup> moles. A typical human has around 11,600 moles of atoms, and the universe is estimated to have roughly 10<sup>56</sup> moles of atoms. Humans are 35% of the way across this scale.
 
-![Logarithmic scale of amount of substance, from single atoms to the universe](/images/Moles.png)
+![Logarithmic scale of amount of substance, from single atoms to the universe](../../assets/images/Moles.png)
 
 The reason that this scale does not align perfectly with the mass scale is because the average atomic mass of the atoms in a human body is much higher than the average atomic mass of the atoms in the universe. Most of the universe is made up of hydrogen (~92% of all atoms), which has an atomic mass of just 1 u. Helium makes up most of the rest, at 4 u. These are the lightest elements, so the universe's average atomic mass is skewed very low—around 1.3 u per atom.
 

@@ -10,14 +10,14 @@ One of the first hobbies I ever had was drawing cars. The earliest thing I remem
 
 Each drawing starts from a photograph I want to recreate. I crop the reference photo to be the same aspect ratio as the paper, convert it to greyscale, and overlay a grid. The first thing I draw on the paper is an extremely light matching grid, and then I use the grid to help me proportionally outline the car’s features in a light pencil. Once that’s done, I don’t really have a strategy except to work from left to right to avoid smudging. Each drawing takes 30-40 hours.
 
-![Step 1](/images/Gen1.jpeg)
+![Step 1](../../assets/images/Gen1.jpeg)
 
-![Step 3](/images/Gen3.jpeg)
+![Step 3](../../assets/images/Gen3.jpeg)
 
-![Step 6](/images/Gen6.jpeg)
+![Step 6](../../assets/images/Gen6.jpeg)
 
-![Step 8](/images/Gen8.jpeg)
+![Step 8](../../assets/images/Gen8.jpeg)
 
-![Step 10](/images/Gen10.jpeg)
+![Step 10](../../assets/images/Gen10.jpeg)
 
-![Step 12](/images/Gen12.jpeg)
+![Step 12](../../assets/images/Gen12.jpeg)

@@ -16,13 +16,13 @@ const { readingTime, hasProse } = readingInfo(project.body ?? '');
 
 <BaseLayout
   bodyClass={project.data.cover ? 'has-cover' : undefined}
-  ogImage={project.data.cover?.src}
+  ogImage={project.data.cover?.src.src}
   title={`${project.data.title} — Keogan Larade`}
   description={project.data.summary ?? `${project.data.title} — a project by Keogan Larade.`}
 >
-  <p class="back" transition:name="back-link"><a href="/projects">← projects</a></p>
+  <p class="back"><a href="/projects">← projects</a></p>
   <Cover cover={project.data.cover}>
-    <h1 class="name" transition:name="page-heading">{project.data.title}</h1>
+    <h1 class="name">{project.data.title}</h1>
     <p class="article-meta">
       <span class="article-year">{project.data.year}</span>
       {hasProse && <span>·</span>}
@@ -57,5 +57,4 @@ const { readingTime, hasProse } = readingInfo(project.body ?? '');
     }
   }
   checkBottomBack();
-  document.addEventListener('astro:page-load', checkBottomBack);
 </script>

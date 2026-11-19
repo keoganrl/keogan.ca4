@@ -1,10 +1,12 @@
-import { defineCollection, z } from 'astro:content';
+import { defineCollection, z, type SchemaContext } from 'astro:content';
 import { glob } from 'astro/loaders';
 
 // Optional full-bleed cover photo with the title over it (src/components/Cover.astro).
 // position / mobilePosition are CSS object-position values for the crop.
-const cover = z.object({
-  src: z.string(),
+// `src` is a path relative to the .md file (src/assets/images/...), so Astro
+// can resize and re-encode it; a /public path would ship the original as-is.
+const coverSchema = (image: SchemaContext['image']) => z.object({
+  src: image(),
   alt: z.string(),
   position: z.string().optional(),
   mobilePosition: z.string().optional(),
@@ -12,19 +14,19 @@ const cover = z.object({
 
 const writing = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/writing' }),
-  schema: z.object({
+  schema: ({ image }) => z.object({
     title: z.string(),
     year: z.number(),
     date: z.coerce.date(),
     tags: z.array(z.string()),
     summary: z.string().optional(),
-    cover,
+    cover: coverSchema(image),
   }),
 });
 
 const projects = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/projects' }),
-  schema: z.object({
+  schema: ({ image }) => z.object({
     title: z.string(),
     year: z.number(),
     date: z.coerce.date(),
@@ -36,7 +38,7 @@ const projects = defineCollection({
     href: z.string().optional(),
     // A collaborator credited beside the title, as a separate link.
     collaborator: z.object({ name: z.string(), url: z.string().url() }).optional(),
-    cover,
+    cover: coverSchema(image),
   }),
 });
 

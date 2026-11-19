@@ -5,7 +5,7 @@ date: 2025-05-01
 tags: [work, quantum, waterloo]
 summary: "Co-founding UW's first quantum computing club after attending Quantum Days 2025."
 cover:
-  src: /images/QuantumClub.jpg
+  src: ../../assets/images/QuantumClub.jpg
   alt: "Selfie from the front of an Intro to Quantum Computing lecture at the Waterloo Quantum Club"
   mobilePosition: 22% 50%
 ---

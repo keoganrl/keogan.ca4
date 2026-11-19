@@ -3,8 +3,11 @@
 // via `cover:` in front matter; without one the heading renders exactly as
 // before. Styles live in global.css under "Cover header", since the slotted
 // heading is the page's markup and the page also needs `has-cover` on <body>.
+import { Picture } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
 interface Props {
-  cover?: { src: string; alt: string; position?: string; mobilePosition?: string };
+  cover?: { src: ImageMetadata; alt: string; position?: string; mobilePosition?: string };
 }
 const { cover } = Astro.props;
 const style = cover && [
@@ -16,7 +19,16 @@ const style = cover && [
 {cover && <div class="cover-tint" aria-hidden="true"></div>}
 {cover ? (
   <header class="cover" style={style || undefined}>
-    <img src={cover.src} alt={cover.alt} fetchpriority="high" decoding="async" />
+    <Picture
+      src={cover.src}
+      alt={cover.alt}
+      formats={['avif', 'webp']}
+      widths={[800, 1400, 2000]}
+      sizes="100vw"
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
     <div class="cover-inner"><slot /></div>
   </header>
 ) : <slot />}
@@ -25,12 +37,12 @@ const style = cover && [
   // iOS Safari paints the strip behind the status bar to match a fixed element
   // touching the top of the screen (it ignores theme-color). .cover-tint is that
   // element, dark like the top of the photo. Once the photo scrolls away it is
-  // hidden, so the strip goes back to cream over the text.
+  // hidden, so the strip goes back to the page colour over the text.
   function watchCover() {
     const tint = document.querySelector<HTMLElement>('.cover-tint');
     const cover = document.querySelector('.cover');
     if (!tint || !cover) return;
     new IntersectionObserver(([e]) => { tint.hidden = !e.isIntersecting; }).observe(cover);
   }
-  document.addEventListener('astro:page-load', watchCover);
+  watchCover();
 </script>

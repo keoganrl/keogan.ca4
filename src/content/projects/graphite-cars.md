@@ -7,26 +7,36 @@ summary: "Hyperrealistic graphite pencil drawings of the Mustang GT, Genesis Cou
 ---
 
 <figure>
-  <img src="/images/MustangGTDrawing.jpg" alt="Mustang GT" />
-  <figcaption>2026</figcaption>
+
+![Mustang GT](../../assets/images/MustangGTDrawing.jpg)
+
+<figcaption>2026</figcaption>
 </figure>
 
 <figure>
-  <img src="/images/GenesisCoupeDrawing.jpeg" alt="Genesis Coupe" />
-  <figcaption>2022</figcaption>
+
+![Genesis Coupe](../../assets/images/GenesisCoupeDrawing.jpeg)
+
+<figcaption>2022</figcaption>
 </figure>
 
 <figure>
-  <img src="/images/TeslaRoadsterDrawing.jpg" alt="Tesla Roadster" />
-  <figcaption>2020</figcaption>
+
+![Tesla Roadster](../../assets/images/TeslaRoadsterDrawing.jpg)
+
+<figcaption>2020</figcaption>
 </figure>
 
 <figure>
-  <img src="/images/570SDrawing.jpg" alt="McLaren 570S" />
-  <figcaption>2018</figcaption>
+
+![McLaren 570S](../../assets/images/570SDrawing.jpg)
+
+<figcaption>2018</figcaption>
 </figure>
 
 <figure>
-  <img src="/images/ShelbyMustangDrawing.jpg" alt="Shelby Mustang" />
-  <figcaption>2017</figcaption>
+
+![Shelby Mustang](../../assets/images/ShelbyMustangDrawing.jpg)
+
+<figcaption>2017</figcaption>
 </figure>

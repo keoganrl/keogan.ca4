@@ -1,8 +1,8 @@
 ---
-import { ClientRouter } from 'astro:transitions';
 import Analytics from '@vercel/analytics/astro';
 import SpeedInsights from '@vercel/speed-insights/astro';
 import '../styles/global.css';
+import canoe from '../assets/images/canoe.jpg';
 
 interface Props {
   title?: string;
@@ -14,7 +14,7 @@ interface Props {
 const {
   title = 'Keogan Larade',
   description = "Keogan Larade — writing, projects, and notes on quantum computing, music, and art.",
-  ogImage = '/images/canoe.jpg',
+  ogImage = canoe.src,
   bodyClass,
 } = Astro.props;
 
@@ -32,6 +32,9 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
     <meta charset="UTF-8" />
     <meta name="viewport" content={`width=device-width, initial-scale=1.0${edgeToEdge ? ', viewport-fit=cover' : ''}`} />
     {edgeToEdge && <meta name="theme-color" content="#403d3a" />}
+    {/* Browser chrome follows the page. Values track --paper in global.css. */}
+    {!edgeToEdge && <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />}
+    {!edgeToEdge && <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />}
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
@@ -47,19 +50,13 @@ const ogImageUrl = ogImage ? new URL(ogImage, Astro.site).toString() : undefined
     {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
     <link rel="alternate" type="application/rss+xml" title="Keogan Larade — Writing" href="/rss.xml" />
     <link rel="preload" href="/fonts/charter/charter_regular.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preload" href="/fonts/libre-baskerville/libre-baskerville-700.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
     <link rel="manifest" href="/images/site.webmanifest">
     <Analytics />
     <SpeedInsights />
-    <ClientRouter />
   </head>
   <body class={bodyClass}>
     <slot />

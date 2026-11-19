@@ -311,13 +311,46 @@ circles (same reason), `0` on inputs, and three decorations too small to matter
 (the 1px confetti, the 2px home divider, the 4px slash icon). A new rounded box
 takes a token.
 
+## Main-site front end
+
+- **Images live in `src/assets/images/`**, not `public/`, so Astro resizes and
+  re-encodes them. Markdown uses relative paths (`../../assets/images/x.jpg`), cover
+  photos take the same path in front matter (the schema uses `image()`), and
+  `image.layout: 'constrained'` in `astro.config.mjs` gives markdown images a srcset.
+  An image under `public/` ships at full size, untouched. What is left in
+  `public/images/` is favicons, the slash glyph and files nothing links to.
+- **Page transitions are native** (`@view-transition` in `global.css`), not Astro's
+  `<ClientRouter />`, which is gone. Every navigation is a real page load, so a page
+  script just runs: never wait for `astro:page-load`, which no longer fires. A
+  `view-transition-name` must be unique on the page or the whole transition is
+  skipped, which is why the repeated bottom back link is excluded.
+- **Both fonts are self-hosted**: Charter and Libre Baskerville, in `public/fonts/`,
+  with identical `@font-face` blocks in `global.css` and `chips.css`. Nothing loads
+  from Google Fonts.
+- **The home page's desktop split is pure CSS** (one grid row as tall as the content;
+  the rail stretches to it). It replaced a script that measured on every resize and
+  reproduces it to the pixel at 1100, 1440 and 1920 wide.
+- **The canoe photo is a button** that crossfades to a graphite drawing on hover, focus
+  or tap (`.flip` in `index.astro`). The `2026` beside the name is hardcoded on
+  purpose: it dates this version of the site.
+- `:focus-visible` and `prefers-reduced-motion` are handled once, at the top and the
+  foot of `global.css`. /chips has its own, per component.
+
 ## Dark mode
 
-The main site (`global.css`) has its own dark mode, **phones only**: its token block
-is gated on `(prefers-color-scheme: dark) and (hover: none) and (pointer: coarse)`, so
-desktop never goes dark, even in a narrow window. Same token names and values as
-chips.css, OLED black, gutter 1.75rem -> 1.1rem. The cover header's literals are
-deliberate (they sit on a photo). Same rule as below: no colour literals.
+The main site (`global.css`) follows the OS light/dark setting on every device, with
+no toggle. Light is pure white; dark is neutral greys on `#111` on a monitor, and on
+OLED black with the gutter narrowed 1.75rem -> 1.1rem on touch-only devices (a second
+block gated on `(hover: none) and (pointer: coarse)`, so a narrow desktop window stays
+`#111`). Token names and values match chips.css, except that /chips stays `#000` in
+dark everywhere, because its money and series colours were validated against it. The
+cover header's literals are deliberate (they sit on a photo). Same rule as below: no
+colour literals.
+
+`--faint` and `--whisper` are set by contrast floors, not taste: `--faint` carries real
+text (dates, read times, tags, back links, labels) at 4.74:1 on white, `--whisper` is
+3.03:1 and is for marks only, never words. Lighter breaks the floor; the comment on the
+token block in `global.css` has the numbers.
 
 `/chips` follows the phone's light/dark setting and has no toggle, by design: the
 OS already has one, and a second switch is a second thing to be out of step.

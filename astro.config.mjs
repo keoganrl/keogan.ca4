@@ -22,4 +22,10 @@ export default defineConfig({
   build: {
     inlineStylesheets: 'always',
   },
+  // Markdown images (and any <Image> without its own widths) get a srcset and
+  // sizes, so a phone downloads a phone-sized drawing. Styling stays ours:
+  // responsiveStyles is off, and .article-body img already sets width: 100%.
+  image: {
+    layout: 'constrained',
+  },
 });
