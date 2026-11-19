@@ -81,7 +81,7 @@ const allTags = [...new Set(projects.flatMap(p => p.data.tags))].sort();
   .article-title-link,
   .article-collab,
   .article-collab a {
-    color: #2a2a2a;
+    color: var(--ink);
   }
 
   .article-title-link {
@@ -95,7 +95,7 @@ const allTags = [...new Set(projects.flatMap(p => p.data.tags))].sort();
 
   .article-collab a {
     text-decoration: underline;
-    text-decoration-color: #ccc;
+    text-decoration-color: var(--rule);
     transition: text-decoration-color 1s ease;
   }
 
@@ -105,7 +105,7 @@ const allTags = [...new Set(projects.flatMap(p => p.data.tags))].sort();
       transition: transform 0.27s ease;
     }
     .article-collab a:hover {
-      text-decoration-color: #888;
+      text-decoration-color: var(--faint);
       transition: text-decoration-color 0.1s ease;
     }
   }
